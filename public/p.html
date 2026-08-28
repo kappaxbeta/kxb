@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebGL probe</title>
+    <!--
+      A page that asks the machine about itself and prints the answer big.
+
+      Written by hand under public/ rather than as a route, and that is the
+      point of it: it is served as a static file, so nothing about it depends on
+      React mounting, a chunk loading, or the app's own code working. When the
+      question is "why does the canvas not draw on this device", a diagnostic
+      built out of the thing under suspicion is no diagnostic at all.
+
+      Nothing here is part of the product. It lives at /p.html for one reason:
+      the first version was at /__probe/webgl.html and never once reached the
+      server, because that is a brutal thing to type on a floating keyboard with
+      two controllers. A diagnostic nobody can open diagnoses nothing.
+
+      It also reports what it found back to the server, as a GET whose query
+      string carries the answers. That request 404s and is meant to - the point
+      is the access log, which records the URI. Reading numbers aloud from
+      inside a headset is its own source of errors, and this way the person
+      wearing it only has to arrive.
+    -->
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0a0616;
+        color: #e8e4f0;
+        font: 16px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p.sub { margin: 0 0 20px; color: #8b84a3; font-size: 13px; }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 20px; }
+      dt { color: #8b84a3; white-space: nowrap; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      .ok { color: #6ee7a8; }
+      .bad { color: #fb7185; }
+      #errors { border-top: 1px solid #2a2340; padding-top: 16px; }
+      #errors li { color: #fb7185; overflow-wrap: anywhere; }
+      canvas { border: 1px solid #2a2340; border-radius: 8px; margin-top: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>WebGL probe</h1>
+    <p class="sub">Read the RENDERER line and anything in red.</p>
+
+    <dl id="out"></dl>
+
+    <p class="sub">A green square below means a context drew a frame.</p>
+    <canvas id="c" width="160" height="160"></canvas>
+
+    <div id="errors"><strong>Errors</strong><ul id="errlist"></ul></div>
+
+    <script>
+      const out = document.getElementById('out')
+      const errlist = document.getElementById('errlist')
+
+      function say(label, value, state) {
+        const dt = document.createElement('dt')
+        dt.textContent = label
+        const dd = document.createElement('dd')
+        dd.textContent = String(value)
+        if (state) dd.className = state
+        out.append(dt, dd)
+      }
+
+      function fail(message) {
+        const li = document.createElement('li')
+        li.textContent = message
+        errlist.append(li)
+      }
+
+      // Anything the page throws lands in the list rather than in a console
+      // nobody wearing a headset can open.
+      window.addEventListener('error', (e) => fail('error: ' + (e.message || e.type)))
+      window.addEventListener('unhandledrejection', (e) => fail('rejected: ' + e.reason))
+
+      say('userAgent', navigator.userAgent)
+      say('secureContext', window.isSecureContext, window.isSecureContext ? 'ok' : 'bad')
+
+      /*
+        The question this page was really needed for.
+
+        Every frame the world draws comes from requestAnimationFrame. A browser
+        that thinks its page is hidden never fires one, so the canvas is created,
+        sized, given a context - and then simply never painted. From the outside
+        that is indistinguishable from WebGL being broken, and it is why a video
+        can play on the same device while a scene stays black: a <video> element
+        does not need a frame callback to show a picture.
+
+        Reported live rather than once, because the interesting failure is not
+        "zero forever" but "a handful and then it stops".
+      */
+      say('visibilityState', document.visibilityState, document.hidden ? 'bad' : 'ok')
+
+      const frames = document.createElement('dd')
+      const framesLabel = document.createElement('dt')
+      framesLabel.textContent = 'rAF frames'
+      frames.textContent = 'waiting…'
+      out.append(framesLabel, frames)
+
+      let ticks = 0
+      const startedAt = performance.now()
+      const tick = () => {
+        ticks += 1
+        const seconds = (performance.now() - startedAt) / 1000
+        frames.textContent = ticks + ' in ' + seconds.toFixed(1) + 's'
+        frames.className = ticks > 5 ? 'ok' : 'bad'
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+
+      // If nothing has ticked by now, nothing is going to.
+      setTimeout(() => {
+        if (ticks === 0) {
+          frames.textContent = 'NONE after 2s'
+          frames.className = 'bad'
+          fail('requestAnimationFrame never fires. Nothing that animates can draw.')
+        }
+      }, 2000)
+      say('navigator.xr', 'xr' in navigator ? 'present' : 'absent', 'xr' in navigator ? 'ok' : 'bad')
+      say('devicePixelRatio', window.devicePixelRatio)
+      say('screen', screen.width + ' x ' + screen.height)
+
+      if ('xr' in navigator) {
+        navigator.xr
+          .isSessionSupported('immersive-vr')
+          .then((yes) => say('immersive-vr', yes ? 'SUPPORTED' : 'not supported', yes ? 'ok' : 'bad'))
+          .catch((e) => say('immersive-vr', 'asking threw: ' + e, 'bad'))
+      }
+
+      const canvas = document.getElementById('c')
+
+      // Both, separately: three needs WebGL2, and a device that has only WebGL1
+      // fails in a way that looks identical to having none at all.
+      const gl2 = canvas.getContext('webgl2')
+      say('webgl2', gl2 ? 'OK' : 'FAILED', gl2 ? 'ok' : 'bad')
+
+      if (!gl2) {
+        const gl1 = document.createElement('canvas').getContext('webgl')
+        say('webgl1', gl1 ? 'OK (but three needs 2)' : 'FAILED', 'bad')
+        fail('No WebGL2 context. Nothing in the app can draw.')
+      } else {
+        const debug = gl2.getExtension('WEBGL_debug_renderer_info')
+        say('VENDOR', debug ? gl2.getParameter(debug.UNMASKED_VENDOR_WEBGL) : gl2.getParameter(gl2.VENDOR))
+        say('RENDERER', debug ? gl2.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl2.getParameter(gl2.RENDERER))
+        say('VERSION', gl2.getParameter(gl2.VERSION))
+        say('GLSL', gl2.getParameter(gl2.SHADING_LANGUAGE_VERSION))
+        say('max texture', gl2.getParameter(gl2.MAX_TEXTURE_SIZE))
+        say('max varyings', gl2.getParameter(gl2.MAX_VARYING_VECTORS))
+        say('frag uniforms', gl2.getParameter(gl2.MAX_FRAGMENT_UNIFORM_VECTORS))
+
+        // The scene asks for these two by name. `preserveDrawingBuffer` is on
+        // for the shutter, and float textures are what soft shadows are made of.
+        const attrs = canvas.getContext('webgl2').getContextAttributes()
+        say('preserveDrawingBuffer', attrs.preserveDrawingBuffer)
+        say('float linear', gl2.getExtension('OES_texture_float_linear') ? 'yes' : 'NO', gl2.getExtension('OES_texture_float_linear') ? 'ok' : 'bad')
+
+        canvas.addEventListener('webglcontextlost', () => fail('context LOST'))
+
+        gl2.clearColor(0.2, 0.85, 0.5, 1)
+        gl2.clear(gl2.COLOR_BUFFER_BIT)
+        say('cleared a frame', 'yes', 'ok')
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="x-apple-disable-message-reformatting" />
+<meta name="color-scheme" content="dark" />
+<meta name="supported-color-schemes" content="dark" />
+<title>Your link is ready</title>
+<!--[if mso]>
+<xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+<![endif]-->
+<style>
+  /* Progressive only. Everything that matters is inline below, because a client
+     that drops this block must still render a complete email - and several
+     drop it. */
+  @media only screen and (max-width:620px) {
+    .card { padding:26px 20px !important; }
+    .title { font-size:22px !important; }
+    .peep-sm { display:none !important; }
+  }
+  a { color:#f6f3fe; }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#05030c;background-image:url('{{ .SiteURL }}/email/sky.png');background-repeat:repeat;">
+  <!-- The inbox preview line. Hidden in the mail itself: zero height, zero
+       opacity and pushed off-screen, which is the combination that survives
+       Gmail, Outlook and Apple Mail alike. -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#05030c;">One tap and you are in - the link works once and lasts an hour.</div>
+
+  <!-- The sky. On the 'background' attribute as well as in CSS: Word reads the
+       attribute and ignores the shorthand, and a mail that loses it falls back
+       to the same deep-space colour rather than to white. -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#05030c" background="{{ .SiteURL }}/email/sky.png" style="background-color:#05030c;background-image:url('{{ .SiteURL }}/email/sky.png');background-repeat:repeat;margin:0;padding:0;">
+    <tr>
+      <td align="center" style="padding:28px 12px 44px;">
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;">
+
+          <!--
+            The lockup, on the sky's two blooms, as a single image.
+
+            The alt text is the wordmark itself, so an inbox with images off
+            shows "kxb.team" where the logo would be rather than an empty box -
+            which is the whole reason this is one picture and not a logo laid
+            over a background. See render-email-art.ts.
+          -->
+          <tr>
+            <td align="center" style="padding:0;">
+              <a href="{{ .SiteURL }}" style="text-decoration:none;">
+                <img src="{{ .SiteURL }}/email/header.png" width="600" height="165" alt="kxb.team" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;border-radius:20px 20px 0 0;" />
+              </a>
+            </td>
+          </tr>
+
+          <!--
+            The card. Solid, never translucent.
+
+            The design on the site is glass over the starfield, and there is no
+            honest way to do that here: 'rgba' backgrounds composite against
+            white in Word, and 'backdrop-filter' exists in no email client at
+            all. A solid panel a few shades off the sky reads as the same
+            object and renders identically everywhere.
+          -->
+          <tr>
+            <td bgcolor="#130d1e" style="background-color:#130d1e;border:1px solid #33244a;border-top:0;border-radius:0 0 20px 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td class="card" align="left" style="padding:30px 34px 30px;">
+
+                    <div style="text-align:center;padding:0 0 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+            <tr>
+              <td class="peep-sm" align="center" valign="middle" width="66" style="padding:0 6px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="54">
+                  <tr>
+                    <td align="center" valign="middle" bgcolor="#241733" height="54" style="background-color:#241733;border:1px solid #33244a;border-radius:18px;height:54px;padding:8px 0;">
+                      <img src="{{ .SiteURL }}/email/peep-bunny.png" width="38" height="38" alt="" style="display:block;margin:0 auto;border:0;outline:none;width:38px;height:38px;" />
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td align="center" valign="middle" width="76" style="padding:0 6px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="64">
+                  <tr>
+                    <td align="center" valign="middle" bgcolor="#241733" height="64" style="background-color:#241733;border:1px solid #33244a;border-radius:18px;height:64px;padding:9px 0;">
+                      <img src="{{ .SiteURL }}/email/peep-parrot.png" width="46" height="46" alt="" style="display:block;margin:0 auto;border:0;outline:none;width:46px;height:46px;" />
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td align="center" valign="middle" width="98" style="padding:0 6px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="86">
+                  <tr>
+                    <td align="center" valign="middle" bgcolor="#241733" height="86" style="background-color:#241733;border:1px solid #00ebec;border-radius:18px;height:86px;padding:10px 0;">
+                      <img src="{{ .SiteURL }}/email/peep-fox.png" width="66" height="66" alt="" style="display:block;margin:0 auto;border:0;outline:none;width:66px;height:66px;" />
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td align="center" valign="middle" width="76" style="padding:0 6px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="64">
+                  <tr>
+                    <td align="center" valign="middle" bgcolor="#241733" height="64" style="background-color:#241733;border:1px solid #33244a;border-radius:18px;height:64px;padding:9px 0;">
+                      <img src="{{ .SiteURL }}/email/peep-koala.png" width="46" height="46" alt="" style="display:block;margin:0 auto;border:0;outline:none;width:46px;height:46px;" />
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td class="peep-sm" align="center" valign="middle" width="66" style="padding:0 6px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="54">
+                  <tr>
+                    <td align="center" valign="middle" bgcolor="#241733" height="54" style="background-color:#241733;border:1px solid #33244a;border-radius:18px;height:54px;padding:8px 0;">
+                      <img src="{{ .SiteURL }}/email/peep-cat.png" width="38" height="38" alt="" style="display:block;margin:0 auto;border:0;outline:none;width:38px;height:38px;" />
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+                    </div>
+
+                    <!-- The neon rule: the lockup's cyan running into its
+                         magenta, as an image because no client can be trusted
+                         with a gradient. -->
+                    <img src="{{ .SiteURL }}/email/rule.png" width="120" height="3" alt="" style="display:block;width:120px;height:3px;border:0;outline:none;margin:0 0 16px;" />
+
+                    <h1 class="title" style="margin:0 0 14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:25px;line-height:1.24;font-weight:700;letter-spacing:-0.01em;color:#f6f3fe;">Your link is ready</h1>
+
+              <p style="margin:0 0 14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#b3a6c9;">Tap the button to sign in. No password needed.</p>
+              <p style="margin:0 0 14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#b3a6c9;">Opening it also confirms this address is yours, which is the thing the app keeps asking about.</p>
+
+                    <!-- The button. A table with bgcolor rather than a styled
+                         anchor alone: Word drops border-radius and background
+                         on an <a>, and the cell is what keeps it a button
+                         there instead of blue underlined text.
+
+                         Dark ink on the magenta, not white. White on this
+                         neon is about 2:1 and unreadable on a phone in
+                         daylight; the near-black is over 8:1. -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 6px;">
+                      <tr>
+                        <td align="center" bgcolor="#e74dff" style="background-color:#e74dff;border-radius:999px;">
+                          <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink" style="display:inline-block;padding:15px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;line-height:1;color:#16081c;text-decoration:none;border-radius:999px;">Sign in</a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div style="padding:18px 0 0;border-top:1px solid #33244a;margin-top:22px;">
+
+              <p style="margin:0 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#7d6f95;">The link expires in one hour and can only be used once.</p>
+              <p style="margin:0 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#7d6f95;">If you didn't ask for this, you can ignore this email - nothing has changed on your account.</p>
+                    </div>
+
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:22px 8px 0;">
+              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#7d6f95;">
+                <a href="{{ .SiteURL }}" style="color:#7d6f95;text-decoration:none;">kxb.team</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

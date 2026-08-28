@@ -1,0 +1,1481 @@
+{
+  "format": "xp/1",
+  "id": "playground",
+  "name": "The Playground",
+  "blurb": "Nothing to win and everything to knock over. Run into anything and it moves; E kicks it properly, F is a dash. Scatter the ball pit, bowl the skittles down, bat the floaters along - they hang where you leave them - launch something off a spring pad, and see how far you get with the boulder in the middle. Put anything through a hoop for a point.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "peepz"
+    },
+    {
+      "id": "platformer-neutral"
+    },
+    {
+      "id": "platformer-green"
+    },
+    {
+      "id": "platformer-blue"
+    },
+    {
+      "id": "platformer-red"
+    },
+    {
+      "id": "platformer-yellow"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "rules": {
+    "preset": "freestyle",
+    "players": {
+      "min": 1,
+      "max": 8
+    }
+  },
+  "data": {
+    "hoops": {
+      "scope": "run",
+      "value": 0,
+      "label": "through the hoop"
+    }
+  },
+  "player": {
+    "blueprint": "peep",
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "kick"
+      },
+      {
+        "key": "KeyF",
+        "does": "dash"
+      }
+    ],
+    "view": "third"
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": -8,
+    "facing": 0
+  },
+  "scripts": {
+    "kick": "/**\n * One script for everything you can hit, and it is the same three lines each\n * time.\n *\n * Every kickable thing in the playground shares this - the loose balls, the\n * skittles, the bowling ball, the floaters, the boulder - and none of them\n * needs a variant, because what makes them different is on their **blueprints**\n * rather than in here. A floater is `gravity: 0`, a boulder is `mass: 30`, a\n * skittle is light and does not bounce. The script does not know or care which\n * one it is running on, and that is the whole argument for putting physics in\n * the format rather than in a file per object.\n *\n * The rule beside each blueprint decides *when*, and the pace is measured from\n * where the player was last frame - a level has no reading of how fast anybody\n * is going, and one frame of positions is exactly that.\n */\nconst BASE = 8\nconst CARRY = 1.6\nconst LOFT = 0.3\n\nlet wasX = null\nlet wasZ = null\nlet pace = 0\n\nfunction onTick(dt) {\n  const player = getEntityByName('player')\n  if (player) {\n    if (wasX !== null && dt > 0) {\n      const moved = Math.sqrt((player.x - wasX) * (player.x - wasX) + (player.z - wasZ) * (player.z - wasZ))\n      const speed = moved / dt\n      // A jump in position is a teleport rather than a sprint, and reading it\n      // as one would fire the thing out of the playground.\n      pace = speed > 30 ? pace : speed\n    }\n    wasX = player.x\n    wasZ = player.z\n  }\n\n  if (self.get('kicked') > 0) {\n    self.set('kicked', 0)\n    if (player) {\n      const dx = self.x - player.x\n      const dy = self.y - player.y\n      const dz = self.z - player.z\n      const away = Math.sqrt(dx * dx + dz * dz)\n      // Up as well as along, because a floater is above your head and a kick\n      // that only ever went sideways would be unable to reach one at all.\n      if (away > 0.001 && Math.abs(dy) < 3) {\n        const power = BASE + pace * CARRY\n        // Divided by its own mass inside `push`, so the same kick that sends a\n        // ball across the yard barely rocks the boulder - and the script does\n        // not have to know which one it just hit.\n        self.push((dx / away) * power, power * LOFT, (dz / away) * power)\n      }\n    }\n  }\n}\n\n/**\n * A noise when it lands hard, and nothing when it settles.\n *\n * `hit` is the level itself - the floor, a wall, a spring pad - as opposed to\n * `collide`, which is another thing in the yard. The speed test is what keeps\n * it a clatter rather than a drone: a body that has stopped reports nothing at\n * all, so this only ever fires on an arrival worth hearing.\n */\nfunction onTrigger(event) {\n  if (event === 'hit' && self.speed > 7) self.emit('clatter')\n}\n"
+  },
+  "blueprints": {
+    "peep": {
+      "model": "peepz/fox",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "hp": 100
+      },
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "dash",
+          "do": [
+            {
+              "op": "dash",
+              "target": "self",
+              "cells": 6
+            }
+          ]
+        }
+      ]
+    },
+    "loose-ball": {
+      "model": "platformer-blue/ball_blue",
+      "collider": "none",
+      "body": {
+        "bounce": 0.6,
+        "friction": 1.6,
+        "roll": 240
+      },
+      "props": {
+        "kicked": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 2.8,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "bouncy-ball": {
+      "model": "platformer-green/ball_green",
+      "collider": "none",
+      "body": {
+        "bounce": 0.8,
+        "friction": 0.8,
+        "drag": 0.04,
+        "roll": 240
+      },
+      "props": {
+        "kicked": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 2.8,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "bowling-ball": {
+      "model": "platformer-red/ball_red",
+      "collider": "none",
+      "body": {
+        "bounce": 0.1,
+        "friction": 0.6,
+        "mass": 4,
+        "roll": 180
+      },
+      "props": {
+        "kicked": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 2.8,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "skittle": {
+      "model": "platformer-red/cone_red",
+      "collider": "none",
+      "body": {
+        "bounce": 0.15,
+        "friction": 2.5,
+        "mass": 0.35
+      },
+      "props": {
+        "kicked": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 2.8,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "floater": {
+      "model": "platformer-yellow/ball_yellow",
+      "collider": "none",
+      "body": {
+        "gravity": 0,
+        "bounce": 0.9,
+        "drag": 0.35,
+        "friction": 0.35
+      },
+      "props": {
+        "kicked": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 2.8,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "boulder": {
+      "model": "platformer-neutral/pillar_2x2x2",
+      "collider": "none",
+      "body": {
+        "bounce": 0.05,
+        "friction": 4,
+        "mass": 30
+      },
+      "props": {
+        "kicked": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 2.8,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "hoop": {
+      "model": "platformer-neutral/structure_A",
+      "collider": {
+        "w": 2.4,
+        "h": 2.4,
+        "d": 1
+      },
+      "draw": false,
+      "props": {},
+      "triggers": [
+        {
+          "on": "collide",
+          "do": [
+            {
+              "op": "addProp",
+              "target": "world",
+              "key": "hoops",
+              "value": 1
+            },
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-1",
+      "x": -20,
+      "y": 3,
+      "z": -14,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-2",
+      "x": -17,
+      "y": 3,
+      "z": -13,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-3",
+      "x": -14,
+      "y": 3,
+      "z": -15,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-4",
+      "x": -19,
+      "y": 3,
+      "z": -17,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-5",
+      "x": -15,
+      "y": 3,
+      "z": -19,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-6",
+      "x": -12,
+      "y": 3,
+      "z": -12,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-7",
+      "x": -19,
+      "y": 3,
+      "z": -11,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "loose-ball",
+      "name": "loose-8",
+      "x": -16,
+      "y": 3,
+      "z": -10,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-0-0",
+      "x": 9.0,
+      "y": 2,
+      "z": 14.0,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-1-0",
+      "x": 10.6,
+      "y": 2,
+      "z": 13.2,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-1-1",
+      "x": 10.6,
+      "y": 2,
+      "z": 14.8,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-2-0",
+      "x": 12.2,
+      "y": 2,
+      "z": 12.4,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-2-1",
+      "x": 12.2,
+      "y": 2,
+      "z": 14.0,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-2-2",
+      "x": 12.2,
+      "y": 2,
+      "z": 15.6,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-3-0",
+      "x": 13.8,
+      "y": 2,
+      "z": 11.6,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-3-1",
+      "x": 13.8,
+      "y": 2,
+      "z": 13.2,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-3-2",
+      "x": 13.8,
+      "y": 2,
+      "z": 14.8,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "skittle",
+      "name": "skittle-3-3",
+      "x": 13.8,
+      "y": 2,
+      "z": 16.4,
+      "scale": 0.6
+    },
+    {
+      "blueprint": "bowling-ball",
+      "name": "bowler",
+      "x": 12,
+      "y": 2,
+      "z": 2,
+      "scale": 0.7
+    },
+    {
+      "blueprint": "floater",
+      "name": "floater-1",
+      "x": -19,
+      "y": 4,
+      "z": 15,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "floater",
+      "name": "floater-2",
+      "x": -15,
+      "y": 5,
+      "z": 19,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "floater",
+      "name": "floater-3",
+      "x": -12,
+      "y": 4,
+      "z": 20,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "floater",
+      "name": "floater-4",
+      "x": -20,
+      "y": 6,
+      "z": 20,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "floater",
+      "name": "floater-5",
+      "x": -14,
+      "y": 6,
+      "z": 13,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "bouncy-ball",
+      "name": "bouncy-1",
+      "x": 15,
+      "y": 5,
+      "z": 15,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "bouncy-ball",
+      "name": "bouncy-2",
+      "x": 19,
+      "y": 5,
+      "z": 17,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "bouncy-ball",
+      "name": "bouncy-3",
+      "x": 15,
+      "y": 5,
+      "z": 19,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "boulder",
+      "name": "boulder",
+      "x": 0,
+      "y": 3,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "hoop",
+      "name": "blue-hoop",
+      "x": -18,
+      "y": 2.5,
+      "z": 0
+    },
+    {
+      "blueprint": "hoop",
+      "name": "red-hoop",
+      "x": 18,
+      "y": 2.5,
+      "z": 0
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "ground": false,
+    "restart": false,
+    "fatal": false,
+    "placements": [
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -18,
+        "y": 0.49,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -18,
+        "y": 0.49,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -18,
+        "y": 0.49,
+        "z": 2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -18,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -18,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -18,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -12,
+        "y": 0.49,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -12,
+        "y": 0.49,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -12,
+        "y": 0.49,
+        "z": 2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -12,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -12,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -12,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -6,
+        "y": 0.49,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -6,
+        "y": 0.49,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": -6,
+        "y": 0.49,
+        "z": 2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -6,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -6,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -6,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -20,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -16,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -14,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -10,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -8,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -4,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 4,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 8,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 10,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 14,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 16,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 0,
+        "y": 0.49,
+        "z": 20,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 6,
+        "y": 0.49,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 6,
+        "y": 0.49,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 6,
+        "y": 0.49,
+        "z": 2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 12,
+        "y": 0.49,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 12,
+        "y": 0.49,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 12,
+        "y": 0.49,
+        "z": 2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 18,
+        "y": 0.49,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 18,
+        "y": 0.49,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/floor_wood_2x6",
+        "x": 18,
+        "y": 0.49,
+        "z": 2,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -20,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -20,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -16,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -16,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -12,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -12,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -8,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -8,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -4,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -4,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 0,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 0,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 4,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 4,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 8,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 8,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 12,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 12,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 16,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 16,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 20,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 20,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -16,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -16,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -12,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -12,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -8,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -8,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -4,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -4,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 0,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 0,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 4,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 4,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 8,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 8,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 12,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 12,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 16,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 16,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": -19.5,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": -19.5,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": 19.5,
+        "y": 1,
+        "z": -21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": 19.5,
+        "y": 1,
+        "z": 21.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_slope_6x6x4_blue",
+        "x": -18,
+        "y": 1,
+        "z": -6,
+        "rotation": 180
+      },
+      {
+        "model": "platformer-blue/platform_4x4x1_blue",
+        "x": -18,
+        "y": 1,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_arrow_4x4x1_red",
+        "x": 12,
+        "y": 1,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_2x2x2_yellow",
+        "x": -18,
+        "y": 1,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_2x2x1_yellow",
+        "x": -12,
+        "y": 1,
+        "z": 14,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_slope_4x6x4_green",
+        "x": 18,
+        "y": 1,
+        "z": 12,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-green/spring_pad_green",
+        "x": 14,
+        "y": 1,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/spring_pad_green",
+        "x": 20,
+        "y": 1,
+        "z": 15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_2x2x1_green",
+        "x": 17,
+        "y": 1,
+        "z": 16,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/hoop_green",
+        "x": 18,
+        "y": 1,
+        "z": 20,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/hoop_blue",
+        "x": -18,
+        "y": 1,
+        "z": 0,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-red/hoop_red",
+        "x": 18,
+        "y": 1,
+        "z": 0,
+        "rotation": 90
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "name": "gate",
+        "x": 0,
+        "y": 1,
+        "z": -8,
+        "facing": 0,
+        "width": 6,
+        "height": 4
+      },
+      {
+        "kind": "spawn",
+        "name": "far-gate",
+        "x": 0,
+        "y": 1,
+        "z": 8,
+        "facing": 180,
+        "width": 6,
+        "height": 4
+      }
+    ]
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "format": "xp/1",
+  "id": "two-rooms",
+  "name": "Two rooms",
+  "blurb": "A hand-written document with more than one place in it. Walk onto the blue pad and the whole room goes down to the cellar together - the level does not change, only which room of it everybody is standing in. The orange pad down there brings you back, and it is the one door only `scene` can spell: the front room is called `main` and `main` is not in the scenes table, so a door naming it as an xp would go looking for a file nobody wrote.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "proto"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 2,
+    "facing": 180
+  },
+  "enter": "main",
+  "blueprints": {
+    "down": {
+      "model": "proto/Primitive_Floor",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "load",
+              "scene": "cellar"
+            }
+          ]
+        }
+      ]
+    },
+    "lamp": {
+      "model": "proto/Barrel_A",
+      "tags": [
+        "breakable"
+      ],
+      "props": {
+        "hp": 20
+      }
+    },
+    "up": {
+      "model": "proto/Primitive_Floor",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "load",
+              "scene": "main",
+              "who": "room"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "down",
+      "name": "the-way-down",
+      "x": 0,
+      "y": 0.2,
+      "z": -4,
+      "colour": 3386111,
+      "stretch": {
+        "x": 0.25,
+        "y": 3,
+        "z": 0.25
+      }
+    },
+    {
+      "blueprint": "lamp",
+      "name": "lobby-lamp",
+      "x": 3,
+      "y": 1,
+      "z": 3
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "ground": true,
+    "placements": [
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": 4
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": 2,
+        "facing": 180,
+        "width": 1,
+        "height": 1
+      },
+      {
+        "kind": "spawn",
+        "x": 2,
+        "y": 1,
+        "z": 2,
+        "facing": 180,
+        "width": 1,
+        "height": 1
+      }
+    ]
+  },
+  "scenes": {
+    "cellar": {
+      "name": "The cellar",
+      "world": {
+        "floorY": 0,
+        "ground": true,
+        "placements": [
+          {
+            "model": "proto/Primitive_Floor",
+            "x": -4,
+            "y": 0,
+            "z": -4
+          },
+          {
+            "model": "proto/Primitive_Floor",
+            "x": -4,
+            "y": 0,
+            "z": 0
+          },
+          {
+            "model": "proto/Primitive_Floor",
+            "x": 0,
+            "y": 0,
+            "z": -4
+          },
+          {
+            "model": "proto/Primitive_Floor",
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          {
+            "model": "proto/Primitive_Floor",
+            "x": -4,
+            "y": 0,
+            "z": -8
+          },
+          {
+            "model": "proto/Primitive_Floor",
+            "x": 0,
+            "y": 0,
+            "z": -8
+          }
+        ],
+        "marks": [
+          {
+            "kind": "spawn",
+            "x": -2,
+            "y": 1,
+            "z": -2,
+            "facing": 0,
+            "width": 1,
+            "height": 1
+          }
+        ]
+      },
+      "spawn": {
+        "x": -2,
+        "y": 1,
+        "z": -2,
+        "facing": 0
+      },
+      "entities": [
+        {
+          "blueprint": "up",
+          "name": "the-way-up",
+          "x": -2,
+          "y": 0.2,
+          "z": -6,
+          "colour": 14712880,
+          "stretch": {
+            "x": 0.25,
+            "y": 3,
+            "z": 0.25
+          }
+        },
+        {
+          "blueprint": "lamp",
+          "name": "cellar-lamp",
+          "x": -5,
+          "y": 1,
+          "z": -1
+        }
+      ]
+    }
+  }
+}

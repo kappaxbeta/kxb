@@ -1,0 +1,22 @@
+-- ============================================================================
+-- `xp_pins` is gone, because a room already was one
+-- ----------------------------------------------------------------------------
+-- It existed for about an hour and never left this machine, which is the only
+-- reason this is a drop rather than a migration of its rows.
+--
+-- The table answered a real question - how does a level survive the match it is
+-- played in - and answered it beside the rooms instead of as one. That left a
+-- standing level with no chat, no visitor list, no capacity, no rename and no
+-- close, all of which a room has and all of which would have had to be built a
+-- second time and worse.
+--
+-- 20261015000000_rooms_xp.sql is the replacement and it is one column: a room
+-- may name a level. Everything a room already does then applies to it, which is
+-- the whole argument. See docs/xp/backlog.md §11.5.
+--
+-- Kept as a written-down drop rather than by deleting the migration that made
+-- it, because a migration that vanishes is one that has already run on somebody
+-- else's machine and will not be undone there.
+-- ============================================================================
+
+drop table if exists public.xp_pins;

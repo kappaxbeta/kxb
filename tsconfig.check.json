@@ -1,0 +1,21 @@
+{
+  // Typecheck config for CI and deploys.
+  //
+  // Identical to tsconfig.json except that it ignores `.next/dev/types`, which
+  // the running dev server rewrites continuously. The main config includes
+  // those files so the editor can typecheck route params - but a build-time
+  // check that reads them races the dev server, and a torn read shows up as a
+  // syntax error inside generated code that is perfectly valid a second later.
+  //
+  // Used by deploy.sh. `bun run typecheck` still uses the main config, so
+  // editor-facing route types stay covered day to day.
+  //
+  // `.next*/dev` is a pattern rather than a list, for the reason the eslint
+  // config already learned about `.next-shots`: every concurrent session runs
+  // its own dev server under its own NEXT_DIST_DIR, so the set of directories
+  // is not knowable here. A literal `.next/dev` covered the default one and let
+  // a deploy fail on a torn read from `.next-guestloop/dev` - a syntax error in
+  // generated code belonging to a server this checkout is not even using.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", ".next*/dev"]
+}

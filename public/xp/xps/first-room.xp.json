@@ -1,0 +1,337 @@
+{
+  "format": "xp/1",
+  "id": "first-room",
+  "name": "First room",
+  "blurb": "A hand-written document, to prove the runtime reads one. The stairs climb because a model's collision is its measured shape rather than its box; the way out is a gap in the wall, because a 1.6-metre doorway does not fit a one-metre grid.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "proto"
+    }
+  ],
+  "capabilities": [
+    "freeplay",
+    "match",
+    "competition"
+  ],
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 2,
+    "facing": 180
+  },
+  "blueprints": {
+    "barrel": {
+      "model": "proto/Barrel_A",
+      "tags": [
+        "breakable"
+      ],
+      "props": {
+        "hp": 20
+      }
+    },
+    "crate": {
+      "model": "proto/Box_A",
+      "tags": [
+        "breakable"
+      ],
+      "props": {
+        "hp": 10
+      }
+    },
+    "coin": {
+      "model": "proto/Coin_A",
+      "collider": "none",
+      "tags": [
+        "pickup"
+      ],
+      "props": {
+        "value": 5
+      }
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "barrel",
+      "x": 3.2,
+      "y": 1,
+      "z": 3.4
+    },
+    {
+      "blueprint": "barrel",
+      "x": 4.1,
+      "y": 1,
+      "z": 3.1,
+      "rotation": 30
+    },
+    {
+      "blueprint": "crate",
+      "x": 2.4,
+      "y": 1,
+      "z": 4.2
+    },
+    {
+      "blueprint": "crate",
+      "x": 2.9,
+      "y": 1.51,
+      "z": 4.3,
+      "rotation": 20
+    },
+    {
+      "blueprint": "coin",
+      "x": -2.5,
+      "y": 1.5,
+      "z": 2.5
+    },
+    {
+      "blueprint": "coin",
+      "x": -1.5,
+      "y": 1.5,
+      "z": 2.5
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "placements": [
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -4,
+        "y": 1,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -4,
+        "y": 1,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 0,
+        "y": 1,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 4,
+        "y": 1,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 4,
+        "y": 1,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": -4,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": -4,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": 0,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": 0,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": 4,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": 4,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": -3,
+        "y": 1,
+        "z": -3
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": -3,
+        "y": 3,
+        "z": -3
+      },
+      {
+        "model": "proto/Locker",
+        "x": -5,
+        "y": 1,
+        "z": 4,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Workbench",
+        "x": -4,
+        "y": 1,
+        "z": 0,
+        "rotation": 270
+      },
+      {
+        "model": "proto/target_stand_A",
+        "x": -4,
+        "y": 1,
+        "z": -4
+      },
+      {
+        "model": "proto/Weaponrack",
+        "x": -1,
+        "y": 1,
+        "z": -5
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 8
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 0,
+        "y": 1,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 1,
+        "z": 8,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 1,
+        "z": 8,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Stairs_Half",
+        "x": 3,
+        "y": 1,
+        "z": 0,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": 4,
+        "y": 1,
+        "z": 0
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": 2,
+        "facing": 180,
+        "team": "red"
+      },
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": -2,
+        "facing": 0,
+        "team": "blue"
+      },
+      {
+        "kind": "start",
+        "x": -4,
+        "y": 1,
+        "z": 4,
+        "facing": 0,
+        "width": 4,
+        "height": 4
+      },
+      {
+        "kind": "finish",
+        "x": 4,
+        "y": 1,
+        "z": -4,
+        "facing": 180,
+        "width": 4,
+        "height": 4
+      }
+    ]
+  }
+}

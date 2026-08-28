@@ -1,0 +1,51 @@
+{
+  "format": "xp/1",
+  "id": "peepz-world",
+  "name": "Peepz World",
+  "blurb": "Four rooms and the garden behind them, and a catalogue to fill both with. Buy the floor before you buy the sofa; step out of the front door and you are outside, and down the garden is the café that pays for all of it. One purse, one plot of land, two cartridges. Not a level - this document names a game the host runs.",
+  "finish": "glass",
+  "packs": [
+    {
+      "id": "tiny-house"
+    },
+    {
+      "id": "tiny-living"
+    },
+    {
+      "id": "tiny-bedroom"
+    },
+    {
+      "id": "tiny-bathroom"
+    },
+    {
+      "id": "tiny-kitchen"
+    },
+    {
+      "id": "tiny-park"
+    },
+    {
+      "id": "tiny-plants"
+    },
+    {
+      "id": "peepz"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "rules": {
+    "preset": "freestyle",
+    "players": {
+      "min": 1,
+      "max": 8
+    }
+  },
+  "backend": {
+    "needs": [
+      "identity"
+    ]
+  },
+  "frame": {
+    "game": "peepz-world"
+  }
+}

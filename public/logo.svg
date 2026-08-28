@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="400" viewBox="0 0 500 400">
+  <defs>
+    <!-- The outer half of the CSS box-shadow. Blur radius is in user units here
+         where CSS gave it in rem, so it scales with the box like everything else. -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="30.08"/>
+    </filter>
+    <filter id="textGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12.03"/>
+    </filter>
+  </defs>
+
+  <!-- Painted first and blurred: the glow reading out from behind the box,
+       which is what the outer box-shadow does. -->
+  <rect x="62" y="49.599999999999994" width="376" height="300.8" rx="48.128"
+        fill="none" stroke="#00ebec" stroke-width="30.08"
+        opacity="0.45" filter="url(#glow)"/>
+
+  <!-- The box. Filled with the translucent cyan ground, not the page surface:
+       this file is meant to sit on somebody else's background. -->
+  <rect x="62" y="49.599999999999994" width="376" height="300.8" rx="48.128"
+        fill="#00ebec" fill-opacity="0.08" stroke="#00ebec" stroke-width="15.04"/>
+
+  <!-- The word twice: blurred for the text-shadow, then sharp on top. The skew
+       is the italic of the CSS rule - these are paths, so there is no oblique
+       face to ask for. -->
+  <g transform="translate(250 200) skewX(-9) scale(13.3211) translate(-16.3 -17.25)"
+     fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#00ebec" stroke-width="3.4" opacity="0.8" filter="url(#textGlow)">
+    <path d="M6.5 11.5V21.5"/>
+    <path d="M10.8 12.2 6.9 16.5"/>
+    <path d="M7.4 16.2 10.8 21.5"/>
+    <path d="M13.3 10.5 18.9 21.5"/>
+    <path d="M18.9 10.5 13.3 21.5"/>
+    <path d="M22.4 24V12.4a2.9 2.9 0 0 1 5.1 1.9 2.6 2.6 0 0 1-2.6 2.4"/>
+    <path d="M24.9 16.7a2.9 2.9 0 0 1 0 5.2h-2.5"/>
+</g>
+    <g stroke="#f6f3fe" stroke-width="2.1">
+    <path d="M6.5 11.5V21.5"/>
+    <path d="M10.8 12.2 6.9 16.5"/>
+    <path d="M7.4 16.2 10.8 21.5"/>
+    <path d="M13.3 10.5 18.9 21.5"/>
+    <path d="M18.9 10.5 13.3 21.5"/>
+    <path d="M22.4 24V12.4a2.9 2.9 0 0 1 5.1 1.9 2.6 2.6 0 0 1-2.6 2.4"/>
+    <path d="M24.9 16.7a2.9 2.9 0 0 1 0 5.2h-2.5"/>
+</g>
+  </g>
+</svg>

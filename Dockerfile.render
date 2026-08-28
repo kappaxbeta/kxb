@@ -1,0 +1,93 @@
+# syntax=docker/dockerfile:1
+#
+# The render worker: Chromium, bun, and four source files.
+#
+# Separate from the app's Dockerfile rather than a stage in it, because they
+# have almost nothing in common. The app image is a Next.js standalone bundle
+# and no browser; this is a browser and no Next.js. Folding them together would
+# put 500MB of Chromium into both replicas of a web server, or a web server into
+# a thing that draws pictures.
+#
+# ---------------------------------------------------------------------------
+# Why this does not `bun install` the repo
+# ---------------------------------------------------------------------------
+# The obvious build copies package.json and the lockfile and installs against
+# it, the way the app's does. That resolves to 1.8GB of node_modules, virtually
+# all of it Next, React and three - none of which runs here. The worker imports
+# exactly two packages.
+#
+# So it installs those two, and reads their versions *out of the repo's own
+# package.json* rather than pinning them here. A second hand-written version
+# list is a thing that drifts silently: the app upgrades supabase-js, the worker
+# keeps talking to the old client, and nothing says so until a schema change
+# lands. Reading the range means there is still one place versions are decided,
+# and the build fails loudly if either dependency is renamed or removed.
+#
+# The trade is that there is no lockfile for these two, so a rebuild can pick up
+# a patch release the app has not seen. For a worker whose entire surface is
+# "claim a row, upload a file" that is the cheaper of the two risks.
+
+FROM oven/bun:1 AS deps
+WORKDIR /w
+
+COPY package.json ./repo-package.json
+RUN bun -e "\
+  const repo = require('/w/repo-package.json'); \
+  const wanted = ['@supabase/supabase-js', 'zod']; \
+  const dependencies = {}; \
+  for (const name of wanted) { \
+    const range = repo.dependencies?.[name]; \
+    if (!range) throw new Error('render worker needs ' + name + ', which is no longer a dependency of the app'); \
+    dependencies[name] = range; \
+  } \
+  require('fs').writeFileSync('/w/package.json', JSON.stringify({ name: 'render-worker', private: true, dependencies }, null, 2)); \
+  console.log(dependencies); \
+  " \
+ && rm /w/repo-package.json \
+ && bun install
+
+# ---------------------------------------------------------------------------
+
+FROM oven/bun:1
+
+# Chromium from Debian rather than a downloaded build: it is the version the
+# distribution patches, it arrives with its own library dependencies resolved,
+# and it is the one thing in this image that must not be a surprise.
+#
+# fonts-liberation is not optional. Without any font at all, text drawn into a
+# scene renders as boxes - and a thumbnail with boxes in it looks like a bug in
+# the scene rather than a missing package.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      chromium \
+      fonts-liberation \
+      ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=deps /w/node_modules ./node_modules
+
+# Only what the worker imports. Listed one by one rather than `COPY . .` so that
+# adding a file to this image is a decision somebody made: a worker that quietly
+# gains the ability to import half the app is a worker that will.
+COPY scripts/render-worker.ts scripts/devtools.ts ./scripts/
+COPY src/domain/renders/jobs.ts ./src/domain/renders/
+COPY src/lib/supabase/database.types.ts ./src/lib/supabase/
+
+ENV CHROME_PATH=/usr/bin/chromium
+# Chromium's own sandbox cannot start in a container without extra privileges,
+# and asking for those to draw a picture is the wrong trade. The container is
+# the boundary instead: no ports, no volumes, and the only untrusted input is a
+# scene document that has already been through `parseShot` twice.
+ENV CHROME_NO_SANDBOX=1
+# Written to on every render. /tmp is where a profile belongs and also the one
+# place a read-only root filesystem would still allow.
+ENV RENDER_PROFILE_DIR=/tmp/render-profile
+
+# `bun` is already the image's non-root user. Chromium with --no-sandbox does
+# not need root, and a browser that renders arbitrary scene documents is exactly
+# the process not to run as one.
+USER bun
+
+CMD ["bun", "run", "scripts/render-worker.ts"]

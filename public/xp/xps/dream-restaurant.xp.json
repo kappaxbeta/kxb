@@ -1,0 +1,42 @@
+{
+  "format": "xp/1",
+  "id": "dream-restaurant",
+  "name": "Peepz My Dream Restaurant",
+  "blurb": "Run the lunch service. Take an order, cook it, carry it out before the customer gives up - and spend the takings on a bigger kitchen. Out of the front door is the garden, and past the garden is the house you are earning it for: one purse, one plot of land, two cartridges. Not a level - this document names a game the host runs, and the host is the space it is opened in.",
+  "finish": "shiny",
+  "packs": [
+    {
+      "id": "restaurant"
+    },
+    {
+      "id": "tiny-cafe"
+    },
+    {
+      "id": "tiny-kitchen"
+    },
+    {
+      "id": "tiny-bakery"
+    },
+    {
+      "id": "peepz"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "rules": {
+    "preset": "freestyle",
+    "players": {
+      "min": 1,
+      "max": 8
+    }
+  },
+  "backend": {
+    "needs": [
+      "identity"
+    ]
+  },
+  "frame": {
+    "game": "dream-restaurant"
+  }
+}

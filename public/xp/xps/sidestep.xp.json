@@ -1,0 +1,308 @@
+{
+  "format": "xp/1",
+  "id": "sidestep",
+  "name": "Sidestep",
+  "blurb": "A run seen from the side, the way a platformer is meant to be. Everything happens along one axis and inside one screen of height — walk the steps, jump the gaps, sprint the long one, time the saw, and drop to the gate. Miss and you are back at the start; there is nothing under it to land on.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "dummy"
+    },
+    {
+      "id": "platformer-neutral"
+    },
+    {
+      "id": "platformer-green"
+    },
+    {
+      "id": "platformer-yellow"
+    },
+    {
+      "id": "platformer-red"
+    },
+    {
+      "id": "platformer-blue"
+    }
+  ],
+  "capabilities": [
+    "freeplay",
+    "competition"
+  ],
+  "rules": {
+    "preset": "parkour"
+  },
+  "camera": {
+    "kind": "side"
+  },
+  "spawn": {
+    "x": 0,
+    "y": 2,
+    "z": 0,
+    "facing": 90
+  },
+  "player": {
+    "blueprint": "runner"
+  },
+  "scripts": {
+    "sweep": "\n// Up and down over the gap, so the way through opens and shuts. Driven from\n// world.time rather than integrated per frame, so every client agrees where the\n// blade is without anybody sending it.\nconst BASE = 12\nconst REACH = 2.4\nconst PACE = 2.6\n\nfunction onTick() {\n  self.y = BASE + Math.sin(world.time * PACE) * REACH\n  self.rotation = (world.time * 360) % 360\n}\n"
+  },
+  "blueprints": {
+    "runner": {
+      "model": "dummy/Dummy",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "hp": 1
+      },
+      "triggers": []
+    },
+    "spikes": {
+      "model": "platformer-neutral/floor_spikes_2x2x1",
+      "collider": "none",
+      "tags": [
+        "hazard"
+      ],
+      "props": {},
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "damage",
+              "target": "other",
+              "amount": 99
+            }
+          ]
+        }
+      ]
+    },
+    "saw": {
+      "model": "platformer-neutral/sawblade",
+      "collider": {
+        "w": 5,
+        "h": 1.4,
+        "d": 3
+      },
+      "tags": [
+        "hazard"
+      ],
+      "props": {},
+      "script": "sweep",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "damage",
+              "target": "other",
+              "amount": 99
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "spikes",
+      "name": "spikes_1",
+      "x": 48,
+      "y": 11,
+      "z": 0,
+      "rotation": 0,
+      "scale": 1,
+      "props": {}
+    },
+    {
+      "blueprint": "saw",
+      "name": "saw_1",
+      "x": 62.5,
+      "y": 12,
+      "z": 0,
+      "rotation": 0,
+      "scale": 1,
+      "props": {}
+    }
+  ],
+  "world": {
+    "floorY": -12,
+    "ground": false,
+    "restart": true,
+    "placements": [
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 1,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 1,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-neutral/signage_arrows_right",
+        "x": 10,
+        "y": 2,
+        "z": -3,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_4x4x1_green",
+        "x": 11,
+        "y": 2,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_4x4x1_green",
+        "x": 15,
+        "y": 3,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_4x4x1_green",
+        "x": 19,
+        "y": 4,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/platform_4x4x1_yellow",
+        "x": 26,
+        "y": 6,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/barrier_4x1x1_yellow",
+        "x": 26,
+        "y": 7,
+        "z": 2,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/platform_4x4x1_yellow",
+        "x": 33,
+        "y": 8,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/barrier_4x1x1_yellow",
+        "x": 33,
+        "y": 9,
+        "z": 2,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/platform_4x4x1_yellow",
+        "x": 40,
+        "y": 10,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/barrier_4x1x1_yellow",
+        "x": 40,
+        "y": 11,
+        "z": 2,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 48,
+        "y": 10,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-red/platform_4x4x1_red",
+        "x": 59,
+        "y": 10,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-red/platform_4x4x1_red",
+        "x": 66,
+        "y": 10,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 74,
+        "y": 8,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-neutral/signage_finish_wide",
+        "x": 74,
+        "y": 9,
+        "z": -2,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-blue/flag_A_blue",
+        "x": 72,
+        "y": 9,
+        "z": 1,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-blue/flag_A_blue",
+        "x": 76,
+        "y": 9,
+        "z": 1,
+        "rotation": 0,
+        "scale": 1
+      }
+    ],
+    "marks": [
+      {
+        "kind": "start",
+        "x": 0,
+        "y": 2,
+        "z": 0,
+        "facing": 90,
+        "width": 6,
+        "height": 4
+      },
+      {
+        "kind": "finish",
+        "x": 74,
+        "y": 9,
+        "z": 0,
+        "facing": 90,
+        "width": 6,
+        "height": 4
+      }
+    ]
+  }
+}

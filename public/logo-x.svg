@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="400" viewBox="0 0 70 40">
+  <g transform="translate(10 4) skewX(-9)"
+     fill="none" stroke="#e74dff" stroke-width="3.4"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 8V28"/>
+    <path d="M13 8 2.8 19.2"/>
+    <path d="M5 17.6 13.6 28"/>
+    <path d="M18 8 29 28"/>
+    <path d="M29 8 18 28"/>
+    <path d="M34 8V28"/>
+    <path d="M34 8h5.4a5 5 0 0 1 0 9.9H34"/>
+    <path d="M34 17.9h6.1a5.05 5.05 0 0 1 0 10.1H34"/>
+  </g>
+</svg>

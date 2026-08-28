@@ -1,0 +1,21 @@
+{
+  "name": "@kxb/maumau",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mau-Mau for two to four: the deck, the table, and the authority that is the only thing allowed to see a hand. Integrates @kxb/xp as a host SDK; ships its own art.",
+  "dependencies": {
+    "@kxb/xp": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./cards": "./src/rules/cards.ts",
+    "./table": "./src/rules/table.ts",
+    "./house": "./src/rules/house.ts",
+    "./arbiter": "./src/net/arbiter.ts",
+    "./net": "./src/net/session.ts",
+    "./wire": "./src/net/wire.ts",
+    "./art": "./src/art/deck.ts",
+    "./play": "./src/play/game.tsx",
+    "./words": "./src/play/words.ts"
+  }
+}

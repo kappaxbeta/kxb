@@ -1,0 +1,1251 @@
+{
+  "format": "xp/1",
+  "id": "peepz",
+  "name": "Peepz Park",
+  "blurb": "You are an animal in a park with a ball in it. Run into the ball and it rolls; E kicks it properly, and it goes as fast as you were running when you hit it. F is a dash, which is how you catch it. Eat the apples the trees drop. Knock over the critters and the strength bar fills - full, your dash goes rainbow, twice as far, and takes down whatever it touches.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "peepz"
+    },
+    {
+      "id": "platformer-neutral"
+    },
+    {
+      "id": "platformer-blue"
+    },
+    {
+      "id": "platformer-green"
+    },
+    {
+      "id": "platformer-red"
+    },
+    {
+      "id": "platformer-yellow"
+    },
+    {
+      "id": "resources"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "rules": {
+    "preset": "freestyle",
+    "players": {
+      "min": 1,
+      "max": 8
+    }
+  },
+  "camera": {
+    "kind": "follow"
+  },
+  "data": {
+    "strength": {
+      "scope": "run",
+      "value": 0,
+      "label": "strength"
+    },
+    "goals": {
+      "scope": "run",
+      "value": 0,
+      "label": "goals"
+    },
+    "eaten": {
+      "scope": "run",
+      "value": 0,
+      "label": "apples"
+    }
+  },
+  "player": {
+    "blueprint": "peep",
+    "wears": "profile",
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "kick"
+      },
+      {
+        "key": "KeyF",
+        "does": "dash"
+      }
+    ]
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 6,
+    "facing": 180
+  },
+  "scripts": {
+    "kick": "/**\n * A ball, and what a kick does to it.\n *\n * The rule beside this one decides *when* - `pressed key: kick, within: 3` - and\n * everything about how hard is here. That split is the point: a rule is a\n * sentence about the game, and how hard you hit a ball is arithmetic.\n *\n * What this script does not do is *move* the ball. The blueprint has a `body`,\n * so gravity, the grass, the trees and the walls all have an opinion about where\n * it goes, and a shoulder into it rolls it with no script at all. Everything\n * below is about the kick, which is the one thing the physics cannot know: how\n * hard, and which way.\n *\n * ---------------------------------------------------------------------------\n * The same kick the pitch has, because this was the old one\n * ---------------------------------------------------------------------------\n * Reported as *\"make the balls like in football, that you kick them not teleport\n * kick them\"*, and that is exactly what this was: the park kept the first\n * version of this script while `kickabout` spent four commits fixing it, so the\n * two levels have had different balls for as long as there have been two of\n * them. Three things made the park's read as a teleport rather than a shot, and\n * each is a note of its own below - the power, the loft, and the glow.\n *\n * Momentum, because a ball that always left at the same speed would make running\n * at it pointless. The kicker's pace is measured here rather than asked for, by\n * remembering where they were last frame - a level has no reading of how fast\n * anybody is going, and one frame of positions is exactly that.\n */\nconst REACH = 3\n/**\n * How hard a kick is, and these numbers are the whole of whether it is watchable.\n *\n * They were 9 and 1.7 here, which is a standing kick of nine cells a second and\n * a running one of over thirty. The goals are twenty cells from the middle, so\n * that is a ball which leaves from anywhere, crosses the whole park inside a\n * second and turns up against the far wall - **not a skip in the drawing but a\n * ball that leaves the picture**, which is what \"teleport\" describes. Traced\n * frame by frame on the pitch next door, the drawn ball was perfectly smooth\n * through the whole of a kick like this and still travelled thirty-one cells.\n *\n * Four and a quarter, the numbers `kickabout` settled on against a pitch this\n * same size. A push leads by about three cells, so a kick is priced at roughly\n * three of those - nine or ten at a walk, a dozen at a sprint - and the ball\n * stays somewhere you can see it the whole way.\n */\nconst BASE = 4\nconst CARRY = 0.25\n/**\n * Flat. A kick is a force along the ground and gravity does the rest.\n *\n * This lofted at 0.3 of the kick's power to *clear a critter*, which is a real\n * thing to want and not worth what it costs: a hop is the one part of a shot you\n * cannot follow. The ball leaves the ground, its shadow separates from it, and\n * where it comes down is a guess - so every touch read as the ball jumping\n * somewhere rather than being struck. Rolling is legible, and a critter is\n * something to dribble round.\n */\nconst LOFT = 0\n\nlet wasX = null\nlet wasZ = null\nlet pace = 0\n\n/**\n * A kick still to be delivered: where it is going, where it started, and how\n * long is left of it.\n *\n * A kick used to be handed to the ball whole, in one frame - the honest sum, and\n * it read as the ball jumping into motion rather than being struck. The same\n * shot spread over a fifth of a second has a visible start to it: the ball\n * accelerates away like something hit hard, which is what it is. Short enough\n * that nothing about aiming or passing changes - the ball is at full speed\n * inside twelve frames.\n *\n * ---------------------------------------------------------------------------\n * A speed that climbs, and not a stream of little pushes\n * ---------------------------------------------------------------------------\n * The pitch pays this out as impulses - a slice of the kick pushed every frame -\n * and on this grass **that kick does not happen at all**. `REST_SPEED` in the\n * body step stops any grounded body under four tenths of a cell a second, on the\n * argument that a body which creeps is a body somebody reports as drifting; a\n * walking kick sliced across twelve frames is a third of that per frame, so\n * every slice is zeroed in the same frame it arrives and a ball kicked at a walk\n * moves seven centimetres. The pitch escapes it by accident: its ball never\n * quite settles - it micro-bounces a hundredth of a cell forever - so it is not\n * grounded on half its frames and the slices survive. Ours lies still, which is\n * the better-behaved ball and the one the trap catches.\n *\n * So the ramp is on the *speed* rather than on the impulse: the velocity the\n * shot should be doing by now, written whole each frame. Only the first frame or\n * two are under the floor and lost, the ball is at the full number at\n * `SEND_TIME` either way, and it does not depend on the frame rate - which the\n * slices did, doubly: at 144Hz every slice is a third the size and the whole\n * kick disappears on any ball at all.\n *\n * `from` is what it was already doing when it was struck, so a ball rolling\n * towards you still leaves faster than one lying still. Written rather than\n * pushed means `mass` does not divide it, which for a football is the same\n * number - and this is the level's own ball rather than a general verb.\n */\nconst SEND_TIME = 0.2\nconst sending = { x: 0, z: 0, fromX: 0, fromZ: 0, left: 0 }\n\nfunction onTick(dt) {\n  const player = getEntityByName('player')\n\n  // How fast they are going, from where they were. Guarded against the first\n  // frame and against a teleport, which would otherwise read as a rocket.\n  if (player) {\n    if (wasX !== null && dt > 0) {\n      const moved = Math.sqrt((player.x - wasX) * (player.x - wasX) + (player.z - wasZ) * (player.z - wasZ))\n      const speed = moved / dt\n      pace = speed > 30 ? pace : speed\n    }\n    wasX = player.x\n    wasZ = player.z\n  }\n\n  // The struck ball, brought up to speed over SEND_TIME rather than in a frame.\n  if (sending.left > 0 && dt > 0) {\n    sending.left = Math.max(0, sending.left - dt)\n    const done = 1 - sending.left / SEND_TIME\n    self.dx = sending.fromX + sending.x * done\n    self.dz = sending.fromZ + sending.z * done\n  }\n\n  if (self.get('kicked') > 0) {\n    self.set('kicked', 0)\n    if (player) {\n      const dx = self.x - player.x\n      const dz = self.z - player.z\n      const away = Math.sqrt(dx * dx + dz * dz)\n      if (away < REACH) {\n        /**\n         * Where you are looking, not where the ball happens to be.\n         *\n         * This kicked the ball *directly away from the player* - the line from\n         * them to it - which makes the shot depend on which side of the ball you\n         * happened to arrive at rather than on where you meant it to go. You\n         * cannot pass with that: standing a step to the left of the ball sends it\n         * right, and the only way to aim was to walk around it.\n         *\n         * A kick is now the direction you are facing, so it is aimed the same way\n         * everything else in the level is aimed - and, the point of the change,\n         * **somebody else can read it**. A player who can see which way you are\n         * turned can see where the ball is about to go and move to meet it, which\n         * is the whole of what makes passing a thing two people do rather than\n         * one.\n         *\n         * `+z` is forward at a facing of zero, which is the frame the spawns, the\n         * marks and the race gates all use.\n         */\n        const facing = (player.rotation * Math.PI) / 180\n        const fx = Math.sin(facing)\n        const fz = Math.cos(facing)\n        const power = BASE + pace * CARRY\n        // On top of what it is already doing, so meeting a ball coming towards\n        // you sends it on harder than hitting one lying still. Which is the\n        // whole of a volley. Ramped rather than struck whole - see SEND_TIME.\n        sending.fromX = self.dx\n        sending.fromZ = self.dz\n        sending.x = fx * power\n        sending.z = fz * power\n        sending.left = SEND_TIME\n        self.emit('kicked')\n      }\n    }\n  }\n\n  /*\n   * No material change any more, and it is worth recording why. The ball turned\n   * to rainbow glass while it was going somewhere, as a beacon that read across\n   * the park. But the swap itself is a discontinuity: the frame you kick, the\n   * ball you were looking at becomes a glass one the grass shows straight\n   * through, and on the pitch next door every report of the kick \"jumping\"\n   * survived every fix to the physics because the thing jumping was the look.\n   * Its own colours are the most visible thing this ball can wear, at any speed,\n   * from anywhere.\n   */\n}\n\n/**\n * It met the level - the grass, a tree, the back of a goal.\n *\n * The event that did not exist while the ball was a script: nothing could tell\n * you it had *arrived* anywhere, because nothing ever did. `other` is null on a\n * hit; a rule about touching a critter is a `collide`.\n */\nfunction onTrigger(event) {\n  if (event === 'hit' && self.speed > 6) self.emit('thump')\n}\n",
+    "orchard": "\n/**\n * A tree that drops an apple now and then.\n *\n * The whole of \"apples fall\": a deadline on `world.time`, which is the clock\n * every client agrees about, so four browsers grow the same fruit at the same\n * moment without anybody sending anything. A timer per machine would not.\n *\n * It counts what it has dropped rather than what is lying about, and stops at\n * a few: an orchard nobody eats from should not fill the park by teatime.\n */\nconst EVERY = 9\nconst MOST = 3\n\nlet next = 0\nlet out = 0\n\nfunction onSpawn() {\n  // Staggered by where the tree stands, so four trees do not fruit in unison.\n  next = 2 + Math.abs(self.x + self.z) * 0.11\n}\n\nfunction onTick() {\n  if (world.time < next) return\n  next = world.time + EVERY\n  if (out >= MOST) return\n  out += 1\n  // Just off the trunk and above head height: an apple has to fall to be worth\n  // waiting for, and the world's own gravity is not a thing an entity has.\n  const apple = self.spawn('apple', world.random() * 2 - 1, 3.2, world.random() * 2 - 1)\n  if (apple) apple.set('from', self.id)\n}\n",
+    "falling": "\n/**\n * An apple on its way down, and then lying there.\n *\n * Entities have no gravity - the character controller is the only thing in this\n * engine that falls - so a thing that should drop does it here. Which is fine\n * for one apple and is the honest reason it is a script rather than a field.\n */\nconst GRAVITY = 14\nconst GROUND = 1.2\n\nlet fall = 0\n\nfunction onTick(dt) {\n  if (self.y <= GROUND) {\n    self.y = GROUND\n    fall = 0\n    // Turning slowly where it lies, so it reads as something to pick up.\n    self.rotation = (self.rotation + dt * 45) % 360\n    return\n  }\n  fall += GRAVITY * dt\n  self.y = Math.max(GROUND, self.y - fall * dt)\n}\n",
+    "hero": "\n/**\n * The strength bar, and what being full of it does to a dash.\n *\n * The rules do the parts that are sentences about the game - the dash key\n * dashes, a critter that goes down adds to `strength` - and this does the part\n * that is a clock: a mega dash lasts a moment, and something has to end it.\n *\n * `mega` is a property on the body rather than a field of the level because it\n * is a fact about *this* player. A critter reads it off whoever touched them.\n */\nconst MEGA_FOR = 0.45\n\nlet until = 0\n\nfunction onTick() {\n  const full = world.get('strength') >= 4\n\n  if (self.get('mega') > 0 && until === 0) {\n    until = world.time + MEGA_FOR\n    self.material = 'rainbow'\n  }\n\n  if (until > 0 && world.time >= until) {\n    until = 0\n    self.set('mega', 0)\n    // Spent. The bar goes back to nothing, which is what makes a mega dash a\n    // thing you save up for rather than a thing you have.\n    world.set('strength', 0)\n    self.material = 'own'\n  }\n\n  // A hint that it is ready, when it is and nothing is running: the body itself\n  // glows faintly rather than the HUD growing another number.\n  if (full && until === 0 && self.material === 'own') self.material = 'rainbow'\n  if (!full && until === 0 && self.material === 'rainbow') self.material = 'own'\n}\n",
+    "critter": "\n/**\n * Somebody to knock over: a peep that wanders its own patch.\n *\n * A patch and not the park, because a critter that walked off would be a level\n * that empties itself. Where it started is remembered on the first tick - an\n * entity knows where it *is*, and where it belongs is this script's business.\n */\nconst PATCH = 5\nconst PACE = 1.8\n\nlet homeX = null\nlet homeZ = null\nlet goX = 0\nlet goZ = 0\nlet turn = 0\n\nfunction onTick(dt) {\n  if (homeX === null) {\n    homeX = self.x\n    homeZ = self.z\n  }\n\n  if (world.time >= turn) {\n    turn = world.time + 2 + world.random() * 3\n    const angle = world.random() * Math.PI * 2\n    goX = Math.sin(angle)\n    goZ = Math.cos(angle)\n  }\n\n  // Turned back at the edge of its patch rather than clamped, so it paces about\n  // instead of standing against an invisible wall.\n  const outX = self.x - homeX\n  const outZ = self.z - homeZ\n  if (Math.sqrt(outX * outX + outZ * outZ) > PATCH) {\n    const back = Math.sqrt(outX * outX + outZ * outZ)\n    goX = -outX / back\n    goZ = -outZ / back\n  }\n\n  self.moveBy(goX * PACE * dt, 0, goZ * PACE * dt)\n  self.rotation = (Math.atan2(goX, goZ) * 180) / Math.PI\n}\n"
+  },
+  "blueprints": {
+    "peep": {
+      "model": "peepz/fox",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "hp": 100,
+        "mega": 0
+      },
+      "script": "hero",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "dash",
+          "when": {
+            "of": "world",
+            "prop": "strength",
+            "is": "<",
+            "value": 4
+          },
+          "do": [
+            {
+              "op": "dash",
+              "target": "self",
+              "cells": 5
+            }
+          ]
+        },
+        {
+          "on": "pressed",
+          "key": "dash",
+          "when": {
+            "of": "world",
+            "prop": "strength",
+            "is": ">=",
+            "value": 4
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "mega",
+              "value": 1
+            },
+            {
+              "op": "dash",
+              "target": "self",
+              "cells": 11
+            },
+            {
+              "op": "emit",
+              "event": "mega dash"
+            }
+          ]
+        }
+      ]
+    },
+    "ball": {
+      "model": "platformer-neutral/ball",
+      "collider": "none",
+      "props": {
+        "kicked": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 3,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "body": {
+        "bounce": 0.5,
+        "friction": 0.7,
+        "drag": 0.08,
+        "roll": 115
+      }
+    },
+    "goal": {
+      "model": "platformer-neutral/structure_A",
+      "collider": "none",
+      "draw": false,
+      "props": {},
+      "triggers": [
+        {
+          "on": "collide",
+          "by": "ball",
+          "do": [
+            {
+              "op": "addProp",
+              "target": "world",
+              "key": "goals",
+              "value": 1
+            },
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            },
+            {
+              "op": "emit",
+              "event": "goal"
+            }
+          ]
+        }
+      ]
+    },
+    "tree": {
+      "model": "platformer-neutral/pillar_1x1x4",
+      "collider": "auto",
+      "props": {},
+      "script": "orchard",
+      "triggers": []
+    },
+    "apple": {
+      "model": "resources/Food_Apple_Red",
+      "collider": "none",
+      "props": {
+        "from": 0
+      },
+      "script": "falling",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "heal",
+              "target": "other",
+              "amount": 15
+            },
+            {
+              "op": "addProp",
+              "target": "world",
+              "key": "eaten",
+              "value": 1
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "despawn",
+              "target": "self"
+            }
+          ]
+        }
+      ]
+    },
+    "critter": {
+      "model": "peepz/panda",
+      "collider": "auto",
+      "props": {
+        "hp": 30
+      },
+      "script": "critter",
+      "triggers": [
+        {
+          "on": "collide",
+          "when": {
+            "of": "other",
+            "prop": "mega",
+            "is": ">=",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "damage",
+              "target": "self",
+              "amount": 999
+            }
+          ]
+        },
+        {
+          "on": "collide",
+          "when": {
+            "of": "other",
+            "prop": "hp",
+            "is": ">",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "damage",
+              "target": "self",
+              "amount": 10
+            }
+          ]
+        },
+        {
+          "on": "collide",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "addProp",
+              "target": "world",
+              "key": "strength",
+              "value": 1
+            },
+            {
+              "op": "sound",
+              "sound": "hit"
+            },
+            {
+              "op": "emit",
+              "event": "a critter is down"
+            },
+            {
+              "op": "despawn",
+              "target": "self"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "ball",
+      "name": "ball",
+      "x": 0,
+      "y": 2,
+      "z": 4
+    },
+    {
+      "blueprint": "goal",
+      "name": "blue-goal",
+      "x": 0,
+      "y": 2,
+      "z": -20
+    },
+    {
+      "blueprint": "goal",
+      "name": "red-goal",
+      "x": 0,
+      "y": 2,
+      "z": 20
+    },
+    {
+      "blueprint": "tree",
+      "name": "tree-1",
+      "x": -22,
+      "y": 1,
+      "z": -22
+    },
+    {
+      "blueprint": "critter",
+      "name": "critter-1",
+      "x": -12,
+      "y": 1,
+      "z": -4
+    },
+    {
+      "blueprint": "tree",
+      "name": "tree-2",
+      "x": 22,
+      "y": 1,
+      "z": -22
+    },
+    {
+      "blueprint": "critter",
+      "name": "critter-2",
+      "x": 12,
+      "y": 1,
+      "z": -4
+    },
+    {
+      "blueprint": "tree",
+      "name": "tree-3",
+      "x": 22,
+      "y": 1,
+      "z": 22
+    },
+    {
+      "blueprint": "critter",
+      "name": "critter-3",
+      "x": 12,
+      "y": 1,
+      "z": 4
+    },
+    {
+      "blueprint": "tree",
+      "name": "tree-4",
+      "x": -22,
+      "y": 1,
+      "z": 22
+    },
+    {
+      "blueprint": "critter",
+      "name": "critter-4",
+      "x": -12,
+      "y": 1,
+      "z": 4
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "ground": true,
+    "restart": false,
+    "fatal": false,
+    "placements": [
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -24,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 24,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -15,
+        "y": 1,
+        "z": -15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_4x4x1_blue",
+        "x": -15,
+        "y": 2,
+        "z": -15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_slope_4x4x4_blue",
+        "x": -15,
+        "y": 1,
+        "z": -9,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_2x2x1_blue",
+        "x": -8,
+        "y": 1,
+        "z": -15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_2x2x2_blue",
+        "x": -21,
+        "y": 1,
+        "z": -8,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/spring_pad_blue",
+        "x": -9,
+        "y": 1,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/flag_A_blue",
+        "x": -16.5,
+        "y": 3,
+        "z": -16.5,
+        "rotation": 45
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 15,
+        "y": 1,
+        "z": -15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_4x4x1_green",
+        "x": 15,
+        "y": 2,
+        "z": -15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_slope_4x4x4_green",
+        "x": 15,
+        "y": 1,
+        "z": -9,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_2x2x1_green",
+        "x": 8,
+        "y": 1,
+        "z": -15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_2x2x2_green",
+        "x": 21,
+        "y": 1,
+        "z": -8,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/spring_pad_green",
+        "x": 9,
+        "y": 1,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/flag_A_green",
+        "x": 16.5,
+        "y": 3,
+        "z": -16.5,
+        "rotation": 135
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 15,
+        "y": 1,
+        "z": 15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_4x4x1_red",
+        "x": 15,
+        "y": 2,
+        "z": 15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_slope_4x4x4_red",
+        "x": 15,
+        "y": 1,
+        "z": 9,
+        "rotation": 180
+      },
+      {
+        "model": "platformer-red/platform_2x2x1_red",
+        "x": 8,
+        "y": 1,
+        "z": 15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_2x2x2_red",
+        "x": 21,
+        "y": 1,
+        "z": 8,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/spring_pad_red",
+        "x": 9,
+        "y": 1,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/flag_A_red",
+        "x": 16.5,
+        "y": 3,
+        "z": 16.5,
+        "rotation": 225
+      },
+      {
+        "model": "platformer-yellow/platform_6x6x1_yellow",
+        "x": -15,
+        "y": 1,
+        "z": 15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_4x4x1_yellow",
+        "x": -15,
+        "y": 2,
+        "z": 15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_slope_4x4x4_yellow",
+        "x": -15,
+        "y": 1,
+        "z": 9,
+        "rotation": 180
+      },
+      {
+        "model": "platformer-yellow/platform_2x2x1_yellow",
+        "x": -8,
+        "y": 1,
+        "z": 15,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/platform_2x2x2_yellow",
+        "x": -21,
+        "y": 1,
+        "z": 8,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/spring_pad_yellow",
+        "x": -9,
+        "y": 1,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-yellow/flag_A_yellow",
+        "x": -16.5,
+        "y": 3,
+        "z": 16.5,
+        "rotation": 315
+      },
+      {
+        "model": "platformer-blue/hoop_blue",
+        "x": 0,
+        "y": 1,
+        "z": -20,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/hoop_red",
+        "x": 0,
+        "y": 1,
+        "z": 20,
+        "rotation": 180
+      },
+      {
+        "model": "platformer-neutral/platform_wood_1x1x1",
+        "x": -6,
+        "y": 1,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/platform_wood_1x1x1",
+        "x": -2,
+        "y": 1,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/platform_wood_1x1x1",
+        "x": 2,
+        "y": 1,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/platform_wood_1x1x1",
+        "x": 6,
+        "y": 1,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x2",
+        "x": -5,
+        "y": 1,
+        "z": -11,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x2",
+        "x": 5,
+        "y": 1,
+        "z": -11,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x2",
+        "x": -5,
+        "y": 1,
+        "z": 11,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x2",
+        "x": 5,
+        "y": 1,
+        "z": 11,
+        "rotation": 0
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": 6,
+        "facing": 180
+      },
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": -6,
+        "facing": 0
+      }
+    ]
+  }
+}

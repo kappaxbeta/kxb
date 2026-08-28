@@ -1,0 +1,3 @@
+# Bun reads this; Next.js does not. Applies to `bun test`.
+[test]
+preload = ["./scripts/test-preload.ts"]

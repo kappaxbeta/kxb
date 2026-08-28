@@ -1,0 +1,2299 @@
+{
+  "format": "xp/1",
+  "id": "shooter",
+  "name": "Shooter",
+  "blurb": "The demo the rest of it was for, grown into a range you have to move around: forty cells of it on two floors, a gallery of targets that get back up, two that run, a bunker you shoot into through a window, and mines that come looking for you - every one of which is a rule or a script in this file rather than code in the runtime.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "proto"
+    },
+    {
+      "id": "dummy"
+    }
+  ],
+  "capabilities": [
+    "freeplay",
+    "match"
+  ],
+  "rules": {
+    "preset": "shooter",
+    "scoreLimit": 60,
+    "timeLimit": 420,
+    "respawn": 4,
+    "players": {
+      "min": 1,
+      "max": 8
+    }
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 16,
+    "facing": 180
+  },
+  "player": {
+    "blueprint": "marksman",
+    "weapon": {
+      "blueprint": "pistol",
+      "socket": "hand"
+    }
+  },
+  "scripts": {
+    "rail": "/**\n * A target that will not stand still.\n *\n * Where it is, is worked out from the clock rather than accumulated frame by\n * frame - `world.time` is the one number every client in the room agrees\n * about, so four browsers draw this in the same place without anybody sending\n * anything, and a runner that was shot down and came back rejoins the sweep\n * instead of starting again from wherever it happened to die.\n *\n * The middle of the sweep is a property rather than where it was placed. Both\n * runners sweep across the middle of the gallery, and both had to be *placed*\n * out at the ends of it: the lane down the centre is the shot you are given on\n * arrival, and there is a test that fires it.\n */\nconst PACE = 0.42\n\nlet phase = 0\n\nfunction onSpawn() {\n  // Staggered by where it starts, so two runners are not one thick runner.\n  phase = self.x * 0.21\n}\n\nfunction onTick() {\n  self.x = self.get('centre') + Math.sin(world.time * PACE + phase) * self.get('span')\n}",
+    "mine": "/**\n * The thing that shoots back, as near as a level can get to one.\n *\n * A script can measure a distance and take health off; it cannot cast a ray,\n * so it cannot fire. What it can do is come to you, and that is what this is:\n * a mine that circles its own patch of the pit until somebody walks inside its\n * reach, closes the distance, and goes off in their face.\n *\n * Three numbers make it fair rather than annoying. It flies above head height\n * and above every crate and cube in the pit, so what it costs you is the open\n * ground rather than the cover; it has a reload, so being caught once is a\n * hit and not a grinder; and it is two shots to bring down, which is worth\n * more than anything standing still on the far wall.\n *\n * ---------------------------------------------------------------------------\n * What it does in a room with other people in it\n * ---------------------------------------------------------------------------\n * `getEntityByName('player')` is *this* browser's player and there is no other\n * kind - so in a room of four, four mines chase four people, each on its own\n * screen. That is the honest reading of it for a range everybody is shooting\n * in at once, and it is deliberately the only divergence: where the mine flies\n * when nobody is near it comes off `world.time`, which is agreed, so the\n * moment it stops chasing it is back on the circle everybody can see.\n */\nconst RING = 5\nconst HEIGHT = 3.6\nconst AGGRO = 11\nconst STING = 2\nconst PACE = 3.6\nconst HURT = 18\nconst RELOAD = 7\nconst DEGREES = 180 / Math.PI\n\nlet homeX = null\nlet homeZ = null\nlet ready = 0\n\nfunction onTick(dt) {\n  if (homeX === null) {\n    homeX = self.x\n    homeZ = self.z\n  }\n\n  const player = getEntityByName('player')\n  const reach = player ? self.flatDistanceTo(player) : 999\n\n  if (player && world.time >= ready && reach < AGGRO) {\n    const dx = player.x - self.x\n    const dz = player.z - self.z\n    const away = Math.sqrt(dx * dx + dz * dz) || 1\n    self.moveTo(self.x + (dx / away) * PACE * dt, HEIGHT, self.z + (dz / away) * PACE * dt)\n    self.rotation = Math.atan2(dx, dz) * DEGREES\n\n    if (reach < STING) {\n      player.damage(HURT)\n      self.emit('a mine went off')\n      ready = world.time + RELOAD\n    }\n    return\n  }\n\n  // Its circuit, and it is *eased* back on to rather than snapped: one that\n  // has just stung somebody drifts back out over a second or so, which is the\n  // whole of what reading as \"it is backing off\" needs.\n  const angle = world.time * 0.6 + homeX\n  const wantX = homeX + Math.cos(angle) * RING\n  const wantZ = homeZ + Math.sin(angle) * RING\n  const ease = Math.min(1, dt * 1.5)\n  self.moveTo(self.x + (wantX - self.x) * ease, HEIGHT, self.z + (wantZ - self.z) * ease)\n  self.rotation = (self.rotation + dt * 120) % 360\n}",
+    "dust": "/**\n * A piece of something that has been shot, on its way to not being there.\n *\n * Debris used to be forever, which was fine when everything in the level broke\n * once. Half of what is in here now comes back - a popper is up again in six\n * seconds - so without this the floor of the gallery is a carpet of shards by\n * the end of a round, every one of them an entity being walked past sixty\n * times a second.\n */\nconst LASTS = 8\n\nlet until = 0\n\nfunction onSpawn() {\n  until = world.time + LASTS\n}\n\nfunction onTick() {\n  if (until > 0 && world.time >= until) self.despawn()\n}"
+  },
+  "blueprints": {
+    "marksman": {
+      "model": "dummy/Dummy",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "hp": 100,
+        "ammo": 30
+      },
+      "sockets": {
+        "hand": {
+          "x": 0.32,
+          "y": 1.15,
+          "z": 0.34
+        }
+      }
+    },
+    "pistol": {
+      "model": "proto/Gun_Pistol",
+      "collider": "none",
+      "tags": [
+        "weapon"
+      ],
+      "props": {
+        "damage": 25,
+        "range": 60
+      }
+    },
+    "target": {
+      "model": "proto/target",
+      "tags": [
+        "breakable",
+        "scoring"
+      ],
+      "props": {
+        "hp": 100
+      },
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "spawn",
+              "blueprint": "shard",
+              "dx": -0.2,
+              "dy": 0.1,
+              "dz": 0
+            },
+            {
+              "op": "spawn",
+              "blueprint": "shard",
+              "dx": 0.2,
+              "dy": -0.2,
+              "dz": 0
+            },
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "emit",
+              "event": "target down"
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "popper": {
+      "model": "proto/target_small",
+      "tags": [
+        "breakable",
+        "scoring"
+      ],
+      "props": {
+        "hp": 60
+      },
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "spawn",
+              "blueprint": "shard",
+              "dx": 0.2,
+              "dy": 0.3,
+              "dz": 0
+            },
+            {
+              "op": "score",
+              "amount": 2
+            },
+            {
+              "op": "emit",
+              "event": "popper down"
+            },
+            {
+              "op": "deactivate",
+              "target": "self",
+              "seconds": 6
+            }
+          ]
+        },
+        {
+          "on": "returned",
+          "do": [
+            {
+              "op": "heal",
+              "target": "self",
+              "amount": 999
+            },
+            {
+              "op": "emit",
+              "event": "popper up"
+            }
+          ]
+        }
+      ]
+    },
+    "runner": {
+      "model": "proto/target",
+      "tags": [
+        "breakable",
+        "scoring"
+      ],
+      "props": {
+        "hp": 75,
+        "centre": 0,
+        "span": 11
+      },
+      "script": "rail",
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "spawn",
+              "blueprint": "shard",
+              "dx": -0.3,
+              "dy": 0.1,
+              "dz": 0
+            },
+            {
+              "op": "spawn",
+              "blueprint": "shard",
+              "dx": 0.3,
+              "dy": -0.2,
+              "dz": 0
+            },
+            {
+              "op": "score",
+              "amount": 4
+            },
+            {
+              "op": "emit",
+              "event": "runner down"
+            },
+            {
+              "op": "deactivate",
+              "target": "self",
+              "seconds": 9
+            }
+          ]
+        },
+        {
+          "on": "returned",
+          "do": [
+            {
+              "op": "heal",
+              "target": "self",
+              "amount": 999
+            },
+            {
+              "op": "emit",
+              "event": "runner back on the rail"
+            }
+          ]
+        }
+      ]
+    },
+    "bullseye": {
+      "model": "proto/target_wall_large_A",
+      "tags": [
+        "breakable",
+        "scoring"
+      ],
+      "props": {
+        "hp": 40
+      },
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "spawn",
+              "blueprint": "shard",
+              "dx": -0.4,
+              "dy": 0.2,
+              "dz": 0.2
+            },
+            {
+              "op": "spawn",
+              "blueprint": "shard",
+              "dx": 0.4,
+              "dy": -0.3,
+              "dz": 0.2
+            },
+            {
+              "op": "score",
+              "amount": 6
+            },
+            {
+              "op": "emit",
+              "event": "bullseye"
+            },
+            {
+              "op": "deactivate",
+              "target": "self",
+              "seconds": 10
+            }
+          ]
+        },
+        {
+          "on": "returned",
+          "do": [
+            {
+              "op": "heal",
+              "target": "self",
+              "amount": 999
+            },
+            {
+              "op": "emit",
+              "event": "bullseye reset"
+            }
+          ]
+        }
+      ]
+    },
+    "wall_target": {
+      "model": "proto/Wall_Target",
+      "tags": [
+        "breakable",
+        "scoring",
+        "cover"
+      ],
+      "props": {
+        "hp": 200
+      },
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "spawn",
+              "blueprint": "rubble",
+              "dx": -0.6,
+              "dy": 0.2,
+              "dz": 0
+            },
+            {
+              "op": "spawn",
+              "blueprint": "rubble",
+              "dx": 0.6,
+              "dy": 0.6,
+              "dz": 0.2
+            },
+            {
+              "op": "score",
+              "amount": 3
+            },
+            {
+              "op": "emit",
+              "event": "cover down"
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "hunter": {
+      "model": "proto/Barrel_C",
+      "tags": [
+        "breakable",
+        "scoring"
+      ],
+      "props": {
+        "hp": 40
+      },
+      "script": "mine",
+      "light": {
+        "colour": 16729122,
+        "intensity": 9,
+        "range": 7
+      },
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "spawn",
+              "blueprint": "rubble",
+              "dx": -0.3,
+              "dy": 0.2,
+              "dz": 0
+            },
+            {
+              "op": "spawn",
+              "blueprint": "rubble",
+              "dx": 0.3,
+              "dy": -0.3,
+              "dz": 0
+            },
+            {
+              "op": "sound",
+              "sound": "hit"
+            },
+            {
+              "op": "score",
+              "amount": 8
+            },
+            {
+              "op": "emit",
+              "event": "mine down"
+            },
+            {
+              "op": "deactivate",
+              "target": "self",
+              "seconds": 12
+            }
+          ]
+        },
+        {
+          "on": "returned",
+          "do": [
+            {
+              "op": "heal",
+              "target": "self",
+              "amount": 999
+            },
+            {
+              "op": "emit",
+              "event": "a mine is back up"
+            }
+          ]
+        }
+      ]
+    },
+    "shard": {
+      "model": "proto/target_pieces_A",
+      "collider": "none",
+      "tags": [
+        "debris"
+      ],
+      "script": "dust"
+    },
+    "rubble": {
+      "model": "proto/target_pieces_D",
+      "collider": "none",
+      "tags": [
+        "debris"
+      ],
+      "script": "dust"
+    },
+    "crate": {
+      "model": "proto/Box_A",
+      "tags": [
+        "breakable"
+      ],
+      "props": {
+        "hp": 50
+      },
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "emit",
+              "event": "crate"
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "barrel": {
+      "model": "proto/Barrel_A",
+      "tags": [
+        "breakable"
+      ],
+      "props": {
+        "hp": 25
+      },
+      "triggers": [
+        {
+          "on": "damaged",
+          "when": {
+            "prop": "hp",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "damage",
+              "amount": 20,
+              "target": "other"
+            },
+            {
+              "op": "sound",
+              "sound": "thud"
+            },
+            {
+              "op": "emit",
+              "event": "barrel"
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "ammo": {
+      "model": "proto/Ammo_Box",
+      "collider": "none",
+      "tags": [
+        "pickup"
+      ],
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "addProp",
+              "key": "ammo",
+              "value": 12,
+              "target": "other"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "+12 ammo"
+            },
+            {
+              "op": "deactivate",
+              "target": "self",
+              "seconds": 15
+            }
+          ]
+        }
+      ]
+    },
+    "stim": {
+      "model": "proto/Can_A",
+      "collider": "none",
+      "tags": [
+        "pickup"
+      ],
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "heal",
+              "target": "other",
+              "amount": 40
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "patched up"
+            },
+            {
+              "op": "deactivate",
+              "target": "self",
+              "seconds": 25
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "target",
+      "x": -8,
+      "y": 3.1,
+      "z": -17.4,
+      "name": "target-1"
+    },
+    {
+      "blueprint": "target",
+      "x": 0,
+      "y": 3.1,
+      "z": -17.4,
+      "name": "target-2"
+    },
+    {
+      "blueprint": "target",
+      "x": 8,
+      "y": 3.1,
+      "z": -17.4,
+      "name": "target-3"
+    },
+    {
+      "blueprint": "popper",
+      "x": -14,
+      "y": 3.0,
+      "z": -17.4
+    },
+    {
+      "blueprint": "popper",
+      "x": 14,
+      "y": 3.0,
+      "z": -17.4
+    },
+    {
+      "blueprint": "popper",
+      "x": -18.4,
+      "y": 2.4,
+      "z": -6.0,
+      "rotation": 90
+    },
+    {
+      "blueprint": "popper",
+      "x": 18.4,
+      "y": 2.4,
+      "z": 6.0,
+      "rotation": 270
+    },
+    {
+      "blueprint": "bullseye",
+      "x": -14,
+      "y": 4.4,
+      "z": -18.9
+    },
+    {
+      "blueprint": "bullseye",
+      "x": 14,
+      "y": 4.4,
+      "z": -18.9
+    },
+    {
+      "blueprint": "bullseye",
+      "x": -18.6,
+      "y": 3.0,
+      "z": -2.5,
+      "rotation": 90
+    },
+    {
+      "blueprint": "wall_target",
+      "x": -4,
+      "y": 1,
+      "z": -2,
+      "rotation": 90,
+      "name": "cover-left"
+    },
+    {
+      "blueprint": "wall_target",
+      "x": 4,
+      "y": 1,
+      "z": 2,
+      "rotation": 90,
+      "name": "cover-right"
+    },
+    {
+      "blueprint": "wall_target",
+      "x": -10,
+      "y": 1,
+      "z": -6
+    },
+    {
+      "blueprint": "wall_target",
+      "x": 10,
+      "y": 1,
+      "z": -6
+    },
+    {
+      "blueprint": "runner",
+      "x": -11,
+      "y": 3.4,
+      "z": -12.6,
+      "name": "runner-1"
+    },
+    {
+      "blueprint": "runner",
+      "x": 11,
+      "y": 3.4,
+      "z": -14.6,
+      "name": "runner-2",
+      "props": {
+        "span": 9
+      }
+    },
+    {
+      "blueprint": "hunter",
+      "x": -7,
+      "y": 3.6,
+      "z": 3,
+      "scale": 0.8,
+      "name": "mine-1"
+    },
+    {
+      "blueprint": "hunter",
+      "x": 9,
+      "y": 3.6,
+      "z": -4,
+      "scale": 0.8,
+      "name": "mine-2"
+    },
+    {
+      "blueprint": "hunter",
+      "x": -3,
+      "y": 3.6,
+      "z": -13,
+      "scale": 0.8,
+      "name": "mine-3"
+    },
+    {
+      "blueprint": "crate",
+      "x": -9.4,
+      "y": 1,
+      "z": -6.6
+    },
+    {
+      "blueprint": "crate",
+      "x": -8.6,
+      "y": 1,
+      "z": -7.0,
+      "rotation": 25
+    },
+    {
+      "blueprint": "crate",
+      "x": 9.2,
+      "y": 1,
+      "z": 6.4
+    },
+    {
+      "blueprint": "crate",
+      "x": 8.4,
+      "y": 1,
+      "z": 6.8,
+      "rotation": 40
+    },
+    {
+      "blueprint": "crate",
+      "x": -3.2,
+      "y": 1,
+      "z": 9.4
+    },
+    {
+      "blueprint": "crate",
+      "x": 12.6,
+      "y": 1,
+      "z": -2.4
+    },
+    {
+      "blueprint": "crate",
+      "x": 13.2,
+      "y": 1,
+      "z": -1.7,
+      "rotation": 15
+    },
+    {
+      "blueprint": "crate",
+      "x": -14.2,
+      "y": 1.5,
+      "z": 12.0
+    },
+    {
+      "blueprint": "crate",
+      "x": -13.4,
+      "y": 1.5,
+      "z": 12.4,
+      "rotation": 30
+    },
+    {
+      "blueprint": "crate",
+      "x": 17.6,
+      "y": 5,
+      "z": -6.0
+    },
+    {
+      "blueprint": "crate",
+      "x": -1.5,
+      "y": 1,
+      "z": 13.5
+    },
+    {
+      "blueprint": "crate",
+      "x": 1.4,
+      "y": 1,
+      "z": 14.2,
+      "rotation": 55
+    },
+    {
+      "blueprint": "barrel",
+      "x": 7.2,
+      "y": 1.5,
+      "z": -7.4
+    },
+    {
+      "blueprint": "barrel",
+      "x": 7.9,
+      "y": 1.5,
+      "z": -6.8
+    },
+    {
+      "blueprint": "barrel",
+      "x": -7.4,
+      "y": 1.5,
+      "z": 7.2
+    },
+    {
+      "blueprint": "barrel",
+      "x": -16.8,
+      "y": 1.5,
+      "z": -8.2
+    },
+    {
+      "blueprint": "barrel",
+      "x": 15.4,
+      "y": 1.5,
+      "z": 14.6
+    },
+    {
+      "blueprint": "barrel",
+      "x": -15.0,
+      "y": 1.5,
+      "z": 4.5
+    },
+    {
+      "blueprint": "barrel",
+      "x": -11.5,
+      "y": 1.5,
+      "z": -15.5
+    },
+    {
+      "blueprint": "barrel",
+      "x": 4.4,
+      "y": 1.5,
+      "z": -16.0
+    },
+    {
+      "blueprint": "ammo",
+      "x": -2.5,
+      "y": 1,
+      "z": 12.5,
+      "rotation": 18
+    },
+    {
+      "blueprint": "ammo",
+      "x": 7.5,
+      "y": 1,
+      "z": 12.0,
+      "rotation": 288
+    },
+    {
+      "blueprint": "ammo",
+      "x": -13.5,
+      "y": 1,
+      "z": 9.0,
+      "rotation": 69
+    },
+    {
+      "blueprint": "ammo",
+      "x": 13.0,
+      "y": 1,
+      "z": 6.5,
+      "rotation": 113
+    },
+    {
+      "blueprint": "ammo",
+      "x": -9.5,
+      "y": 1,
+      "z": -2.5,
+      "rotation": 155
+    },
+    {
+      "blueprint": "ammo",
+      "x": 2.5,
+      "y": 1,
+      "z": -3.5,
+      "rotation": 330
+    },
+    {
+      "blueprint": "ammo",
+      "x": -17.0,
+      "y": 1,
+      "z": 11.0,
+      "rotation": 242
+    },
+    {
+      "blueprint": "ammo",
+      "x": 17.5,
+      "y": 1,
+      "z": -7.0,
+      "rotation": 333
+    },
+    {
+      "blueprint": "ammo",
+      "x": -16.5,
+      "y": 1,
+      "z": 0.0,
+      "rotation": 168
+    },
+    {
+      "blueprint": "ammo",
+      "x": -14.0,
+      "y": 1,
+      "z": -13.0,
+      "rotation": 202
+    },
+    {
+      "blueprint": "ammo",
+      "x": 6.0,
+      "y": 1,
+      "z": -13.5,
+      "rotation": 107
+    },
+    {
+      "blueprint": "ammo",
+      "x": 0.0,
+      "y": 1,
+      "z": -6.5,
+      "rotation": 44
+    },
+    {
+      "blueprint": "ammo",
+      "x": 18.0,
+      "y": 5,
+      "z": -2.0,
+      "rotation": 210
+    },
+    {
+      "blueprint": "ammo",
+      "x": 18.0,
+      "y": 5,
+      "z": 10.0,
+      "rotation": 12
+    },
+    {
+      "blueprint": "ammo",
+      "x": 13.5,
+      "y": 5,
+      "z": -12.0,
+      "rotation": 96
+    },
+    {
+      "blueprint": "stim",
+      "x": -16.5,
+      "y": 1,
+      "z": 2.5
+    },
+    {
+      "blueprint": "stim",
+      "x": -18.0,
+      "y": 1,
+      "z": -13.0
+    },
+    {
+      "blueprint": "stim",
+      "x": 13.5,
+      "y": 5,
+      "z": -15.0
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "ground": false,
+    "marks": [
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": 16,
+        "facing": 180,
+        "team": "red"
+      },
+      {
+        "kind": "spawn",
+        "x": -2,
+        "y": 1,
+        "z": -6,
+        "facing": 0,
+        "team": "blue"
+      }
+    ],
+    "placements": [
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -18,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": -18
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -18,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -18,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": -18,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": -18,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -14,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -14,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 14,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 14,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 18,
+        "y": 1,
+        "z": -20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 18,
+        "y": 1,
+        "z": 20
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -20,
+        "y": 1,
+        "z": 18,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 20,
+        "y": 1,
+        "z": 18,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 4,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 4,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 4,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 4,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 4,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 4,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 18,
+        "y": 4,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 20,
+        "y": 5,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 4,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 12,
+        "y": 5,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 4,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 12,
+        "y": 5,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 16,
+        "y": 5,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 16,
+        "y": 5,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 16,
+        "y": 5,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 16,
+        "y": 5,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 16,
+        "y": 5,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 14,
+        "y": 5,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 18,
+        "y": 5,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Stairs",
+        "x": 18,
+        "y": 1,
+        "z": 14,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Slope",
+        "x": 14,
+        "y": 1,
+        "z": -6,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Window",
+        "x": -12,
+        "y": 1,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 1,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -18,
+        "y": 1,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -14,
+        "y": 1,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -18,
+        "y": 1,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": -18,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": -14,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": -10,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": -6,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 6,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 10,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 14,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": 18,
+        "y": 1,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": -8,
+        "y": 1,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": 8,
+        "y": 1,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": -6,
+        "y": 1,
+        "z": 8
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": 6,
+        "y": 1,
+        "z": -8
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": -10,
+        "y": 1,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": 10,
+        "y": 1,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": -8,
+        "y": 3,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": 8,
+        "y": 3,
+        "z": 4
+      },
+      {
+        "model": "proto/Primitive_Cube",
+        "x": -8,
+        "y": 1,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Cube",
+        "x": 8,
+        "y": 1,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": -6,
+        "y": 1,
+        "z": -13
+      },
+      {
+        "model": "proto/Primitive_Cube_Small",
+        "x": 2,
+        "y": 1,
+        "z": 8
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": -16,
+        "y": 1,
+        "z": 8
+      },
+      {
+        "model": "proto/Primitive_Wall_Short",
+        "x": -18,
+        "y": 1,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Pillar_A",
+        "x": -16,
+        "y": 1,
+        "z": 16
+      },
+      {
+        "model": "proto/Pillar_A",
+        "x": -16,
+        "y": 1,
+        "z": -16
+      },
+      {
+        "model": "proto/Pillar_A",
+        "x": -4,
+        "y": 1,
+        "z": 14
+      },
+      {
+        "model": "proto/Pillar_A",
+        "x": 4,
+        "y": 1,
+        "z": -14
+      },
+      {
+        "model": "proto/Pillar_A",
+        "x": 12,
+        "y": 1,
+        "z": 16
+      },
+      {
+        "model": "proto/Weaponrack",
+        "x": -6,
+        "y": 1,
+        "z": 18
+      },
+      {
+        "model": "proto/Weaponrack",
+        "x": 6,
+        "y": 1,
+        "z": 18
+      },
+      {
+        "model": "proto/Workbench",
+        "x": 0,
+        "y": 1,
+        "z": 18,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Locker",
+        "x": -11,
+        "y": 1,
+        "z": 18
+      },
+      {
+        "model": "proto/Locker",
+        "x": 11,
+        "y": 1,
+        "z": 18
+      },
+      {
+        "model": "proto/Pallet_Large",
+        "x": -14,
+        "y": 1,
+        "z": 12
+      },
+      {
+        "model": "proto/table_medium",
+        "x": 14,
+        "y": 1,
+        "z": 10
+      },
+      {
+        "model": "proto/target_stand_A",
+        "x": -8,
+        "y": 1,
+        "z": -17.4
+      },
+      {
+        "model": "proto/target_stand_A",
+        "x": 0,
+        "y": 1,
+        "z": -17.4
+      },
+      {
+        "model": "proto/target_stand_A",
+        "x": 8,
+        "y": 1,
+        "z": -17.4
+      },
+      {
+        "model": "proto/target_stand_B",
+        "x": -14,
+        "y": 1,
+        "z": -17.4
+      },
+      {
+        "model": "proto/target_stand_B",
+        "x": 14,
+        "y": 1,
+        "z": -17.4
+      }
+    ]
+  }
+}

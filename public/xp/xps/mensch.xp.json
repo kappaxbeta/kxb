@@ -1,0 +1,3287 @@
+{
+  "format": "xp/1",
+  "id": "mensch",
+  "name": "Mensch ärgere dich nicht",
+  "blurb": "Four colours, four pieces each, one dice on the table. Roll it, walk to a piece, and send it round. First colour home wins.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "dummy"
+    },
+    {
+      "id": "boardgame"
+    },
+    {
+      "id": "shapes"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "backend": {
+    "needs": [
+      "identity"
+    ],
+    "wants": [
+      "network",
+      "persistence",
+      "arbiter"
+    ]
+  },
+  "rules": {
+    "preset": "freestyle",
+    "players": {
+      "min": 1,
+      "max": 4
+    },
+    "assign": "order"
+  },
+  "data": {
+    "dice": {
+      "scope": "space",
+      "value": 0,
+      "label": "roll"
+    },
+    "turn": {
+      "scope": "space",
+      "value": 0
+    },
+    "blue-home": {
+      "scope": "space",
+      "value": 0,
+      "label": "blue home"
+    },
+    "green-home": {
+      "scope": "space",
+      "value": 0,
+      "label": "green home"
+    },
+    "red-home": {
+      "scope": "space",
+      "value": 0,
+      "label": "red home"
+    },
+    "yellow-home": {
+      "scope": "space",
+      "value": 0,
+      "label": "yellow home"
+    }
+  },
+  "player": {
+    "blueprint": "seat",
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "use"
+      },
+      {
+        "key": "KeyR",
+        "does": "roll"
+      },
+      {
+        "key": "KeyF",
+        "does": "done"
+      }
+    ]
+  },
+  "camera": {
+    "kind": "fixed",
+    "x": 0,
+    "y": 22,
+    "z": 20,
+    "seats": {
+      "blue": {
+        "x": 0,
+        "y": 22,
+        "z": 20
+      },
+      "red": {
+        "x": 0,
+        "y": 22,
+        "z": -20
+      },
+      "green": {
+        "x": 20,
+        "y": 22,
+        "z": 0
+      },
+      "yellow": {
+        "x": -20,
+        "y": 22,
+        "z": 0
+      }
+    },
+    "at": {
+      "x": 0,
+      "y": 1,
+      "z": 0
+    }
+  },
+  "blueprints": {
+    "seat": {
+      "model": "shapes/ring_white",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "turn": 0,
+        "threw": 0
+      }
+    },
+    "dice": {
+      "model": "boardgame/D6_A",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "done",
+          "do": [
+            {
+              "op": "setProp",
+              "key": "threw",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "setProp",
+              "key": "dice",
+              "value": 0,
+              "target": "world"
+            },
+            {
+              "op": "pass"
+            },
+            {
+              "op": "emit",
+              "event": "done"
+            }
+          ]
+        },
+        {
+          "on": "spawned",
+          "do": [
+            {
+              "op": "emit",
+              "event": "R rolls your die · E picks up and puts down · F ends your turn"
+            }
+          ]
+        }
+      ]
+    },
+    "board": {
+      "model": "boardgame/board_A",
+      "collider": "none"
+    },
+    "blue-piece": {
+      "model": "boardgame/meeple_blue",
+      "collider": {
+        "w": 0.01875,
+        "h": 0.0375,
+        "d": 0.01875
+      },
+      "props": {
+        "blue": -6,
+        "bumped": 0,
+        "blue-out": 1
+      },
+      "triggers": [
+        {
+          "on": "held",
+          "when": {
+            "prop": "blue-out",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "blue-out",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "addProp",
+              "key": "blue-home",
+              "value": -1,
+              "target": "world"
+            },
+            {
+              "op": "emit",
+              "event": "a blue piece leaves home"
+            }
+          ]
+        },
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 1.4,
+          "do": [
+            {
+              "op": "carry",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            }
+          ]
+        },
+        {
+          "on": "released",
+          "key": "use",
+          "when": {
+            "prop": "held",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "drop",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "drop"
+            }
+          ]
+        }
+      ]
+    },
+    "blue-home": {
+      "model": "shapes/disc_blue",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "collide",
+          "when": {
+            "of": "other",
+            "prop": "blue-out",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "blue-out",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "blue-home",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "a blue piece is home"
+            }
+          ]
+        },
+        {
+          "on": "collide",
+          "when": {
+            "of": "world",
+            "prop": "blue-home",
+            "is": ">=",
+            "value": 4
+          },
+          "do": [
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            },
+            {
+              "op": "emit",
+              "event": "blue has all four home - blue wins"
+            }
+          ]
+        }
+      ]
+    },
+    "green-piece": {
+      "model": "boardgame/meeple_green",
+      "collider": {
+        "w": 0.01875,
+        "h": 0.0375,
+        "d": 0.01875
+      },
+      "props": {
+        "green": -6,
+        "bumped": 0,
+        "green-out": 1
+      },
+      "triggers": [
+        {
+          "on": "held",
+          "when": {
+            "prop": "green-out",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "green-out",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "addProp",
+              "key": "green-home",
+              "value": -1,
+              "target": "world"
+            },
+            {
+              "op": "emit",
+              "event": "a green piece leaves home"
+            }
+          ]
+        },
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 1.4,
+          "do": [
+            {
+              "op": "carry",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            }
+          ]
+        },
+        {
+          "on": "released",
+          "key": "use",
+          "when": {
+            "prop": "held",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "drop",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "drop"
+            }
+          ]
+        }
+      ]
+    },
+    "green-home": {
+      "model": "shapes/disc_green",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "collide",
+          "when": {
+            "of": "other",
+            "prop": "green-out",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "green-out",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "green-home",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "a green piece is home"
+            }
+          ]
+        },
+        {
+          "on": "collide",
+          "when": {
+            "of": "world",
+            "prop": "green-home",
+            "is": ">=",
+            "value": 4
+          },
+          "do": [
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            },
+            {
+              "op": "emit",
+              "event": "green has all four home - green wins"
+            }
+          ]
+        }
+      ]
+    },
+    "red-piece": {
+      "model": "boardgame/meeple_red",
+      "collider": {
+        "w": 0.01875,
+        "h": 0.0375,
+        "d": 0.01875
+      },
+      "props": {
+        "red": -6,
+        "bumped": 0,
+        "red-out": 1
+      },
+      "triggers": [
+        {
+          "on": "held",
+          "when": {
+            "prop": "red-out",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "red-out",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "addProp",
+              "key": "red-home",
+              "value": -1,
+              "target": "world"
+            },
+            {
+              "op": "emit",
+              "event": "a red piece leaves home"
+            }
+          ]
+        },
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 1.4,
+          "do": [
+            {
+              "op": "carry",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            }
+          ]
+        },
+        {
+          "on": "released",
+          "key": "use",
+          "when": {
+            "prop": "held",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "drop",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "drop"
+            }
+          ]
+        }
+      ]
+    },
+    "red-home": {
+      "model": "shapes/disc_red",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "collide",
+          "when": {
+            "of": "other",
+            "prop": "red-out",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "red-out",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "red-home",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "a red piece is home"
+            }
+          ]
+        },
+        {
+          "on": "collide",
+          "when": {
+            "of": "world",
+            "prop": "red-home",
+            "is": ">=",
+            "value": 4
+          },
+          "do": [
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            },
+            {
+              "op": "emit",
+              "event": "red has all four home - red wins"
+            }
+          ]
+        }
+      ]
+    },
+    "yellow-piece": {
+      "model": "boardgame/meeple_yellow",
+      "collider": {
+        "w": 0.01875,
+        "h": 0.0375,
+        "d": 0.01875
+      },
+      "props": {
+        "yellow": -6,
+        "bumped": 0,
+        "yellow-out": 1
+      },
+      "triggers": [
+        {
+          "on": "held",
+          "when": {
+            "prop": "yellow-out",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "yellow-out",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "addProp",
+              "key": "yellow-home",
+              "value": -1,
+              "target": "world"
+            },
+            {
+              "op": "emit",
+              "event": "a yellow piece leaves home"
+            }
+          ]
+        },
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 1.4,
+          "do": [
+            {
+              "op": "carry",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            }
+          ]
+        },
+        {
+          "on": "released",
+          "key": "use",
+          "when": {
+            "prop": "held",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "drop",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "drop"
+            }
+          ]
+        }
+      ]
+    },
+    "yellow-home": {
+      "model": "shapes/disc_yellow",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "collide",
+          "when": {
+            "of": "other",
+            "prop": "yellow-out",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "yellow-out",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "yellow-home",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "a yellow piece is home"
+            }
+          ]
+        },
+        {
+          "on": "collide",
+          "when": {
+            "of": "world",
+            "prop": "yellow-home",
+            "is": ">=",
+            "value": 4
+          },
+          "do": [
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            },
+            {
+              "op": "emit",
+              "event": "yellow has all four home - yellow wins"
+            }
+          ]
+        }
+      ]
+    },
+    "blue-dice": {
+      "model": "boardgame/D6_A",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "roll",
+          "by": "team:blue",
+          "do": [
+            {
+              "op": "setProp",
+              "key": "threw",
+              "value": 1,
+              "target": "other"
+            },
+            {
+              "op": "roll",
+              "key": "dice",
+              "sides": 6
+            },
+            {
+              "op": "sound",
+              "sound": "tap"
+            }
+          ]
+        }
+      ]
+    },
+    "red-dice": {
+      "model": "boardgame/D6_A",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "roll",
+          "by": "team:red",
+          "do": [
+            {
+              "op": "setProp",
+              "key": "threw",
+              "value": 1,
+              "target": "other"
+            },
+            {
+              "op": "roll",
+              "key": "dice",
+              "sides": 6
+            },
+            {
+              "op": "sound",
+              "sound": "tap"
+            }
+          ]
+        }
+      ]
+    },
+    "green-dice": {
+      "model": "boardgame/D6_A",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "roll",
+          "by": "team:green",
+          "do": [
+            {
+              "op": "setProp",
+              "key": "threw",
+              "value": 1,
+              "target": "other"
+            },
+            {
+              "op": "roll",
+              "key": "dice",
+              "sides": 6
+            },
+            {
+              "op": "sound",
+              "sound": "tap"
+            }
+          ]
+        }
+      ]
+    },
+    "yellow-dice": {
+      "model": "boardgame/D6_A",
+      "collider": "none",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "roll",
+          "by": "team:yellow",
+          "do": [
+            {
+              "op": "setProp",
+              "key": "threw",
+              "value": 1,
+              "target": "other"
+            },
+            {
+              "op": "roll",
+              "key": "dice",
+              "sides": 6
+            },
+            {
+              "op": "sound",
+              "sound": "tap"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "blue-piece",
+      "name": "blue-piece-1",
+      "x": -1.2,
+      "y": 1.02,
+      "z": 13.4,
+      "scale": 16
+    },
+    {
+      "blueprint": "blue-piece",
+      "name": "blue-piece-2",
+      "x": -1.2,
+      "y": 1.02,
+      "z": 14.8,
+      "scale": 16
+    },
+    {
+      "blueprint": "blue-piece",
+      "name": "blue-piece-3",
+      "x": 1.2,
+      "y": 1.02,
+      "z": 13.4,
+      "scale": 16
+    },
+    {
+      "blueprint": "blue-piece",
+      "name": "blue-piece-4",
+      "x": 1.2,
+      "y": 1.02,
+      "z": 14.8,
+      "scale": 16
+    },
+    {
+      "blueprint": "green-piece",
+      "name": "green-piece-1",
+      "x": 13.4,
+      "y": 1.02,
+      "z": 1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "green-piece",
+      "name": "green-piece-2",
+      "x": 14.8,
+      "y": 1.02,
+      "z": 1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "green-piece",
+      "name": "green-piece-3",
+      "x": 13.4,
+      "y": 1.02,
+      "z": -1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "green-piece",
+      "name": "green-piece-4",
+      "x": 14.8,
+      "y": 1.02,
+      "z": -1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "red-piece",
+      "name": "red-piece-1",
+      "x": 1.2,
+      "y": 1.02,
+      "z": -13.4,
+      "scale": 16
+    },
+    {
+      "blueprint": "red-piece",
+      "name": "red-piece-2",
+      "x": 1.2,
+      "y": 1.02,
+      "z": -14.8,
+      "scale": 16
+    },
+    {
+      "blueprint": "red-piece",
+      "name": "red-piece-3",
+      "x": -1.2,
+      "y": 1.02,
+      "z": -13.4,
+      "scale": 16
+    },
+    {
+      "blueprint": "red-piece",
+      "name": "red-piece-4",
+      "x": -1.2,
+      "y": 1.02,
+      "z": -14.8,
+      "scale": 16
+    },
+    {
+      "blueprint": "yellow-piece",
+      "name": "yellow-piece-1",
+      "x": -13.4,
+      "y": 1.02,
+      "z": -1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "yellow-piece",
+      "name": "yellow-piece-2",
+      "x": -14.8,
+      "y": 1.02,
+      "z": -1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "yellow-piece",
+      "name": "yellow-piece-3",
+      "x": -13.4,
+      "y": 1.02,
+      "z": 1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "yellow-piece",
+      "name": "yellow-piece-4",
+      "x": -14.8,
+      "y": 1.02,
+      "z": 1.2,
+      "scale": 16
+    },
+    {
+      "blueprint": "blue-home",
+      "name": "blue-home-40",
+      "x": 0,
+      "y": 0.98,
+      "z": 9,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "blue-home",
+      "name": "blue-home-41",
+      "x": 0,
+      "y": 0.98,
+      "z": 7.4,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "blue-home",
+      "name": "blue-home-42",
+      "x": 0,
+      "y": 0.98,
+      "z": 5.8,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "blue-home",
+      "name": "blue-home-43",
+      "x": 0,
+      "y": 0.98,
+      "z": 4.2,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "green-home",
+      "name": "green-home-40",
+      "x": 9,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "green-home",
+      "name": "green-home-41",
+      "x": 7.4,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "green-home",
+      "name": "green-home-42",
+      "x": 5.8,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "green-home",
+      "name": "green-home-43",
+      "x": 4.2,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "red-home",
+      "name": "red-home-40",
+      "x": 0,
+      "y": 0.98,
+      "z": -9,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "red-home",
+      "name": "red-home-41",
+      "x": 0,
+      "y": 0.98,
+      "z": -7.4,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "red-home",
+      "name": "red-home-42",
+      "x": 0,
+      "y": 0.98,
+      "z": -5.8,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "red-home",
+      "name": "red-home-43",
+      "x": 0,
+      "y": 0.98,
+      "z": -4.2,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "yellow-home",
+      "name": "yellow-home-40",
+      "x": -9,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "yellow-home",
+      "name": "yellow-home-41",
+      "x": -7.4,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "yellow-home",
+      "name": "yellow-home-42",
+      "x": -5.8,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "yellow-home",
+      "name": "yellow-home-43",
+      "x": -4.2,
+      "y": 0.98,
+      "z": 0,
+      "scale": 1.2
+    },
+    {
+      "blueprint": "dice",
+      "name": "the-dice",
+      "x": 0,
+      "y": 1.5,
+      "z": 0,
+      "scale": 25
+    },
+    {
+      "blueprint": "blue-dice",
+      "name": "blue-dice",
+      "x": 0,
+      "y": 1.5,
+      "z": 15.4,
+      "scale": 25
+    },
+    {
+      "blueprint": "red-dice",
+      "name": "red-dice",
+      "x": 0,
+      "y": 1.5,
+      "z": -15.4,
+      "scale": 25
+    },
+    {
+      "blueprint": "green-dice",
+      "name": "green-dice",
+      "x": 15.4,
+      "y": 1.5,
+      "z": 0,
+      "scale": 25
+    },
+    {
+      "blueprint": "yellow-dice",
+      "name": "yellow-dice",
+      "x": -15.4,
+      "y": 1.5,
+      "z": 0,
+      "scale": 25
+    }
+  ],
+  "world": {
+    "floorY": 1,
+    "placements": [
+      {
+        "model": "shapes/disc_blue",
+        "x": 0,
+        "y": 0.98,
+        "z": 11,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 1.72,
+        "y": 0.98,
+        "z": 10.86,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 3.4,
+        "y": 0.98,
+        "z": 10.46,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 4.99,
+        "y": 0.98,
+        "z": 9.8,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 6.47,
+        "y": 0.98,
+        "z": 8.9,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 7.78,
+        "y": 0.98,
+        "z": 7.78,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 8.9,
+        "y": 0.98,
+        "z": 6.47,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 9.8,
+        "y": 0.98,
+        "z": 4.99,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 10.46,
+        "y": 0.98,
+        "z": 3.4,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 10.86,
+        "y": 0.98,
+        "z": 1.72,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_green",
+        "x": 11,
+        "y": 0.98,
+        "z": 0,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 10.86,
+        "y": 0.98,
+        "z": -1.72,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 10.46,
+        "y": 0.98,
+        "z": -3.4,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 9.8,
+        "y": 0.98,
+        "z": -4.99,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 8.9,
+        "y": 0.98,
+        "z": -6.47,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 7.78,
+        "y": 0.98,
+        "z": -7.78,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 6.47,
+        "y": 0.98,
+        "z": -8.9,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 4.99,
+        "y": 0.98,
+        "z": -9.8,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 3.4,
+        "y": 0.98,
+        "z": -10.46,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": 1.72,
+        "y": 0.98,
+        "z": -10.86,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_red",
+        "x": 0,
+        "y": 0.98,
+        "z": -11,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -1.72,
+        "y": 0.98,
+        "z": -10.86,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -3.4,
+        "y": 0.98,
+        "z": -10.46,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -4.99,
+        "y": 0.98,
+        "z": -9.8,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -6.47,
+        "y": 0.98,
+        "z": -8.9,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -7.78,
+        "y": 0.98,
+        "z": -7.78,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -8.9,
+        "y": 0.98,
+        "z": -6.47,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -9.8,
+        "y": 0.98,
+        "z": -4.99,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -10.46,
+        "y": 0.98,
+        "z": -3.4,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -10.86,
+        "y": 0.98,
+        "z": -1.72,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_yellow",
+        "x": -11,
+        "y": 0.98,
+        "z": 0,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -10.86,
+        "y": 0.98,
+        "z": 1.72,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -10.46,
+        "y": 0.98,
+        "z": 3.4,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -9.8,
+        "y": 0.98,
+        "z": 4.99,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -8.9,
+        "y": 0.98,
+        "z": 6.47,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -7.78,
+        "y": 0.98,
+        "z": 7.78,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -6.47,
+        "y": 0.98,
+        "z": 8.9,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -4.99,
+        "y": 0.98,
+        "z": 9.8,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -3.4,
+        "y": 0.98,
+        "z": 10.46,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/disc_white",
+        "x": -1.72,
+        "y": 0.98,
+        "z": 10.86,
+        "scale": 1.2,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_white",
+        "x": 0,
+        "y": 0.99,
+        "z": 11,
+        "scale": 1.05,
+        "rotation": -85,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_blue",
+        "x": -1.72,
+        "y": 0.99,
+        "z": 10.86,
+        "scale": 1.05,
+        "rotation": -9,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_white",
+        "x": 0,
+        "y": 0.99,
+        "z": -11,
+        "scale": 1.05,
+        "rotation": 95,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_red",
+        "x": 1.72,
+        "y": 0.99,
+        "z": -10.86,
+        "scale": 1.05,
+        "rotation": 171,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_white",
+        "x": 11,
+        "y": 0.99,
+        "z": 0,
+        "scale": 1.05,
+        "rotation": 5,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_green",
+        "x": 10.86,
+        "y": 0.99,
+        "z": 1.72,
+        "scale": 1.05,
+        "rotation": 81,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_white",
+        "x": -11,
+        "y": 0.99,
+        "z": 0,
+        "scale": 1.05,
+        "rotation": -175,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/arrow_yellow",
+        "x": -10.86,
+        "y": 0.99,
+        "z": -1.72,
+        "scale": 1.05,
+        "rotation": -99,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_blue",
+        "x": -1.2,
+        "y": 0.99,
+        "z": 13.4,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_blue",
+        "x": -1.2,
+        "y": 0.99,
+        "z": 14.8,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_blue",
+        "x": 1.2,
+        "y": 0.99,
+        "z": 13.4,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_blue",
+        "x": 1.2,
+        "y": 0.99,
+        "z": 14.8,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_green",
+        "x": 13.4,
+        "y": 0.99,
+        "z": 1.2,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_green",
+        "x": 14.8,
+        "y": 0.99,
+        "z": 1.2,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_green",
+        "x": 13.4,
+        "y": 0.99,
+        "z": -1.2,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_green",
+        "x": 14.8,
+        "y": 0.99,
+        "z": -1.2,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_red",
+        "x": 1.2,
+        "y": 0.99,
+        "z": -13.4,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_red",
+        "x": 1.2,
+        "y": 0.99,
+        "z": -14.8,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_red",
+        "x": -1.2,
+        "y": 0.99,
+        "z": -13.4,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_red",
+        "x": -1.2,
+        "y": 0.99,
+        "z": -14.8,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_yellow",
+        "x": -13.4,
+        "y": 0.99,
+        "z": -1.2,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_yellow",
+        "x": -14.8,
+        "y": 0.99,
+        "z": -1.2,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_yellow",
+        "x": -13.4,
+        "y": 0.99,
+        "z": 1.2,
+        "scale": 1.15,
+        "collider": "none"
+      },
+      {
+        "model": "shapes/frame_yellow",
+        "x": -14.8,
+        "y": 0.99,
+        "z": 1.2,
+        "scale": 1.15,
+        "collider": "none"
+      }
+    ],
+    "marks": [
+      {
+        "kind": "point",
+        "name": "blue-0",
+        "x": 0,
+        "y": 1.02,
+        "z": 11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-1",
+        "x": 1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-2",
+        "x": 3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-3",
+        "x": 4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-4",
+        "x": 6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-5",
+        "x": 7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-6",
+        "x": 8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-7",
+        "x": 9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-8",
+        "x": 10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-9",
+        "x": 10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-10",
+        "x": 11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-11",
+        "x": 10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-12",
+        "x": 10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-13",
+        "x": 9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-14",
+        "x": 8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-15",
+        "x": 7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-16",
+        "x": 6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-17",
+        "x": 4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-18",
+        "x": 3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-19",
+        "x": 1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-20",
+        "x": 0,
+        "y": 1.02,
+        "z": -11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-21",
+        "x": -1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-22",
+        "x": -3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-23",
+        "x": -4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-24",
+        "x": -6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-25",
+        "x": -7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-26",
+        "x": -8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-27",
+        "x": -9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-28",
+        "x": -10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-29",
+        "x": -10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-30",
+        "x": -11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-31",
+        "x": -10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-32",
+        "x": -10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-33",
+        "x": -9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-34",
+        "x": -8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-35",
+        "x": -7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-36",
+        "x": -6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-37",
+        "x": -4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-38",
+        "x": -3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-39",
+        "x": -1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-40",
+        "x": 0,
+        "y": 1.02,
+        "z": 9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-41",
+        "x": 0,
+        "y": 1.02,
+        "z": 7.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-42",
+        "x": 0,
+        "y": 1.02,
+        "z": 5.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-43",
+        "x": 0,
+        "y": 1.02,
+        "z": 4.2,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-0",
+        "x": 11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-1",
+        "x": 10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-2",
+        "x": 10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-3",
+        "x": 9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-4",
+        "x": 8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-5",
+        "x": 7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-6",
+        "x": 6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-7",
+        "x": 4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-8",
+        "x": 3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-9",
+        "x": 1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-10",
+        "x": 0,
+        "y": 1.02,
+        "z": -11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-11",
+        "x": -1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-12",
+        "x": -3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-13",
+        "x": -4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-14",
+        "x": -6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-15",
+        "x": -7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-16",
+        "x": -8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-17",
+        "x": -9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-18",
+        "x": -10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-19",
+        "x": -10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-20",
+        "x": -11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-21",
+        "x": -10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-22",
+        "x": -10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-23",
+        "x": -9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-24",
+        "x": -8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-25",
+        "x": -7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-26",
+        "x": -6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-27",
+        "x": -4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-28",
+        "x": -3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-29",
+        "x": -1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-30",
+        "x": 0,
+        "y": 1.02,
+        "z": 11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-31",
+        "x": 1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-32",
+        "x": 3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-33",
+        "x": 4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-34",
+        "x": 6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-35",
+        "x": 7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-36",
+        "x": 8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-37",
+        "x": 9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-38",
+        "x": 10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-39",
+        "x": 10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-40",
+        "x": 9,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-41",
+        "x": 7.4,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-42",
+        "x": 5.8,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-43",
+        "x": 4.2,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-0",
+        "x": 0,
+        "y": 1.02,
+        "z": -11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-1",
+        "x": -1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-2",
+        "x": -3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-3",
+        "x": -4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-4",
+        "x": -6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-5",
+        "x": -7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-6",
+        "x": -8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-7",
+        "x": -9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-8",
+        "x": -10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-9",
+        "x": -10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-10",
+        "x": -11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-11",
+        "x": -10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-12",
+        "x": -10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-13",
+        "x": -9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-14",
+        "x": -8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-15",
+        "x": -7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-16",
+        "x": -6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-17",
+        "x": -4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-18",
+        "x": -3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-19",
+        "x": -1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-20",
+        "x": 0,
+        "y": 1.02,
+        "z": 11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-21",
+        "x": 1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-22",
+        "x": 3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-23",
+        "x": 4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-24",
+        "x": 6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-25",
+        "x": 7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-26",
+        "x": 8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-27",
+        "x": 9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-28",
+        "x": 10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-29",
+        "x": 10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-30",
+        "x": 11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-31",
+        "x": 10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-32",
+        "x": 10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-33",
+        "x": 9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-34",
+        "x": 8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-35",
+        "x": 7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-36",
+        "x": 6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-37",
+        "x": 4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-38",
+        "x": 3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-39",
+        "x": 1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-40",
+        "x": 0,
+        "y": 1.02,
+        "z": -9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-41",
+        "x": 0,
+        "y": 1.02,
+        "z": -7.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-42",
+        "x": 0,
+        "y": 1.02,
+        "z": -5.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-43",
+        "x": 0,
+        "y": 1.02,
+        "z": -4.2,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-0",
+        "x": -11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-1",
+        "x": -10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-2",
+        "x": -10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-3",
+        "x": -9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-4",
+        "x": -8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-5",
+        "x": -7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-6",
+        "x": -6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-7",
+        "x": -4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-8",
+        "x": -3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-9",
+        "x": -1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-10",
+        "x": 0,
+        "y": 1.02,
+        "z": 11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-11",
+        "x": 1.72,
+        "y": 1.02,
+        "z": 10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-12",
+        "x": 3.4,
+        "y": 1.02,
+        "z": 10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-13",
+        "x": 4.99,
+        "y": 1.02,
+        "z": 9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-14",
+        "x": 6.47,
+        "y": 1.02,
+        "z": 8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-15",
+        "x": 7.78,
+        "y": 1.02,
+        "z": 7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-16",
+        "x": 8.9,
+        "y": 1.02,
+        "z": 6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-17",
+        "x": 9.8,
+        "y": 1.02,
+        "z": 4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-18",
+        "x": 10.46,
+        "y": 1.02,
+        "z": 3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-19",
+        "x": 10.86,
+        "y": 1.02,
+        "z": 1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-20",
+        "x": 11,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-21",
+        "x": 10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-22",
+        "x": 10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-23",
+        "x": 9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-24",
+        "x": 8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-25",
+        "x": 7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-26",
+        "x": 6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-27",
+        "x": 4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-28",
+        "x": 3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-29",
+        "x": 1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-30",
+        "x": 0,
+        "y": 1.02,
+        "z": -11,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-31",
+        "x": -1.72,
+        "y": 1.02,
+        "z": -10.86,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-32",
+        "x": -3.4,
+        "y": 1.02,
+        "z": -10.46,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-33",
+        "x": -4.99,
+        "y": 1.02,
+        "z": -9.8,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-34",
+        "x": -6.47,
+        "y": 1.02,
+        "z": -8.9,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-35",
+        "x": -7.78,
+        "y": 1.02,
+        "z": -7.78,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-36",
+        "x": -8.9,
+        "y": 1.02,
+        "z": -6.47,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-37",
+        "x": -9.8,
+        "y": 1.02,
+        "z": -4.99,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-38",
+        "x": -10.46,
+        "y": 1.02,
+        "z": -3.4,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-39",
+        "x": -10.86,
+        "y": 1.02,
+        "z": -1.72,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-40",
+        "x": -9,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-41",
+        "x": -7.4,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-42",
+        "x": -5.8,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-43",
+        "x": -4.2,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "blue-yard",
+        "x": 0,
+        "y": 1.02,
+        "z": 14.1,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "red-yard",
+        "x": 0,
+        "y": 1.02,
+        "z": -14.1,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "green-yard",
+        "x": 14.1,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "point",
+        "name": "yellow-yard",
+        "x": -14.1,
+        "y": 1.02,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "spawn",
+        "team": "blue",
+        "x": 0,
+        "y": 1,
+        "z": 12.8,
+        "facing": 0,
+        "width": 1,
+        "height": 1
+      },
+      {
+        "kind": "spawn",
+        "team": "red",
+        "x": 0,
+        "y": 1,
+        "z": -12.8,
+        "facing": 180,
+        "width": 1,
+        "height": 1
+      },
+      {
+        "kind": "spawn",
+        "team": "green",
+        "x": 12.8,
+        "y": 1,
+        "z": 0,
+        "facing": 90,
+        "width": 1,
+        "height": 1
+      },
+      {
+        "kind": "spawn",
+        "team": "yellow",
+        "x": -12.8,
+        "y": 1,
+        "z": 0,
+        "facing": -90,
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "ground": true
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 0,
+    "facing": 180
+  },
+  "flow": {
+    "start": "roll",
+    "phases": {
+      "roll": {
+        "says": "Press R to throw your die, from wherever you are standing.",
+        "allow": [
+          "roll"
+        ],
+        "next": [
+          {
+            "when": {
+              "of": "world",
+              "prop": "blue-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-blue"
+          },
+          {
+            "when": {
+              "of": "world",
+              "prop": "red-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-red"
+          },
+          {
+            "when": {
+              "of": "world",
+              "prop": "green-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-green"
+          },
+          {
+            "when": {
+              "of": "world",
+              "prop": "yellow-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-yellow"
+          },
+          {
+            "when": {
+              "prop": "threw",
+              "is": "==",
+              "value": 1
+            },
+            "go": "move"
+          }
+        ]
+      },
+      "move": {
+        "says": "E takes a piece and E puts it down — or hold E to carry it. Then F ends your turn.",
+        "allow": [
+          "use",
+          "done"
+        ],
+        "next": [
+          {
+            "when": {
+              "of": "world",
+              "prop": "blue-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-blue"
+          },
+          {
+            "when": {
+              "of": "world",
+              "prop": "red-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-red"
+          },
+          {
+            "when": {
+              "of": "world",
+              "prop": "green-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-green"
+          },
+          {
+            "when": {
+              "of": "world",
+              "prop": "yellow-home",
+              "is": ">=",
+              "value": 4
+            },
+            "go": "over-yellow"
+          },
+          {
+            "on": "done",
+            "go": "roll"
+          }
+        ]
+      },
+      "over-blue": {
+        "says": "Blue has all four pieces home. Blue wins.",
+        "allow": [],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "fanfare"
+          },
+          {
+            "op": "emit",
+            "event": "blue wins"
+          }
+        ]
+      },
+      "over-green": {
+        "says": "Green has all four pieces home. Green wins.",
+        "allow": [],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "fanfare"
+          },
+          {
+            "op": "emit",
+            "event": "green wins"
+          }
+        ]
+      },
+      "over-red": {
+        "says": "Red has all four pieces home. Red wins.",
+        "allow": [],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "fanfare"
+          },
+          {
+            "op": "emit",
+            "event": "red wins"
+          }
+        ]
+      },
+      "over-yellow": {
+        "says": "Yellow has all four pieces home. Yellow wins.",
+        "allow": [],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "fanfare"
+          },
+          {
+            "op": "emit",
+            "event": "yellow wins"
+          }
+        ]
+      }
+    }
+  }
+}

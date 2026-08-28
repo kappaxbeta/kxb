@@ -1,0 +1,40 @@
+# Kept in step with the --exclude list in deploy.sh. Both are the same question
+# asked twice - what does the server have no use for - and an entry that lands
+# in one but not the other still costs a deploy: rsync's list decides what
+# crosses the wire, this one decides what crosses into the build context.
+#
+# As with rsync, these are patterns and not prefixes: `.next` does not cover
+# `.next-shots`.
+node_modules
+.next
+# Every alternate build directory, as one pattern. There are six of them -
+# `.next-shots`, `.next-shots2`, `.next-build`, `.next-verify`,
+# `.next-classname`, `.next-xp` - and there keeps being another, so each new one
+# was shipped by accident once before somebody added it by hand.
+.next-*
+.agents
+.git
+.idea
+.claude
+supabase/.branches
+supabase/.temp
+# A dump of production data. Nothing in src/ reads it - only scripts/, which
+# never runs in the image - and a build context is not the place for it.
+supabase/seed.sql
+# Cited constantly in source comments - and, since /internDoc, read at runtime by
+# the docs reader, so the tree itself has to be in the image. Only the bulk stays
+# out: 9.4MB of the 9.7MB is docs/marketing, which is not documentation about the
+# product and is what made this line worth having in the first place. The ~600KB
+# that is left is carried into standalone by outputFileTracingIncludes in
+# next.config.ts - the .dockerignore lets it into the build context and the trace
+# is what puts it in the runtime image, and both are needed.
+docs/marketing
+# Production's uploads are a bind mount at /mnt/volume-hel1-1/uploads. These are
+# whatever happens to be in the local dev copy.
+uploads
+*.tsbuildinfo
+.eslintcache
+.env*
+!.env.example
+README.md
+*.log

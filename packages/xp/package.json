@@ -1,0 +1,35 @@
+{
+  "name": "@kxb/xp",
+  "version": "0.1.0",
+  "dependencies": {
+    "quickjs-emscripten-core": "0.32.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./format": "./src/document/format.ts",
+    "./engine": "./src/world/engine.ts",
+    "./catalogue": "./src/assets/catalogue.ts",
+    "./packs": "./src/assets/packs.ts",
+    "./sounds": "./src/assets/sounds.ts",
+    "./sharing": "./src/net/sharing.ts",
+    "./owning": "./src/net/owning.ts",
+    "./host": "./src/net/host.ts",
+    "./edit": "./src/document/edit.ts",
+    "./script": "./src/rules/script.ts",
+    "./script-api": "./src/rules/script-api.ts",
+    "./motions": "./src/document/motions.ts",
+    "./movie": "./src/document/movie.ts",
+    "./clips": "./src/document/clips.ts",
+    "./words": "./src/document/words.ts"
+  },
+  "description": "The XP format and engine: a document, a character controller, and the interfaces a host has to satisfy to run one.",
+  "files": [
+    "src"
+  ],
+  "private": true,
+  "sideEffects": false,
+  "type": "module",
+  "devDependencies": {
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0"
+  }
+}

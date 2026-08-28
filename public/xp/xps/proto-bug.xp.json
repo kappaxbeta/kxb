@@ -1,0 +1,1287 @@
+{
+  "format": "xp/1",
+  "id": "proto-bug",
+  "name": "Proto Bug",
+  "blurb": "One of you is a bug, and only the bug's gun works. The rest have work to do: finish every task, or call a meeting and vote it out before it finishes you.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "proto"
+    },
+    {
+      "id": "dummy"
+    },
+    {
+      "id": "furniture"
+    }
+  ],
+  "capabilities": [
+    "freeplay",
+    "match"
+  ],
+  "backend": {
+    "needs": [
+      "identity",
+      "network",
+      "arbiter"
+    ],
+    "wants": [
+      "persistence"
+    ]
+  },
+  "rules": {
+    "preset": "shooter",
+    "scoreLimit": 12,
+    "timeLimit": 600,
+    "players": {
+      "min": 3,
+      "max": 10
+    },
+    "roles": [
+      "bug",
+      "crew",
+      "crew",
+      "crew",
+      "crew",
+      "crew",
+      "crew",
+      "crew",
+      "crew",
+      "crew"
+    ],
+    "lethal": "bug",
+    "respawn": 5
+  },
+  "data": {
+    "tasks": {
+      "scope": "space",
+      "value": 0,
+      "label": "Tasks finished"
+    },
+    "hauls": {
+      "scope": "space",
+      "value": 0,
+      "label": "Cargo delivered"
+    },
+    "shifts": {
+      "scope": "player",
+      "value": 0,
+      "label": "Shifts worked"
+    }
+  },
+  "player": {
+    "blueprint": "crewbody",
+    "weapon": {
+      "blueprint": "debugger",
+      "socket": "hand"
+    },
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "use"
+      }
+    ]
+  },
+  "blueprints": {
+    "crewbody": {
+      "model": "dummy/Dummy",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "hp": 100,
+        "hauling": 0
+      },
+      "sockets": {
+        "hand": {
+          "x": 0.32,
+          "y": 1.15,
+          "z": 0.34
+        }
+      },
+      "triggers": [
+        {
+          "on": "dealt",
+          "when": {
+            "prop": "bug",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "sound",
+              "sound": "hit"
+            }
+          ]
+        }
+      ]
+    },
+    "debugger": {
+      "model": "proto/Gun_Pistol",
+      "collider": "none",
+      "tags": [
+        "weapon"
+      ],
+      "sockets": {
+        "muzzle": {
+          "x": 0,
+          "y": 0.06,
+          "z": 0.28
+        }
+      }
+    },
+    "console": {
+      "model": "furniture/monitor",
+      "collider": "auto",
+      "props": {
+        "done": 0
+      },
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "prop": "done",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "done",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "addProp",
+              "key": "tasks",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "addProp",
+              "key": "shifts",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "sound",
+              "sound": "click"
+            },
+            {
+              "op": "emit",
+              "event": "task-done"
+            }
+          ]
+        }
+      ]
+    },
+    "valve": {
+      "model": "proto/Barrel_A",
+      "collider": "auto",
+      "props": {
+        "done": 0
+      },
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "prop": "done",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "done",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "addProp",
+              "key": "tasks",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "addProp",
+              "key": "shifts",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "sound",
+              "sound": "thud"
+            },
+            {
+              "op": "emit",
+              "event": "task-done"
+            }
+          ]
+        }
+      ]
+    },
+    "wiring": {
+      "model": "furniture/cabinet_small",
+      "collider": "auto",
+      "props": {
+        "done": 0
+      },
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "prop": "done",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "done",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "addProp",
+              "key": "tasks",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "addProp",
+              "key": "shifts",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "sound",
+              "sound": "tap"
+            },
+            {
+              "op": "emit",
+              "event": "task-done"
+            }
+          ]
+        }
+      ]
+    },
+    "cargo": {
+      "model": "proto/Box_A",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "prop": "held",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "hauling",
+              "value": 1,
+              "target": "other"
+            },
+            {
+              "op": "carry",
+              "target": "self",
+              "socket": "hand"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            }
+          ]
+        }
+      ]
+    },
+    "bay": {
+      "model": "furniture/rug_rectangle_A",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "enter",
+          "when": {
+            "of": "other",
+            "prop": "hauling",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "unhand",
+              "target": "other"
+            },
+            {
+              "op": "setProp",
+              "key": "hauling",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "hauls",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "addProp",
+              "key": "tasks",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "sound",
+              "sound": "drop"
+            },
+            {
+              "op": "emit",
+              "event": "cargo-delivered"
+            }
+          ]
+        }
+      ]
+    },
+    "hatch": {
+      "model": "proto/Door_A",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "of": "world",
+            "prop": "tasks",
+            "is": ">=",
+            "value": 12
+          },
+          "do": [
+            {
+              "op": "despawn",
+              "target": "self"
+            },
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            },
+            {
+              "op": "emit",
+              "event": "shift-over"
+            }
+          ]
+        }
+      ]
+    },
+    "crate": {
+      "model": "proto/Box_C",
+      "collider": "auto"
+    },
+    "barrel": {
+      "model": "proto/Barrel_C",
+      "collider": "auto"
+    },
+    "desk": {
+      "model": "furniture/desk",
+      "collider": "auto"
+    },
+    "alarm": {
+      "model": "proto/Wall_Target",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 3,
+          "do": [
+            {
+              "op": "meet",
+              "seconds": 60
+            },
+            {
+              "op": "sound",
+              "sound": "hit"
+            },
+            {
+              "op": "emit",
+              "event": "meeting called"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "console",
+      "name": "console-north",
+      "x": -8,
+      "y": 0,
+      "z": -10
+    },
+    {
+      "blueprint": "console",
+      "name": "console-east",
+      "x": 9,
+      "y": 0,
+      "z": -6
+    },
+    {
+      "blueprint": "console",
+      "name": "console-south",
+      "x": 4,
+      "y": 0,
+      "z": 11
+    },
+    {
+      "blueprint": "console",
+      "name": "console-west",
+      "x": -11,
+      "y": 0,
+      "z": 3
+    },
+    {
+      "blueprint": "valve",
+      "name": "valve-engine",
+      "x": 12,
+      "y": 0,
+      "z": 9
+    },
+    {
+      "blueprint": "valve",
+      "name": "valve-vent",
+      "x": -13,
+      "y": 0,
+      "z": -4
+    },
+    {
+      "blueprint": "valve",
+      "name": "valve-tank",
+      "x": 0,
+      "y": 0,
+      "z": -13
+    },
+    {
+      "blueprint": "wiring",
+      "name": "wiring-hall",
+      "x": -4,
+      "y": 0,
+      "z": 6
+    },
+    {
+      "blueprint": "wiring",
+      "name": "wiring-bay",
+      "x": 7,
+      "y": 0,
+      "z": 2
+    },
+    {
+      "blueprint": "wiring",
+      "name": "wiring-store",
+      "x": 13,
+      "y": 0,
+      "z": -12
+    },
+    {
+      "blueprint": "cargo",
+      "name": "cargo-one",
+      "x": -6,
+      "y": 0.3,
+      "z": -2
+    },
+    {
+      "blueprint": "cargo",
+      "name": "cargo-two",
+      "x": -7,
+      "y": 0.3,
+      "z": 0
+    },
+    {
+      "blueprint": "bay",
+      "name": "cargo-bay",
+      "x": 10,
+      "y": 0.05,
+      "z": 13
+    },
+    {
+      "blueprint": "hatch",
+      "name": "the-way-out",
+      "x": 0,
+      "y": 0,
+      "z": 15
+    },
+    {
+      "blueprint": "desk",
+      "x": -8,
+      "y": 0,
+      "z": -8.6
+    },
+    {
+      "blueprint": "desk",
+      "x": 9,
+      "y": 0,
+      "z": -4.6
+    },
+    {
+      "blueprint": "crate",
+      "x": 5,
+      "y": 0,
+      "z": -9
+    },
+    {
+      "blueprint": "crate",
+      "x": -10,
+      "y": 0,
+      "z": 8
+    },
+    {
+      "blueprint": "barrel",
+      "x": 12.6,
+      "y": 0,
+      "z": 7.4
+    },
+    {
+      "blueprint": "barrel",
+      "x": -13,
+      "y": 0,
+      "z": -6
+    },
+    {
+      "blueprint": "alarm",
+      "name": "the-alarm",
+      "x": 0,
+      "y": 1,
+      "z": 2
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "placements": [
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -14,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -14
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 14,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -14,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -14,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 14,
+        "y": 0,
+        "z": -16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 14,
+        "y": 0,
+        "z": 16
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -16,
+        "y": 0,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 16,
+        "y": 0,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": -6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": -2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": 6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": 2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": 8,
+        "y": 0,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": 8,
+        "y": 0,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": -8,
+        "y": 0,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": -8,
+        "y": 0,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": 0,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Wall_Half",
+        "x": -4,
+        "y": 0,
+        "z": 10
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": 0,
+        "facing": 0
+      },
+      {
+        "kind": "spawn",
+        "x": 2,
+        "y": 1,
+        "z": 1,
+        "facing": 0
+      },
+      {
+        "kind": "spawn",
+        "x": -2,
+        "y": 1,
+        "z": 1,
+        "facing": 0
+      },
+      {
+        "kind": "spawn",
+        "x": 1,
+        "y": 1,
+        "z": -2,
+        "facing": 180
+      },
+      {
+        "kind": "spawn",
+        "x": -1,
+        "y": 1,
+        "z": -2,
+        "facing": 180
+      }
+    ]
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 0,
+    "facing": 0
+  }
+}

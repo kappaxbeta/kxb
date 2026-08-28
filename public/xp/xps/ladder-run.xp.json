@@ -1,0 +1,452 @@
+{
+  "format": "xp/1",
+  "id": "ladder-run",
+  "name": "Ladder Run",
+  "blurb": "A race up a ladder of platforms. Four legs, each a different colour, each asking one more thing than the last: walk the stairs, jump the gaps, sprint the wide ones, then the gate. Miss a jump and you are back at the start — there is nothing under the course to land on, which is what makes it a platformer rather than a stroll.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "dummy"
+    },
+    {
+      "id": "platformer-neutral"
+    },
+    {
+      "id": "platformer-green"
+    },
+    {
+      "id": "platformer-yellow"
+    },
+    {
+      "id": "platformer-red"
+    },
+    {
+      "id": "platformer-blue"
+    }
+  ],
+  "capabilities": [
+    "freeplay",
+    "competition"
+  ],
+  "rules": {
+    "preset": "parkour"
+  },
+  "spawn": {
+    "x": 0,
+    "y": 2,
+    "z": 0,
+    "facing": 90
+  },
+  "player": {
+    "blueprint": "runner"
+  },
+  "scripts": {
+    "sweep": "\n// Across the run rather than along it, so the gap is open, then shut, then open.\nconst REACH = 4\nconst PACE = 3.4\n\nfunction onTick() {\n  // Driven from world.time rather than integrated per frame, so every client\n  // agrees about where the blade is without anybody sending it.\n  self.z = Math.sin(world.time * PACE / REACH) * REACH\n  // Spun for the look of the thing. The collider is a box and does not turn\n  // with it - a blade whose collision followed its teeth would be a blade you\n  // could stand between.\n  self.rotation = (world.time * 360) % 360\n}\n",
+    "spin": "\n// A star turns so it reads as a thing to take rather than as scenery.\nconst SPEED = 90\n\nfunction onTick() {\n  self.rotation = (world.time * SPEED) % 360\n}\n"
+  },
+  "blueprints": {
+    "runner": {
+      "model": "dummy/Dummy",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "hp": 1
+      },
+      "triggers": []
+    },
+    "spikes": {
+      "model": "platformer-neutral/floor_spikes_2x2x1",
+      "collider": "none",
+      "tags": [
+        "hazard"
+      ],
+      "props": {},
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "damage",
+              "target": "other",
+              "amount": 99
+            }
+          ]
+        }
+      ]
+    },
+    "saw": {
+      "model": "platformer-neutral/sawblade",
+      "collider": {
+        "w": 6,
+        "h": 2,
+        "d": 0.9
+      },
+      "tags": [
+        "hazard"
+      ],
+      "props": {},
+      "script": "sweep",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "damage",
+              "target": "other",
+              "amount": 99
+            }
+          ]
+        }
+      ]
+    },
+    "star_green": {
+      "model": "platformer-green/star_green",
+      "collider": "none",
+      "tags": [
+        "pickup"
+      ],
+      "props": {
+        "value": 1
+      },
+      "script": "spin",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "star_yellow": {
+      "model": "platformer-yellow/star_yellow",
+      "collider": "none",
+      "tags": [
+        "pickup"
+      ],
+      "props": {
+        "value": 1
+      },
+      "script": "spin",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "star_red": {
+      "model": "platformer-red/star_red",
+      "collider": "none",
+      "tags": [
+        "pickup"
+      ],
+      "props": {
+        "value": 1
+      },
+      "script": "spin",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "star_blue": {
+      "model": "platformer-blue/star_blue",
+      "collider": "none",
+      "tags": [
+        "pickup"
+      ],
+      "props": {
+        "value": 1
+      },
+      "script": "spin",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "score",
+              "amount": 1
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "spikes",
+      "name": "spikes_1",
+      "x": 6,
+      "y": 2,
+      "z": 0,
+      "rotation": 0,
+      "scale": 1,
+      "props": {}
+    },
+    {
+      "blueprint": "saw",
+      "name": "saw_1",
+      "x": 29.5,
+      "y": 5.5,
+      "z": 0,
+      "rotation": 0,
+      "scale": 1,
+      "props": {}
+    },
+    {
+      "blueprint": "star_green",
+      "name": "star_1",
+      "x": 15,
+      "y": 4,
+      "z": 0,
+      "rotation": 0,
+      "scale": 1,
+      "props": {}
+    },
+    {
+      "blueprint": "star_yellow",
+      "name": "star_2",
+      "x": 33,
+      "y": 8,
+      "z": 0,
+      "rotation": 0,
+      "scale": 1,
+      "props": {}
+    },
+    {
+      "blueprint": "star_red",
+      "name": "star_3",
+      "x": 48,
+      "y": 11,
+      "z": -14,
+      "rotation": 0,
+      "scale": 1,
+      "props": {}
+    }
+  ],
+  "world": {
+    "floorY": -12,
+    "ground": false,
+    "restart": true,
+    "placements": [
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 1,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 1,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-neutral/signage_arrows_right",
+        "x": 11,
+        "y": 2,
+        "z": -4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_4x4x1_green",
+        "x": 11,
+        "y": 1,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_4x4x1_green",
+        "x": 15,
+        "y": 2,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-green/platform_4x4x1_green",
+        "x": 19,
+        "y": 3,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/platform_4x4x1_yellow",
+        "x": 26,
+        "y": 5,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/barrier_4x1x1_yellow",
+        "x": 26,
+        "y": 6,
+        "z": 2,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/platform_4x4x1_yellow",
+        "x": 33,
+        "y": 7,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/barrier_4x1x1_yellow",
+        "x": 33,
+        "y": 8,
+        "z": 2,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/platform_4x4x1_yellow",
+        "x": 40,
+        "y": 9,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-yellow/barrier_4x1x1_yellow",
+        "x": 40,
+        "y": 10,
+        "z": 2,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 48,
+        "y": 9,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-neutral/signage_arrows_left",
+        "x": 50,
+        "y": 10,
+        "z": 3,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-red/platform_4x4x1_red",
+        "x": 48,
+        "y": 9,
+        "z": -11,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-red/platform_4x4x1_red",
+        "x": 48,
+        "y": 9,
+        "z": -21,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-red/platform_4x4x1_red",
+        "x": 48,
+        "y": 9,
+        "z": -31,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 48,
+        "y": 10,
+        "z": -39,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-neutral/signage_finish_wide",
+        "x": 48,
+        "y": 11,
+        "z": -41.5,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-blue/flag_A_blue",
+        "x": 46,
+        "y": 11,
+        "z": -40,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "platformer-blue/flag_A_blue",
+        "x": 50,
+        "y": 11,
+        "z": -40,
+        "rotation": 0,
+        "scale": 1
+      }
+    ],
+    "marks": [
+      {
+        "kind": "start",
+        "x": 0,
+        "y": 2,
+        "z": 0,
+        "facing": 90,
+        "width": 6,
+        "height": 4
+      },
+      {
+        "kind": "finish",
+        "x": 48,
+        "y": 11,
+        "z": -41,
+        "facing": 180,
+        "width": 6,
+        "height": 4
+      }
+    ]
+  }
+}

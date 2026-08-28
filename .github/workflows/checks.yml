@@ -1,0 +1,68 @@
+# Types, lint and tests, on every branch.
+#
+# There is deliberately nothing else here. This repository builds no images and
+# deploys nowhere: how you ship it is yours to decide, and a workflow that
+# assumed otherwise would be one more thing to delete before you could use it.
+name: checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # Pinned rather than `latest`, so a bun release cannot turn a green
+          # tree red overnight. Worth bumping deliberately; not worth
+          # discovering.
+          bun-version: 1.1.38
+
+      - name: Cache bun's global install cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install
+        # --frozen-lockfile so a package.json edited without regenerating the
+        # lockfile fails here rather than resolving to something nobody has run.
+        run: bun install --frozen-lockfile
+
+      - name: Generate route types
+        # tsconfig.json includes `.next/types/**`, and `next-env.d.ts` is
+        # gitignored, so a fresh checkout has neither. `next typegen` writes
+        # both without running a full build.
+        run: bunx next typegen
+
+      # Each step carries `if: '!cancelled()'` so all three report on every run.
+      # Without it a type error hides the test results, and the next push fixes
+      # the types only to discover the tests were red too.
+      - name: Types
+        if: ${{ !cancelled() }}
+        # tsconfig.check.json drops `.next/dev/types`, which a running dev
+        # server rewrites continuously. `tsgo` rather than `tsc`: same answer
+        # for about a third of the work on this tree.
+        run: bunx tsgo -p tsconfig.check.json --noEmit
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: bunx eslint
+
+      - name: Tests
+        if: ${{ !cancelled() }}
+        # The full suite is `bun test src packages`, and it is what you run
+        # locally. Thirteen of its files read models and audio off disk, and
+        # this repository ships neither - see docs/assets.md - so CI runs the
+        # rest. That way a red badge means a regression rather than a permanent,
+        # expected condition, and the excluded list fails loudly if it drifts.
+        run: ./tools/test-core.sh

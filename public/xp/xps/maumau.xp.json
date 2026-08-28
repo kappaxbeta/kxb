@@ -1,0 +1,39 @@
+{
+  "format": "xp/1",
+  "id": "maumau",
+  "name": "Mau-Mau",
+  "blurb": "The German card game, for two to five. A seven makes the next player draw two and a seven answers a seven, an eight skips, a nine turns the play around and a jack asks for a suit - but never onto another jack. Down to one card, say Mau, and if you forget, anybody may catch you for two. Not a level: this document names a game the host runs, and the deck is held somewhere no player can reach.",
+  "finish": "galaxy",
+  "capabilities": [
+    "match"
+  ],
+  "rules": {
+    "preset": "deathmatch",
+    "sides": "ffa",
+    "players": {
+      "min": 2,
+      "max": 5
+    }
+  },
+  "backend": {
+    "needs": [
+      "identity",
+      "network",
+      "arbiter"
+    ]
+  },
+  "frame": {
+    "game": "maumau",
+    "settings": {
+      "deck": "short",
+      "hand": 5,
+      "sevens": true,
+      "eights": true,
+      "nines": true,
+      "aces": true,
+      "jackOnJack": true,
+      "mau": true,
+      "finish": "kaykit"
+    }
+  }
+}

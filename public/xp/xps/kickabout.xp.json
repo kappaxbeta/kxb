@@ -1,0 +1,1770 @@
+{
+  "format": "xp/1",
+  "id": "kickabout",
+  "name": "Kickabout",
+  "blurb": "Two goals, one ball, and nobody has hands. Run into the ball and it goes along in front of you; E kicks it and it rolls away along the ground, Q dashes. Kick off, score, back to the middle, first to three. If the ball ends up somewhere nobody can play it, the Room tab brings it back.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "peepz"
+    },
+    {
+      "id": "platformer-neutral"
+    },
+    {
+      "id": "platformer-green"
+    },
+    {
+      "id": "platformer-blue"
+    },
+    {
+      "id": "platformer-red"
+    }
+  ],
+  "capabilities": [
+    "freeplay",
+    "match",
+    "football"
+  ],
+  "rules": {
+    "preset": "freestyle",
+    "players": {
+      "min": 2,
+      "max": 8
+    },
+    "respawn": 5
+  },
+  "flow": {
+    "start": "kickoff",
+    "phases": {
+      "kickoff": {
+        "says": "Kick off. The ball is on the spot \u2014 get to it. Q dashes; you cannot kick yet.",
+        "allow": [
+          "dash"
+        ],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "click"
+          },
+          {
+            "op": "emit",
+            "event": "kickoff"
+          }
+        ],
+        "next": [
+          {
+            "after": 3,
+            "go": "playing"
+          }
+        ]
+      },
+      "playing": {
+        "says": "E kicks \u2014 as hard as you were running when you hit it. First to three.",
+        "next": [
+          {
+            "when": {
+              "of": "world",
+              "prop": "blue",
+              "is": ">=",
+              "value": 3
+            },
+            "go": "blue-win"
+          },
+          {
+            "when": {
+              "of": "world",
+              "prop": "red",
+              "is": ">=",
+              "value": 3
+            },
+            "go": "red-win"
+          },
+          {
+            "on": "goal",
+            "go": "celebrate"
+          }
+        ]
+      },
+      "celebrate": {
+        "says": "Goal. Back to the middle.",
+        "allow": [],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "fanfare"
+          }
+        ],
+        "next": [
+          {
+            "after": 4,
+            "go": "kickoff"
+          }
+        ]
+      },
+      "blue-win": {
+        "says": "Blue wins it, three goals.",
+        "allow": [],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "fanfare"
+          },
+          {
+            "op": "emit",
+            "event": "blue wins"
+          }
+        ]
+      },
+      "red-win": {
+        "says": "Red wins it, three goals.",
+        "allow": [],
+        "does": [
+          {
+            "op": "sound",
+            "sound": "fanfare"
+          },
+          {
+            "op": "emit",
+            "event": "red wins"
+          }
+        ]
+      }
+    }
+  },
+  "data": {
+    "blue": {
+      "scope": "run",
+      "value": 0,
+      "label": "blue"
+    },
+    "red": {
+      "scope": "run",
+      "value": 0,
+      "label": "red"
+    }
+  },
+  "player": {
+    "blueprint": "peep",
+    "wears": "profile",
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "kick"
+      },
+      {
+        "key": "KeyQ",
+        "does": "dash",
+        "cooldown": 3
+      }
+    ],
+    "view": "third"
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": -18,
+    "facing": 0
+  },
+  "scripts": {
+    "kick": "/**\n * The ball, and what a kick does to it.\n *\n * The rule beside this one decides *when* - `pressed key: kick, within: 3` - so\n * only somebody standing over the ball can hit it. Everything about how hard is\n * here, because that is the split the whole format is built on: a rule is a\n * sentence about the game, and how hard you hit a ball is arithmetic.\n *\n * The ball moves itself. Its blueprint carries a `body`, so gravity, the\n * touchlines and anybody's shoulder already decide where it goes - running into\n * it rolls it with nothing written down at all. What a kick adds is the one\n * thing the physics cannot know: how hard you meant it, and which way.\n *\n * The kicker's pace is measured rather than asked for, by remembering where\n * they were last frame. A level has no reading of how fast anybody is going,\n * and one frame of positions is exactly that - so a ball met at a sprint leaves\n * at a sprint, and a standing tap is a standing tap.\n *\n * The *direction* is where they are facing rather than where the ball is, so a\n * kick is a pass somebody else can read. See the note on it below.\n */\nconst REACH = 3\n/**\n * How hard a kick is, and these numbers are the whole of whether the game is\n * watchable.\n *\n * They were 10 and 1.9, which is a standing kick of ten cells a second and a\n * running one of nearly thirty-five. On a pitch whose goal is twenty-one cells\n * from the centre spot that put the ball in the net **in under a second, from\n * anywhere**, and the reset then took it away - so a kick read as the ball\n * disappearing rather than as a shot.\n *\n * They then went the other way. Contact became *proportional* - the lounge's\n * model, where a touch sends the ball at 1.7 times your closing speed - so a\n * shoulder at a sprint was already leaving at twenty-two cells a second and a\n * kick at fourteen was **weaker than running into it**, which is nonsense.\n *\n * Four and a quarter, and the number that decides them is not a speed - it is\n * **how far the ball ends up**. Measured on this grass rather than guessed: the\n * drawn ball was traced through a kick frame by frame and it was perfectly\n * smooth, half a cell a frame at the very most, and it travelled *thirty-one\n * cells* - past the goal, into the far wall. Which is what the report was all\n * along: not a skip in the drawing, but a ball that leaves the picture and turns\n * up somewhere else. Nothing about a ramp or a material could fix that, and two\n * attempts at both duly did not.\n *\n * A push leads by about three cells here, so a kick is priced at roughly three\n * of those - nine or ten at a walk, a dozen at a sprint - which is the ask in the\n * words it arrived in: *\"like push, just instead of this bit we push it 3\n * times\"*. The pitch is 21 cells to the goal, so scoring is two touches and a\n * shot rather than one swing from the halfway line, and the ball stays somewhere\n * you can see it the whole way.\n *\n * The grass is deliberately **not** the lever, though it is the obvious one:\n * friction is what makes a *push* feel the way it now does, and that was signed\n * off. A kick is what changes.\n */\nconst BASE = 4\nconst CARRY = 0.25\n/**\n * Flat. A kick is a force along the ground and gravity does the rest.\n *\n * This lofted the ball at a third of the kick's power, on the theory that a\n * shot which never leaves the floor is a dull one. In play it read as the ball\n * *hopping* every time it was touched - asked for as \"you kick it not that it\n * jumps, it just apply force and the gravity return it\" - and the reason is\n * that a hop is the one part of a shot you cannot follow: the ball leaves the\n * ground, the shadow separates from it, and where it comes down is a guess.\n *\n * Rolling is legible. It is also the only kind of shot the rest of this level\n * is built for - the goals are a mouth on the floor and the walls are there to\n * bring a bad shot back, neither of which does anything useful for a ball in\n * the air.\n */\nconst LOFT = 0\n\nlet wasX = null\nlet wasZ = null\nlet pace = 0\n\n/**\n * A kick still to be delivered, in impulse and seconds remaining.\n *\n * A kick used to be handed to the ball whole, in one frame - the honest sum,\n * and it read as the ball jumping into motion rather than being struck. The\n * same impulse spread over a fifth of a second is the same shot with a visible\n * start to it: the ball accelerates away like something hit hard, which is what\n * it is. Short enough that nothing about aiming or passing changes - the ball\n * is at full speed inside twelve frames.\n */\nconst SEND_TIME = 0.2\nconst sending = { x: 0, z: 0, left: 0 }\n\nfunction onTick(dt) {\n  const player = getEntityByName('player')\n\n  if (player) {\n    if (wasX !== null && dt > 0) {\n      const moved = Math.sqrt((player.x - wasX) * (player.x - wasX) + (player.z - wasZ) * (player.z - wasZ))\n      const speed = moved / dt\n      // A jump in position is a teleport - a respawn, a kickoff - rather than a\n      // sprint, and reading it as one would fire the ball out of the ground.\n      pace = speed > 30 ? pace : speed\n    }\n    wasX = player.x\n    wasZ = player.z\n  }\n\n  // The queued kick, paid out a slice a frame until it is all delivered.\n  if (sending.left > 0 && dt > 0) {\n    const step = Math.min(dt, sending.left)\n    const share = step / sending.left\n    self.push(sending.x * share, 0, sending.z * share)\n    sending.x -= sending.x * share\n    sending.z -= sending.z * share\n    sending.left -= step\n  }\n\n  if (self.get('kicked') > 0) {\n    self.set('kicked', 0)\n    if (player) {\n      const dx = self.x - player.x\n      const dz = self.z - player.z\n      const away = Math.sqrt(dx * dx + dz * dz)\n      if (away < REACH) {\n        /**\n         * Where you are looking, not where the ball happens to be.\n         *\n         * This kicked the ball *directly away from the player* - the line from\n         * them to it - which makes the shot depend on which side of the ball\n         * you happened to arrive at rather than on where you meant it to go.\n         * You cannot pass with that: standing a step to the left of the ball\n         * sends it right, and the only way to aim was to walk around it.\n         *\n         * A kick is now the direction you are facing, so it is aimed the same\n         * way everything else in a first-person game is aimed - and, the point\n         * of the change, **somebody else can read it**. A player who can see\n         * which way you are turned can see where the ball is about to go and\n         * move to meet it, which is the whole of what makes passing a thing two\n         * people do rather than one.\n         *\n         * `+z` is forward at a facing of zero, which is the frame the spawns,\n         * the marks and the race gates all use.\n         */\n        const facing = (player.rotation * Math.PI) / 180\n        const fx = Math.sin(facing)\n        const fz = Math.cos(facing)\n        const power = BASE + pace * CARRY\n        // Adds to what it is already doing, so meeting a ball coming towards\n        // you sends it on harder than hitting one lying still. Which is the\n        // whole of a volley. Queued rather than pushed whole - see SEND_TIME.\n        sending.x += fx * power\n        sending.z += fz * power\n        sending.left = SEND_TIME\n        self.emit('kicked')\n      }\n    }\n  }\n\n  /**\n   * Back on the spot, whenever anything asks.\n   *\n   * Four rules set this and the script does not care which: the ball coming\n   * back after a goal, a kick off, the unstick button, and the key bound to\n   * *ball back*. That is the split this format is built on - the document says\n   * *when* the ball belongs in the middle, and this only does the placing.\n   *\n   * On a goal the ball is **deactivated** rather than moved, so it disappears\n   * the moment it crosses the line and comes back four seconds later, on the\n   * spot, as the next kick off starts. A ball that teleported to the middle in\n   * the same frame it scored was the thing that read as it vanishing mid-shot.\n   *\n   * `moveTo` rather than a push, because a kick off is a placement - and the\n   * velocity goes with it, or the ball arrives in the middle still travelling\n   * at whatever put it in the net.\n   */\n  if (self.get('reset') > 0) {\n    self.set('reset', 0)\n    self.moveTo(0, 3, 0)\n    self.dx = 0\n    self.dy = 0\n    self.dz = 0\n  }\n\n  /*\n   * No material change at all any more, and it is worth recording why. The\n   * ball used to turn to rainbow glass while it was in play, as a beacon -\n   * first at any speed, which blinked under a dribble's taps, then only off a\n   * real send. But the swap itself was the discontinuity: the frame you kick,\n   * the ball you were looking at becomes a glass one the pitch shows straight\n   * through, and every report of the kick \"jumping\" survived every fix to the\n   * physics because the thing jumping was the look. Its own colours are the\n   * most visible thing this ball can wear, at any speed, from anywhere.\n   */\n}\n\n/**\n * Whether that was a goal, and what happens next.\n *\n * ---------------------------------------------------------------------------\n * On the ball rather than on the goal\n * ---------------------------------------------------------------------------\n * A goal is three sensors across one mouth, because a volume with no collider\n * is half a metre wide and a mouth is four - see the `goal` blueprint for why\n * it cannot simply be one big box. Three sensors means a ball crossing the line\n * overlaps two of them on the same frame, and a scoring rule on each would give\n * two goals for one shot.\n *\n * So the ball counts, and it counts once. The latch is the whole reason this is\n * a script rather than a rule: a rule fires every time its event happens, and\n * \"the same event twice in one frame is one thing\" is not something a rule can\n * say. Compare `triggers fire against a mutating world` - the same shape of\n * problem, the same answer.\n *\n * The window is generous on purpose. It covers the sensors, and it covers the\n * ball rolling back out of the net through them a second time.\n */\nconst GOAL_GAP = 2\n\nlet lastGoal = -99\n\nfunction onTrigger(event, other) {\n  if (event === 'hit') {\n    if (self.speed > 6) self.emit('thump')\n    return\n  }\n  if (event !== 'collide' || !other) return\n  // Which net, rather than merely that it was one: 1 is blue's and 2 is red's,\n  // and a goal is scored by the side that does not defend the net it went in.\n  const net = other.get('goal')\n  if (net < 1) return\n  if (world.time - lastGoal < GOAL_GAP) return\n  lastGoal = world.time\n\n  world.add(net === 1 ? 'red' : 'blue', 1)\n  self.score(1)\n  // The name the flow listens for. `playing` leaves on this and comes back\n  // through `kickoff`, so the whistle, the pause and the reset are the\n  // document's rather than this script's.\n  self.emit('goal')\n}\n"
+  },
+  "blueprints": {
+    "peep": {
+      "model": "peepz/fox",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "hp": 100
+      },
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "dash",
+          "do": [
+            {
+              "op": "dash",
+              "target": "self",
+              "cells": 6
+            }
+          ]
+        }
+      ]
+    },
+    "ball": {
+      "model": "platformer-neutral/ball",
+      "collider": "none",
+      "body": {
+        "bounce": 0.5,
+        "friction": 0.7,
+        "drag": 0.08,
+        "roll": 115
+      },
+      "props": {
+        "kicked": 0,
+        "reset": 0
+      },
+      "script": "kick",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "kick",
+          "within": 3,
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "kicked",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "on": "collide",
+          "by": "post",
+          "do": [
+            {
+              "op": "sound",
+              "sound": "hit"
+            }
+          ]
+        },
+        {
+          "on": "emitted",
+          "event": "goal",
+          "do": [
+            {
+              "op": "sound",
+              "sound": "fanfare"
+            },
+            {
+              "op": "deactivate",
+              "target": "self",
+              "seconds": 4
+            }
+          ]
+        },
+        {
+          "on": "returned",
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "reset",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "on": "emitted",
+          "event": "unstuck",
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "reset",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "on": "emitted",
+          "event": "kickoff",
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "reset",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "on": "emitted",
+          "event": "ball back",
+          "do": [
+            {
+              "op": "setProp",
+              "target": "self",
+              "key": "reset",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "goal": {
+      "model": "platformer-neutral/structure_A",
+      "collider": "none",
+      "draw": false,
+      "props": {
+        "goal": 1
+      },
+      "triggers": []
+    },
+    "post": {
+      "model": "platformer-neutral/pillar_1x1x2",
+      "collider": "auto",
+      "props": {},
+      "triggers": []
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "ball",
+      "name": "ball",
+      "x": 0,
+      "y": 3,
+      "z": 0,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "goal",
+      "name": "blue-mouth-1",
+      "x": -2,
+      "y": 1,
+      "z": -33,
+      "props": {
+        "goal": 1
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "blue-mouth-2",
+      "x": -1,
+      "y": 1,
+      "z": -33,
+      "props": {
+        "goal": 1
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "blue-mouth-3",
+      "x": 0,
+      "y": 1,
+      "z": -33,
+      "props": {
+        "goal": 1
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "blue-mouth-4",
+      "x": 1,
+      "y": 1,
+      "z": -33,
+      "props": {
+        "goal": 1
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "blue-mouth-5",
+      "x": 2,
+      "y": 1,
+      "z": -33,
+      "props": {
+        "goal": 1
+      }
+    },
+    {
+      "blueprint": "post",
+      "name": "blue-post-left",
+      "x": -3,
+      "y": 1,
+      "z": -33
+    },
+    {
+      "blueprint": "post",
+      "name": "blue-post-right",
+      "x": 3,
+      "y": 1,
+      "z": -33
+    },
+    {
+      "blueprint": "goal",
+      "name": "red-mouth-1",
+      "x": -2,
+      "y": 1,
+      "z": 33,
+      "props": {
+        "goal": 2
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "red-mouth-2",
+      "x": -1,
+      "y": 1,
+      "z": 33,
+      "props": {
+        "goal": 2
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "red-mouth-3",
+      "x": 0,
+      "y": 1,
+      "z": 33,
+      "props": {
+        "goal": 2
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "red-mouth-4",
+      "x": 1,
+      "y": 1,
+      "z": 33,
+      "props": {
+        "goal": 2
+      }
+    },
+    {
+      "blueprint": "goal",
+      "name": "red-mouth-5",
+      "x": 2,
+      "y": 1,
+      "z": 33,
+      "props": {
+        "goal": 2
+      }
+    },
+    {
+      "blueprint": "post",
+      "name": "red-post-left",
+      "x": -3,
+      "y": 1,
+      "z": 33
+    },
+    {
+      "blueprint": "post",
+      "name": "red-post-right",
+      "x": 3,
+      "y": 1,
+      "z": 33
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "ground": false,
+    "restart": false,
+    "fatal": false,
+    "placements": [
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -18,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -18,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -18,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -18,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -18,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -18,
+        "y": 0,
+        "z": 30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -18,
+        "y": 0,
+        "z": 36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -12,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -12,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -12,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -12,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -12,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -12,
+        "y": 0,
+        "z": 30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -12,
+        "y": 0,
+        "z": 36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": -6,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": -6,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -6,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -6,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -6,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -6,
+        "y": 0,
+        "z": 30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": -6,
+        "y": 0,
+        "z": 36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 0,
+        "y": 0,
+        "z": -36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 0,
+        "y": 0,
+        "z": -30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 0,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 0,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 0,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 0,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 0,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 0,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 0,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 0,
+        "y": 0,
+        "z": 30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 0,
+        "y": 0,
+        "z": 36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 6,
+        "y": 0,
+        "z": -36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 6,
+        "y": 0,
+        "z": -30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 6,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 6,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 6,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 6,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": 30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 6,
+        "y": 0,
+        "z": 36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 12,
+        "y": 0,
+        "z": -36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 12,
+        "y": 0,
+        "z": -30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 12,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 12,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 12,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 12,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": 30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 12,
+        "y": 0,
+        "z": 36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 18,
+        "y": 0,
+        "z": -36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 18,
+        "y": 0,
+        "z": -30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 18,
+        "y": 0,
+        "z": -24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 18,
+        "y": 0,
+        "z": -18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/platform_6x6x1_blue",
+        "x": 18,
+        "y": 0,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": -6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 0,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-green/platform_6x6x1_green",
+        "x": 18,
+        "y": 0,
+        "z": 6,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": 12,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": 18,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": 24,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": 30,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/platform_6x6x1_red",
+        "x": 18,
+        "y": 0,
+        "z": 36,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -38,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -38,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -34,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -34,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -30,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -30,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -26,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -26,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -22,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -22,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -18,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -18,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -14,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 18,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 18,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 22,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 22,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 26,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 26,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 30,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 30,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 34,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 34,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -21.5,
+        "y": 1,
+        "z": 38,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 21.5,
+        "y": 1,
+        "z": 38,
+        "rotation": 90
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -18,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -18,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -14,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -14,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -10,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -10,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -6,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -6,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -2,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": -2,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 2,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 2,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 6,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 6,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 10,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 10,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 14,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 14,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 18,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/barrier_4x1x4",
+        "x": 18,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": -20.5,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": -20.5,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": 20.5,
+        "y": 1,
+        "z": -38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/pillar_1x1x4",
+        "x": 20.5,
+        "y": 1,
+        "z": 38.5,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/strut_horizontal",
+        "x": -2,
+        "y": 3,
+        "z": -33,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/strut_horizontal",
+        "x": 0,
+        "y": 3,
+        "z": -33,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/strut_horizontal",
+        "x": 2,
+        "y": 3,
+        "z": -33,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/floor_net_4x4x1_blue",
+        "x": 0,
+        "y": 1.5,
+        "z": -34.6,
+        "rotation": 0,
+        "pitch": 90,
+        "stretch": {
+          "x": 1.5,
+          "z": 0.5
+        }
+      },
+      {
+        "model": "platformer-blue/flag_A_blue",
+        "x": -19,
+        "y": 1,
+        "z": -37,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-blue/flag_A_blue",
+        "x": 19,
+        "y": 1,
+        "z": -37,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/strut_horizontal",
+        "x": -2,
+        "y": 3,
+        "z": 33,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/strut_horizontal",
+        "x": 0,
+        "y": 3,
+        "z": 33,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-neutral/strut_horizontal",
+        "x": 2,
+        "y": 3,
+        "z": 33,
+        "rotation": 0
+      },
+      {
+        "model": "platformer-red/floor_net_4x4x1_red",
+        "x": 0,
+        "y": 1.5,
+        "z": 34.6,
+        "rotation": 0,
+        "pitch": 90,
+        "stretch": {
+          "x": 1.5,
+          "z": 0.5
+        }
+      },
+      {
+        "model": "platformer-red/flag_A_red",
+        "x": -19,
+        "y": 1,
+        "z": 37,
+        "rotation": 180
+      },
+      {
+        "model": "platformer-red/flag_A_red",
+        "x": 19,
+        "y": 1,
+        "z": 37,
+        "rotation": 180
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "team": "blue",
+        "name": "blue-end",
+        "x": 0,
+        "y": 1,
+        "z": -18,
+        "facing": 0,
+        "width": 8,
+        "height": 4
+      },
+      {
+        "kind": "spawn",
+        "team": "red",
+        "name": "red-end",
+        "x": 0,
+        "y": 1,
+        "z": 18,
+        "facing": 180,
+        "width": 8,
+        "height": 4
+      },
+      {
+        "kind": "blue",
+        "name": "blue-net",
+        "x": 0,
+        "y": 1,
+        "z": -33,
+        "facing": 0,
+        "width": 8,
+        "height": 4
+      },
+      {
+        "kind": "red",
+        "name": "red-net",
+        "x": 0,
+        "y": 1,
+        "z": 33,
+        "facing": 180,
+        "width": 8,
+        "height": 4
+      }
+    ]
+  },
+  "clips": {
+    "kick-swing": {
+      "rig": "peepz",
+      "duration": 0.3333,
+      "loop": false,
+      "times": [
+        0.0,
+        0.0417,
+        0.0833,
+        0.125,
+        0.1667,
+        0.2083,
+        0.25,
+        0.2917,
+        0.3333
+      ],
+      "bones": {
+        "leg-front-right": [
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          -0.19081,
+          0.0,
+          0.0,
+          0.98163,
+          -0.39073,
+          0.0,
+          0.0,
+          0.9205,
+          -0.37461,
+          0.0,
+          0.0,
+          0.92718,
+          -0.29237,
+          0.0,
+          0.0,
+          0.9563,
+          -0.19081,
+          0.0,
+          0.0,
+          0.98163,
+          -0.10453,
+          0.0,
+          0.0,
+          0.99452,
+          -0.04362,
+          0.0,
+          0.0,
+          0.99905,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "root": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.18,
+        0.0,
+        0.0,
+        0.3,
+        0.0,
+        0.0,
+        0.3,
+        0.0,
+        0.0,
+        0.24,
+        0.0,
+        0.0,
+        0.16,
+        0.0,
+        0.0,
+        0.09,
+        0.0,
+        0.0,
+        0.04,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  }
+}

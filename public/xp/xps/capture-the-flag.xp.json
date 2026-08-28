@@ -1,0 +1,2517 @@
+{
+ "format": "xp/1",
+ "id": "capture-the-flag",
+ "name": "Capture the flag",
+ "blurb": "Take theirs, get it home. Hit the carrier and it drops where they stood - and yours has to be fetched back.",
+ "finish": "galaxy",
+ "packs": [
+  {
+   "id": "proto",
+   "author": "Kay Lousberg",
+   "source": "https://kaylousberg.itch.io/",
+   "licence": "CC0"
+  },
+  {
+   "id": "dummy",
+   "author": "Kay Lousberg",
+   "source": "https://kaylousberg.itch.io/",
+   "licence": "CC0"
+  },
+  {
+   "id": "platformer-neutral",
+   "author": "Kay Lousberg",
+   "source": "https://kaylousberg.itch.io/",
+   "licence": "CC0"
+  },
+  {
+   "id": "platformer-red",
+   "author": "Kay Lousberg",
+   "source": "https://kaylousberg.itch.io/",
+   "licence": "CC0"
+  },
+  {
+   "id": "platformer-blue",
+   "author": "Kay Lousberg",
+   "source": "https://kaylousberg.itch.io/",
+   "licence": "CC0"
+  }
+ ],
+ "capabilities": [
+  "freeplay",
+  "match"
+ ],
+ "rules": {
+  "preset": "freestyle",
+  "assign": "order",
+  "scoreLimit": 3,
+  "players": {
+   "min": 2,
+   "max": 8
+  }
+ },
+ "player": {
+  "blueprint": "body",
+  "keys": [
+   {
+    "key": "KeyE",
+    "does": "attack"
+   },
+   {
+    "key": "KeyF",
+    "does": "take"
+   },
+   {
+    "key": "KeyQ",
+    "does": "drop"
+   }
+  ],
+  "view": "third"
+ },
+ "blueprints": {
+  "body": {
+   "model": "dummy/Dummy",
+   "tags": [],
+   "props": {
+    "hp": 100,
+    "damage": 25
+   },
+   "sockets": {
+    "hand": {
+     "x": 0.32,
+     "y": 1.15,
+     "z": 0.34
+    }
+   },
+   "collider": "auto",
+   "triggers": [
+    {
+     "on": "pressed",
+     "key": "attack",
+     "do": [
+      {
+       "op": "swing",
+       "target": "self",
+       "reach": 2.4
+      }
+     ]
+    },
+    {
+     "on": "damaged",
+     "do": [
+      {
+       "op": "unhand",
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:red",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:blue",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "home:red",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "home:blue",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "stun",
+       "target": "self",
+       "seconds": 3
+      }
+     ]
+    },
+    {
+     "on": "pressed",
+     "key": "drop",
+     "do": [
+      {
+       "op": "unhand",
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:red",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:blue",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "home:red",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "setProp",
+       "key": "home:blue",
+       "value": 0,
+       "target": "self"
+      },
+      {
+       "op": "sound",
+       "sound": "drop"
+      }
+     ]
+    }
+   ]
+  },
+  "flag-red": {
+   "model": "platformer-red/flag_A_red",
+   "tags": [],
+   "props": {},
+   "sockets": {},
+   "collider": "none",
+   "triggers": [
+    {
+     "on": "pressed",
+     "key": "take",
+     "within": 2,
+     "when": {
+      "of": "other",
+      "prop": "team:blue",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "carry",
+       "target": "self",
+       "socket": "hand"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:red",
+       "value": 1,
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "pickup"
+      }
+     ]
+    },
+    {
+     "on": "pressed",
+     "key": "take",
+     "within": 2,
+     "when": {
+      "of": "other",
+      "prop": "team:red",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "carry",
+       "target": "self",
+       "socket": "hand"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:red",
+       "value": 1,
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "pickup"
+      }
+     ]
+    }
+   ]
+  },
+  "flag-blue": {
+   "model": "platformer-blue/flag_A_blue",
+   "tags": [],
+   "props": {},
+   "sockets": {},
+   "collider": "none",
+   "triggers": [
+    {
+     "on": "pressed",
+     "key": "take",
+     "within": 2,
+     "when": {
+      "of": "other",
+      "prop": "team:red",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "carry",
+       "target": "self",
+       "socket": "hand"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:blue",
+       "value": 1,
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "pickup"
+      }
+     ]
+    },
+    {
+     "on": "pressed",
+     "key": "take",
+     "within": 2,
+     "when": {
+      "of": "other",
+      "prop": "team:blue",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "carry",
+       "target": "self",
+       "socket": "hand"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "flag:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "setProp",
+       "key": "home:blue",
+       "value": 1,
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "pickup"
+      }
+     ]
+    }
+   ]
+  },
+  "base-red": {
+   "model": "proto/Primitive_Floor",
+   "tags": [],
+   "props": {},
+   "sockets": {},
+   "collider": "none",
+   "triggers": [
+    {
+     "on": "enter",
+     "when": {
+      "of": "other",
+      "prop": "flag:blue",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "score",
+       "amount": 1
+      },
+      {
+       "op": "setProp",
+       "key": "flag:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "fanfare"
+      }
+     ]
+    },
+    {
+     "on": "enter",
+     "when": {
+      "of": "other",
+      "prop": "home:red",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "setProp",
+       "key": "home:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "click"
+      }
+     ]
+    }
+   ]
+  },
+  "base-blue": {
+   "model": "proto/Primitive_Floor",
+   "tags": [],
+   "props": {},
+   "sockets": {},
+   "collider": "none",
+   "triggers": [
+    {
+     "on": "enter",
+     "when": {
+      "of": "other",
+      "prop": "flag:red",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "score",
+       "amount": 1
+      },
+      {
+       "op": "setProp",
+       "key": "flag:red",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "fanfare"
+      }
+     ]
+    },
+    {
+     "on": "enter",
+     "when": {
+      "of": "other",
+      "prop": "home:blue",
+      "is": ">=",
+      "value": 1
+     },
+     "do": [
+      {
+       "op": "setProp",
+       "key": "home:blue",
+       "value": 0,
+       "target": "other"
+      },
+      {
+       "op": "unhand",
+       "target": "other"
+      },
+      {
+       "op": "sound",
+       "sound": "click"
+      }
+     ]
+    }
+   ]
+  },
+  "pistol": {
+   "model": "proto/Gun_Pistol",
+   "tags": [
+    "weapon"
+   ],
+   "props": {
+    "damage": 25,
+    "range": 40
+   },
+   "sockets": {},
+   "collider": "none",
+   "triggers": [
+    {
+     "on": "pressed",
+     "key": "take",
+     "within": 2,
+     "do": [
+      {
+       "op": "carry",
+       "target": "self",
+       "socket": "hand"
+      },
+      {
+       "op": "sound",
+       "sound": "pickup"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "entities": [
+  {
+   "name": "red-base",
+   "blueprint": "base-red",
+   "x": -24,
+   "y": 0.1,
+   "z": 0,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "blue-base",
+   "blueprint": "base-blue",
+   "x": 24,
+   "y": 0.1,
+   "z": 0,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "red-flag",
+   "blueprint": "flag-red",
+   "x": -24,
+   "y": 1,
+   "z": 0,
+   "rotation": 90,
+   "scale": 0.6,
+   "props": {}
+  },
+  {
+   "name": "blue-flag",
+   "blueprint": "flag-blue",
+   "x": 24,
+   "y": 1,
+   "z": 0,
+   "rotation": 270,
+   "scale": 0.6,
+   "props": {}
+  },
+  {
+   "name": "gun-1",
+   "blueprint": "pistol",
+   "x": 0,
+   "y": 1,
+   "z": 0,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "gun-2",
+   "blueprint": "pistol",
+   "x": -10,
+   "y": 1,
+   "z": 0,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "gun-3",
+   "blueprint": "pistol",
+   "x": 10,
+   "y": 1,
+   "z": 0,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "gun-4",
+   "blueprint": "pistol",
+   "x": 0,
+   "y": 1,
+   "z": -14,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "gun-5",
+   "blueprint": "pistol",
+   "x": 0,
+   "y": 1,
+   "z": 14,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "gun-6",
+   "blueprint": "pistol",
+   "x": -18,
+   "y": 1,
+   "z": 12,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  },
+  {
+   "name": "gun-7",
+   "blueprint": "pistol",
+   "x": 18,
+   "y": 1,
+   "z": -12,
+   "rotation": 0,
+   "scale": 1,
+   "props": {}
+  }
+ ],
+ "spawn": {
+  "x": 0,
+  "y": 1,
+  "z": -2,
+  "facing": 90
+ },
+ "world": {
+  "ground": true,
+  "floorY": 0,
+  "fatal": false,
+  "restart": false,
+  "marks": [
+   {
+    "kind": "spawn",
+    "team": "red",
+    "name": "red-line",
+    "x": -20,
+    "y": 1,
+    "z": 0,
+    "facing": 90,
+    "width": 6,
+    "height": 4
+   },
+   {
+    "kind": "spawn",
+    "team": "blue",
+    "name": "blue-line",
+    "x": 20,
+    "y": 1,
+    "z": 0,
+    "facing": 270,
+    "width": 6,
+    "height": 4
+   }
+  ],
+  "placements": [
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -28,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -24,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -20,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -16,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -12,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -8,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": -4,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 0,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 4,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 8,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 12,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 16,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 20,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 24,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": -16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": 0,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Floor",
+    "x": 28,
+    "y": 0,
+    "z": 16,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -28,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -28,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -24,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -24,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -20,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -20,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -16,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -16,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -12,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -12,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -8,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -8,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -4,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -4,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 0,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 0,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 4,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 4,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 8,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 8,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 12,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 12,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 16,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 16,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 20,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 20,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 24,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 24,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 28,
+    "y": 1,
+    "z": -18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 28,
+    "y": 1,
+    "z": 18.5,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": -16,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": -16,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": -12,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": -12,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": -8,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": -8,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": -4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": -4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": 0,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": 0,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": 4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": 4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": 8,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": 8,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": 12,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": 12,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": -30.5,
+    "y": 1,
+    "z": 16,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Wall",
+    "x": 30.5,
+    "y": 1,
+    "z": 16,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "platformer-red/arch_tall_red",
+    "x": -24,
+    "y": 1,
+    "z": 0,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "platformer-red/barrier_4x1x2_red",
+    "x": -28,
+    "y": 1,
+    "z": 0,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "platformer-red/barrier_2x1x2_red",
+    "x": -24,
+    "y": 1,
+    "z": -6,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-red/barrier_2x1x2_red",
+    "x": -24,
+    "y": 1,
+    "z": 6,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-red/cone_red",
+    "x": -26,
+    "y": 1,
+    "z": -3,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-red/cone_red",
+    "x": -26,
+    "y": 1,
+    "z": 3,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-blue/arch_tall_blue",
+    "x": 24,
+    "y": 1,
+    "z": 0,
+    "rotation": 270,
+    "scale": 1
+   },
+   {
+    "model": "platformer-blue/barrier_4x1x2_blue",
+    "x": 28,
+    "y": 1,
+    "z": 0,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "platformer-blue/barrier_2x1x2_blue",
+    "x": 24,
+    "y": 1,
+    "z": -6,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-blue/barrier_2x1x2_blue",
+    "x": 24,
+    "y": 1,
+    "z": 6,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-blue/cone_blue",
+    "x": 26,
+    "y": 1,
+    "z": -3,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-blue/cone_blue",
+    "x": 26,
+    "y": 1,
+    "z": 3,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": 0,
+    "y": 1,
+    "z": -12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": 0,
+    "y": 1,
+    "z": -4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": 0,
+    "y": 1,
+    "z": 4,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": 0,
+    "y": 1,
+    "z": 12,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/pillar_2x2x4",
+    "x": 0,
+    "y": 1,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/pillar_2x2x4",
+    "x": 0,
+    "y": 1,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Slope",
+    "x": -4,
+    "y": 1,
+    "z": -12,
+    "rotation": 270,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Slope",
+    "x": 4,
+    "y": 1,
+    "z": 12,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": -16,
+    "y": 1,
+    "z": -10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": -16,
+    "y": 1,
+    "z": 10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_4x1x2",
+    "x": -10,
+    "y": 1,
+    "z": -10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_4x1x2",
+    "x": -10,
+    "y": 1,
+    "z": 10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_2x1x2",
+    "x": -14,
+    "y": 1,
+    "z": -4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_2x1x2",
+    "x": -14,
+    "y": 1,
+    "z": 4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Barrel_A",
+    "x": -12,
+    "y": 1,
+    "z": -2,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Barrel_B",
+    "x": -12,
+    "y": 1,
+    "z": 2,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Box_A",
+    "x": -20,
+    "y": 1,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Box_B",
+    "x": -20,
+    "y": 1,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Pillar_A",
+    "x": -8,
+    "y": 1,
+    "z": -14,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Pillar_A",
+    "x": -8,
+    "y": 1,
+    "z": 14,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": 16,
+    "y": 1,
+    "z": -10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Primitive_Cube",
+    "x": 16,
+    "y": 1,
+    "z": 10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_4x1x2",
+    "x": 10,
+    "y": 1,
+    "z": -10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_4x1x2",
+    "x": 10,
+    "y": 1,
+    "z": 10,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_2x1x2",
+    "x": 14,
+    "y": 1,
+    "z": -4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "platformer-neutral/barrier_2x1x2",
+    "x": 14,
+    "y": 1,
+    "z": 4,
+    "rotation": 90,
+    "scale": 1
+   },
+   {
+    "model": "proto/Barrel_A",
+    "x": 12,
+    "y": 1,
+    "z": -2,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Barrel_B",
+    "x": 12,
+    "y": 1,
+    "z": 2,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Box_A",
+    "x": 20,
+    "y": 1,
+    "z": -8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Box_B",
+    "x": 20,
+    "y": 1,
+    "z": 8,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Pillar_A",
+    "x": 8,
+    "y": 1,
+    "z": -14,
+    "rotation": 0,
+    "scale": 1
+   },
+   {
+    "model": "proto/Pillar_A",
+    "x": 8,
+    "y": 1,
+    "z": 14,
+    "rotation": 0,
+    "scale": 1
+   }
+  ]
+ }
+}

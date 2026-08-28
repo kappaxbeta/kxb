@@ -1,0 +1,847 @@
+{
+  "format": "xp/1",
+  "id": "moving-parts",
+  "name": "Moving parts",
+  "blurb": "Two rooms joined by a corridor, and everything a script can do that a verb cannot. A lift carries you to a ledge no jump reaches, a block patrols the gap in the dividing wall, a coin orbits and says so when you take it. Through the corridor is a pitch with a goal at each end.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "proto"
+    },
+    {
+      "id": "dummy"
+    }
+  ],
+  "capabilities": [
+    "freeplay",
+    "match",
+    "football"
+  ],
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 8,
+    "facing": 180
+  },
+  "player": {
+    "blueprint": "body"
+  },
+  "scripts": {
+    "patrol": "\nconst REACH = 3.4\nconst PACE = 3.2\n\nlet going = 1\n\nfunction onTick(dt) {\n  self.x += going * PACE * dt\n  if (self.x > REACH) { self.x = REACH; going = -1 }\n  if (self.x < -REACH) { self.x = -REACH; going = 1 }\n}\n",
+    "orbit": "\nconst RADIUS = 3\nconst CENTRE = { x: 7, z: 7 }\nconst SPEED = 1.1\nconst DEGREES = 180 / Math.PI\n\nfunction onTick() {\n  const angle = world.time * SPEED\n  self.moveTo(CENTRE.x + Math.cos(angle) * RADIUS, 1.6, CENTRE.z + Math.sin(angle) * RADIUS)\n  self.rotation = -angle * DEGREES\n}\n",
+    "watcher": "\nlet nearest = 99\n\nfunction onSpawn() {\n  log('watching for the block')\n}\n\nfunction onTick() {\n  const block = getEntityByName('block')\n  if (!block) return\n\n  const range = self.flatDistanceTo(block)\n  self.set('range', Math.round(range * 10) / 10)\n\n  if (range < nearest - 0.05) {\n    nearest = range\n    log('the block came within', Math.round(range * 10) / 10, 'metres')\n  }\n\n  // Turned to face it, which is the readable half: you can see what it is\n  // looking at without reading a number.\n  self.rotation = Math.atan2(block.x - self.x, block.z - self.z) * (180 / Math.PI)\n}\n",
+    "lift": "\nconst LOW = 1\nconst HIGH = 5\nconst PACE = 1.4\n\nlet going = 1\n\nfunction onTick(dt) {\n  self.y += going * PACE * dt\n  if (self.y >= HIGH) { self.y = HIGH; going = -1 }\n  if (self.y <= LOW) { self.y = LOW; going = 1 }\n}\n"
+  },
+  "blueprints": {
+    "body": {
+      "model": "dummy/Dummy",
+      "collider": "none",
+      "tags": [
+        "player"
+      ]
+    },
+    "block": {
+      "model": "proto/Primitive_Cube",
+      "collider": {
+        "w": 2,
+        "h": 2,
+        "d": 2
+      },
+      "script": "patrol"
+    },
+    "coin": {
+      "model": "proto/Coin_A",
+      "collider": "none",
+      "props": {
+        "value": 5
+      },
+      "script": "orbit",
+      "triggers": [
+        {
+          "on": "enter",
+          "do": [
+            {
+              "op": "emit",
+              "event": "picked the coin up"
+            },
+            {
+              "op": "score",
+              "amount": 5
+            },
+            {
+              "op": "despawn"
+            }
+          ]
+        }
+      ]
+    },
+    "plinth": {
+      "model": "proto/Box_A",
+      "props": {
+        "range": 0
+      },
+      "script": "watcher"
+    },
+    "crate": {
+      "model": "proto/Box_A",
+      "tags": [
+        "breakable"
+      ],
+      "props": {
+        "hp": 10
+      }
+    },
+    "lift": {
+      "model": "proto/Primitive_Cube",
+      "collider": {
+        "w": 4,
+        "h": 1,
+        "d": 4
+      },
+      "script": "lift"
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "block",
+      "name": "block",
+      "x": 0,
+      "y": 1,
+      "z": -2,
+      "scale": 0.5
+    },
+    {
+      "blueprint": "coin",
+      "name": "coin",
+      "x": 7,
+      "y": 1.6,
+      "z": 7
+    },
+    {
+      "blueprint": "plinth",
+      "name": "plinth",
+      "x": 0,
+      "y": 1,
+      "z": 6
+    },
+    {
+      "blueprint": "crate",
+      "x": -6.2,
+      "y": 1,
+      "z": 5.4
+    },
+    {
+      "blueprint": "crate",
+      "x": -5.4,
+      "y": 1,
+      "z": 5.9,
+      "rotation": 25
+    },
+    {
+      "blueprint": "lift",
+      "name": "lift",
+      "x": -8,
+      "y": 1,
+      "z": -8
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "placements": [
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 1,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 1,
+        "z": 12,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": 12,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 1,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 1,
+        "z": 12,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 1,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": 12,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 1,
+        "z": -12,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 1,
+        "z": 12,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 1,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": -10,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 1,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": -6,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 1,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": -2,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 1,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": 2,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 1,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": 6,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 1,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": 10,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 1,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 1,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 1,
+        "z": -2,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -8,
+        "y": 6,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 6,
+        "z": -4
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 14
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 0,
+        "y": 1,
+        "z": 14,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 4,
+        "y": 1,
+        "z": 14,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 18
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 0,
+        "y": 1,
+        "z": 18,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 4,
+        "y": 1,
+        "z": 18,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 22
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 26
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 30
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 34
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 22
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 26
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 30
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 34
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 22
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 26
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 30
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 34
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 22
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 26
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 30
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 34
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 1,
+        "z": 20,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 1,
+        "z": 36,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 1,
+        "z": 36,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": 20,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 1,
+        "z": 36,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 1,
+        "z": 20,
+        "rotation": 0
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 1,
+        "z": 36,
+        "rotation": 180
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -4,
+        "y": 1,
+        "z": 22,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": 22,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -4,
+        "y": 1,
+        "z": 26,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": 26,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -4,
+        "y": 1,
+        "z": 30,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": 30,
+        "rotation": 270
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -4,
+        "y": 1,
+        "z": 34,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 1,
+        "z": 34,
+        "rotation": 270
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "x": -6,
+        "y": 1,
+        "z": 8,
+        "facing": 180,
+        "team": "red"
+      },
+      {
+        "kind": "spawn",
+        "x": 6,
+        "y": 1,
+        "z": 8,
+        "facing": 180,
+        "team": "blue"
+      },
+      {
+        "kind": "red",
+        "x": 4,
+        "y": 1,
+        "z": 34,
+        "facing": 180,
+        "width": 6,
+        "height": 4
+      },
+      {
+        "kind": "blue",
+        "x": 4,
+        "y": 1,
+        "z": 22,
+        "facing": 0,
+        "width": 6,
+        "height": 4
+      }
+    ]
+  }
+}

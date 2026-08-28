@@ -1,0 +1,27 @@
+{
+  "format": "xp/1",
+  "id": "boxing",
+  "name": "Boxing",
+  "blurb": "Three rounds, two corners, and a jab that is seventy milliseconds of nothing before it can hurt anybody. Block, slip or parry - each of the three beats something the others lose to, and the uppercut goes straight through a guard. Not a level: this document names a game the host runs, built on the XP engine as its own package.",
+  "finish": "galaxy",
+  "capabilities": [
+    "match"
+  ],
+  "rules": {
+    "preset": "deathmatch",
+    "sides": "team",
+    "players": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "backend": {
+    "needs": [
+      "identity",
+      "network"
+    ]
+  },
+  "frame": {
+    "game": "boxing"
+  }
+}

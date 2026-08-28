@@ -1,0 +1,888 @@
+{
+  "format": "xp/1",
+  "id": "steal-a-plant",
+  "name": "Steal a Plant",
+  "blurb": "A greenhouse everybody shares and a shelf that is only yours. Take a plant, carry it home, and watch somebody take it back.",
+  "finish": "galaxy",
+  "packs": [
+    {
+      "id": "proto"
+    },
+    {
+      "id": "dummy"
+    },
+    {
+      "id": "furniture"
+    },
+    {
+      "id": "forest-color3"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "backend": {
+    "needs": [
+      "identity",
+      "persistence"
+    ],
+    "wants": [
+      "network",
+      "arbiter"
+    ]
+  },
+  "visit": {
+    "take": "mine",
+    "amount": 1,
+    "cooldown": 86400
+  },
+  "rules": {
+    "preset": "freestyle",
+    "players": {
+      "min": 1,
+      "max": 8
+    }
+  },
+  "data": {
+    "greenhouse": {
+      "scope": "space",
+      "value": 6,
+      "label": "Plants in the greenhouse"
+    },
+    "mine": {
+      "scope": "shared",
+      "value": 0,
+      "label": "Plants on my shelf"
+    },
+    "taken": {
+      "scope": "player",
+      "value": 0,
+      "label": "Plants I have carried home"
+    }
+  },
+  "player": {
+    "blueprint": "gardener",
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "use"
+      }
+    ]
+  },
+  "blueprints": {
+    "gardener": {
+      "model": "dummy/Dummy",
+      "collider": "none",
+      "tags": [
+        "player"
+      ],
+      "props": {
+        "carrying": 0
+      },
+      "sockets": {
+        "hand": {
+          "x": 0.32,
+          "y": 1.15,
+          "z": 0.34
+        }
+      }
+    },
+    "plant": {
+      "model": "furniture/cactus_medium_A",
+      "collider": "auto",
+      "props": {
+        "lifted": 0
+      },
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "prop": "lifted",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "lifted",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "setProp",
+              "key": "carrying",
+              "value": 1,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "greenhouse",
+              "value": -1,
+              "target": "world"
+            },
+            {
+              "op": "carry",
+              "target": "self",
+              "socket": "hand"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "plant-lifted"
+            }
+          ]
+        }
+      ]
+    },
+    "seedling": {
+      "model": "forest-color3/Bush_1_A_Color3",
+      "collider": "auto",
+      "props": {
+        "lifted": 0
+      },
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "prop": "lifted",
+            "is": "==",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "setProp",
+              "key": "lifted",
+              "value": 1,
+              "target": "self"
+            },
+            {
+              "op": "setProp",
+              "key": "carrying",
+              "value": 1,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "greenhouse",
+              "value": -1,
+              "target": "world"
+            },
+            {
+              "op": "carry",
+              "target": "self",
+              "socket": "hand"
+            },
+            {
+              "op": "sound",
+              "sound": "pickup"
+            },
+            {
+              "op": "emit",
+              "event": "plant-lifted"
+            }
+          ]
+        }
+      ]
+    },
+    "shelf": {
+      "model": "furniture/shelf_A_big",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "enter",
+          "when": {
+            "of": "other",
+            "prop": "carrying",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "unhand",
+              "target": "other"
+            },
+            {
+              "op": "setProp",
+              "key": "carrying",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "mine",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "addProp",
+              "key": "taken",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "sound",
+              "sound": "drop"
+            },
+            {
+              "op": "emit",
+              "event": "plant-shelved"
+            }
+          ]
+        }
+      ]
+    },
+    "bench": {
+      "model": "furniture/table_medium_long",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "enter",
+          "when": {
+            "of": "other",
+            "prop": "carrying",
+            "is": "==",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "unhand",
+              "target": "other"
+            },
+            {
+              "op": "setProp",
+              "key": "carrying",
+              "value": 0,
+              "target": "other"
+            },
+            {
+              "op": "addProp",
+              "key": "greenhouse",
+              "value": 1,
+              "target": "world"
+            },
+            {
+              "op": "sound",
+              "sound": "tap"
+            },
+            {
+              "op": "emit",
+              "event": "plant-returned"
+            }
+          ]
+        }
+      ]
+    },
+    "sign": {
+      "model": "proto/Wall_Target",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "of": "world",
+            "prop": "greenhouse",
+            "is": "<=",
+            "value": 0
+          },
+          "do": [
+            {
+              "op": "sound",
+              "sound": "thud"
+            },
+            {
+              "op": "emit",
+              "event": "greenhouse-empty"
+            }
+          ]
+        },
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "when": {
+            "of": "world",
+            "prop": "greenhouse",
+            "is": ">=",
+            "value": 1
+          },
+          "do": [
+            {
+              "op": "sound",
+              "sound": "click"
+            },
+            {
+              "op": "emit",
+              "event": "greenhouse-open"
+            }
+          ]
+        }
+      ]
+    },
+    "grass": {
+      "model": "forest-color3/Bush_2_A_Color3",
+      "collider": "none"
+    },
+    "planter": {
+      "model": "furniture/table_low",
+      "collider": "auto"
+    },
+    "gate": {
+      "model": "proto/Wall_Doorway",
+      "collider": "auto",
+      "triggers": [
+        {
+          "on": "pressed",
+          "key": "use",
+          "within": 2,
+          "do": [
+            {
+              "op": "raid"
+            },
+            {
+              "op": "sound",
+              "sound": "tap"
+            }
+          ]
+        },
+        {
+          "on": "spawned",
+          "do": [
+            {
+              "op": "emit",
+              "event": "press E at the gate to take a plant from somebody"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "entities": [
+    {
+      "blueprint": "plant",
+      "name": "plant-one",
+      "x": -3,
+      "y": 0.55,
+      "z": -6
+    },
+    {
+      "blueprint": "plant",
+      "name": "plant-two",
+      "x": -1,
+      "y": 0.55,
+      "z": -6
+    },
+    {
+      "blueprint": "plant",
+      "name": "plant-three",
+      "x": 1,
+      "y": 0.55,
+      "z": -6
+    },
+    {
+      "blueprint": "seedling",
+      "name": "seedling-one",
+      "x": 3,
+      "y": 0.55,
+      "z": -6
+    },
+    {
+      "blueprint": "seedling",
+      "name": "seedling-two",
+      "x": -3,
+      "y": 0.55,
+      "z": -8
+    },
+    {
+      "blueprint": "seedling",
+      "name": "seedling-three",
+      "x": 3,
+      "y": 0.55,
+      "z": -8
+    },
+    {
+      "blueprint": "planter",
+      "x": -2,
+      "y": 0,
+      "z": -6
+    },
+    {
+      "blueprint": "planter",
+      "x": 2,
+      "y": 0,
+      "z": -6
+    },
+    {
+      "blueprint": "planter",
+      "x": 0,
+      "y": 0,
+      "z": -8
+    },
+    {
+      "blueprint": "bench",
+      "name": "potting-bench",
+      "x": 0,
+      "y": 0,
+      "z": -3
+    },
+    {
+      "blueprint": "shelf",
+      "name": "my-shelf",
+      "x": 0,
+      "y": 0,
+      "z": 9
+    },
+    {
+      "blueprint": "sign",
+      "name": "the-notice",
+      "x": 0,
+      "y": 0,
+      "z": -10.5
+    },
+    {
+      "blueprint": "grass",
+      "x": -7,
+      "y": 0,
+      "z": 2
+    },
+    {
+      "blueprint": "grass",
+      "x": 7,
+      "y": 0,
+      "z": 2
+    },
+    {
+      "blueprint": "grass",
+      "x": -6,
+      "y": 0,
+      "z": 6
+    },
+    {
+      "blueprint": "grass",
+      "x": 6,
+      "y": 0,
+      "z": 6
+    },
+    {
+      "blueprint": "gate",
+      "name": "garden-gate",
+      "x": -6,
+      "y": 0,
+      "z": 3
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "placements": [
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 2,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 6,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -10
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": -2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 2
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 6
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 10,
+        "y": 0,
+        "z": 10
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 0,
+        "z": -12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -10,
+        "y": 0,
+        "z": 12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 0,
+        "z": -12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -6,
+        "y": 0,
+        "z": 12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 0,
+        "z": -12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -2,
+        "y": 0,
+        "z": 12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 0,
+        "z": -12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 2,
+        "y": 0,
+        "z": 12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 0,
+        "z": -12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 6,
+        "y": 0,
+        "z": 12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 0,
+        "z": -12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 10,
+        "y": 0,
+        "z": 12
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 0,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 0,
+        "z": -10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 0,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 0,
+        "z": -6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 0,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 0,
+        "z": -2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 0,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 0,
+        "z": 2,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 0,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 0,
+        "z": 6,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": -12,
+        "y": 0,
+        "z": 10,
+        "rotation": 90
+      },
+      {
+        "model": "proto/Primitive_Wall",
+        "x": 12,
+        "y": 0,
+        "z": 10,
+        "rotation": 90
+      }
+    ],
+    "marks": [
+      {
+        "kind": "spawn",
+        "x": 0,
+        "y": 1,
+        "z": 4,
+        "facing": 180
+      },
+      {
+        "kind": "spawn",
+        "x": 2,
+        "y": 1,
+        "z": 5,
+        "facing": 180
+      },
+      {
+        "kind": "spawn",
+        "x": -2,
+        "y": 1,
+        "z": 5,
+        "facing": 180
+      }
+    ]
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 4,
+    "facing": 180
+  }
+}

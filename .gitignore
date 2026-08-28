@@ -1,0 +1,99 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+ignoreInGit
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Every alternate build directory, as one pattern.
+#
+# There are five of them and there keeps being another: `.next-shots` and
+# `.next-shots2` for the screenshot servers, `.next-build` and `.next-verify`
+# for production builds that must not stomp on `.next` (which the dev server
+# owns), `.next-classname` for the CSS-attribute build whose chunks must never
+# be picked up by a normal dev server. Each was listed by hand, so each new one
+# was committed by accident once first.
+#
+# `.next` itself is `/.next/` further down, and `next-env.d.ts` does not start
+# with a dot, so neither is caught by this.
+.next-*
+.shoot-profile
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# The event agent's public key, pasted out of the app box so it can be added to
+# the Hetzner project. Only the public half is ever written here - the private
+# key stays on the box that generated it and is never copied anywhere. Ignored
+# because it is a per-install fact about one machine, not part of the source.
+*.pub.local
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Production data dumped for the local stack (bun run db:dump-prod).
+# Real emails and password hashes - never commit this.
+supabase/seed.sql
+
+# Post-ready renders, rebuilt from the scenes by `bun run scripts/build-social.ts`.
+# Ten megabytes of PNG that is a pure function of files already in the repo -
+# the plan and the copy next to them are the part worth keeping. `public/og.png`
+# comes out of the same script and *is* committed: it ships with the site.
+docs/marketing/images/
+
+# eslint --cache, written by deploy.sh
+.eslintcache
+
+# Worktrees an agent session created. Never committed: each one is a full
+# checkout of this repo, and a stray `git add -A` would try to commit all of it.
+.claude/worktrees/
+
+# Playwright's own output. The specs are checked in; their traces are not.
+/test-results/
+/playwright-report/
+
+# Recordings from `VIDEO=1`. Watched, not committed.
+/e2e/video/
+
+# The camera-original screen recordings behind `public/enter/introduction-*.mp4`.
+# Forty-four megabytes for ninety seconds, and the file that ships is a tenth of
+# that with no visible difference (see `bun run scripts/…`, or the ffmpeg line in
+# docs). Kept on disk so the shipped one can be re-encoded from the original
+# rather than from an already-compressed copy; never committed, because a repo
+# that carries both is carrying the same ninety seconds twice.
+/public/enter/*.source.*
+
+# Published from packages/boxing/assets by `bun run boxing:assets --publish`.
+# The package is the source; this is a build output.
+/public/boxing
+
+# ...and the same for the card game. `bun run maumau:assets --publish`.
+/public/maumau

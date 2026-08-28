@@ -1,0 +1,467 @@
+{
+  "format": "xp/1",
+  "id": "a-shot",
+  "name": "A shot",
+  "blurb": "A movie, already cut.",
+  "packs": [
+    {
+      "id": "proto",
+      "author": "Kay Lousberg",
+      "licence": "CC0",
+      "source": "https://kaylousberg.itch.io/"
+    },
+    {
+      "id": "dummy",
+      "author": "Kay Lousberg",
+      "licence": "CC0",
+      "source": "https://kaylousberg.itch.io/"
+    },
+    {
+      "id": "peepz",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/"
+    }
+  ],
+  "capabilities": [
+    "freeplay"
+  ],
+  "blueprints": {
+    "dummy": {
+      "model": "dummy/Dummy",
+      "collider": "auto",
+      "tags": [],
+      "props": {},
+      "sockets": {},
+      "triggers": []
+    },
+    "fox": {
+      "model": "peepz/fox",
+      "collider": "auto",
+      "tags": [],
+      "props": {},
+      "sockets": {},
+      "triggers": []
+    },
+    "crate": {
+      "model": "proto/Box_A",
+      "collider": "auto",
+      "tags": [],
+      "props": {},
+      "sockets": {},
+      "triggers": [
+        {
+          "on": "spawned",
+          "do": [
+            {
+              "op": "movie",
+              "sequence": "the-vault"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "player": {},
+  "entities": [
+    {
+      "blueprint": "dummy",
+      "name": "chad",
+      "x": -6,
+      "y": 1,
+      "z": 0,
+      "rotation": 90,
+      "scale": 1,
+      "props": {}
+    },
+    {
+      "blueprint": "fox",
+      "name": "vera",
+      "x": 3,
+      "y": 1,
+      "z": 1,
+      "rotation": 200,
+      "scale": 1,
+      "props": {}
+    },
+    {
+      "blueprint": "crate",
+      "name": "crate",
+      "x": 0,
+      "y": 1,
+      "z": 0,
+      "rotation": 0,
+      "scale": 1.4,
+      "props": {}
+    }
+  ],
+  "world": {
+    "floorY": 0,
+    "ground": true,
+    "restart": false,
+    "fatal": false,
+    "placements": [
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -8,
+        "y": 0,
+        "z": -8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -8,
+        "y": 0,
+        "z": -4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -8,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -8,
+        "y": 0,
+        "z": 4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -8,
+        "y": 0,
+        "z": 8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": -8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": -4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": 4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": -4,
+        "y": 0,
+        "z": 8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": -8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": -4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 0,
+        "y": 0,
+        "z": 8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": -8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": -4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": 4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 4,
+        "y": 0,
+        "z": 8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 8,
+        "y": 0,
+        "z": -8,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 8,
+        "y": 0,
+        "z": -4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 8,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 8,
+        "y": 0,
+        "z": 4,
+        "rotation": 0,
+        "scale": 1
+      },
+      {
+        "model": "proto/Primitive_Floor",
+        "x": 8,
+        "y": 0,
+        "z": 8,
+        "rotation": 0,
+        "scale": 1
+      }
+    ],
+    "marks": []
+  },
+  "spawn": {
+    "x": 0,
+    "y": 1,
+    "z": 6,
+    "facing": 180
+  },
+  "timeline": {
+    "duration": 8,
+    "fps": 30,
+    "tracks": {},
+    "cameras": [
+      {
+        "name": "wide",
+        "keys": [
+          {
+            "t": 0,
+            "position": [
+              7,
+              4.2,
+              9
+            ],
+            "target": [
+              -2,
+              2.2,
+              0
+            ],
+            "fov": 42
+          },
+          {
+            "t": 8,
+            "position": [
+              9,
+              4.2,
+              8
+            ],
+            "target": [
+              1,
+              2.2,
+              0
+            ],
+            "fov": 42
+          }
+        ],
+        "ease": true
+      },
+      {
+        "name": "vera",
+        "keys": [
+          {
+            "t": 0,
+            "position": [
+              4.4,
+              2.5,
+              4.2
+            ],
+            "target": [
+              3,
+              2.1,
+              1
+            ],
+            "fov": 34
+          }
+        ],
+        "ease": false
+      }
+    ],
+    "cuts": [
+      {
+        "t": 0,
+        "camera": "wide"
+      },
+      {
+        "t": 2.4,
+        "camera": "vera"
+      },
+      {
+        "t": 4.4,
+        "camera": "wide"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "chad",
+        "t": 0,
+        "duration": 2,
+        "kind": "move",
+        "x": -1.6,
+        "z": 0
+      },
+      {
+        "entity": "chad",
+        "t": 2,
+        "duration": 1,
+        "kind": "jump",
+        "height": 1.6
+      },
+      {
+        "entity": "chad",
+        "t": 2,
+        "duration": 1,
+        "kind": "move",
+        "x": 1.4,
+        "z": 0.2
+      },
+      {
+        "entity": "vera",
+        "t": 2.4,
+        "duration": 0.6,
+        "kind": "turn",
+        "rotation": 250
+      },
+      {
+        "entity": "chad",
+        "t": 2.9,
+        "duration": 1.6,
+        "kind": "play",
+        "clip": "Death_A",
+        "loop": false
+      },
+      {
+        "entity": "vera",
+        "t": 3,
+        "duration": 2,
+        "kind": "say",
+        "text": "He does this every time."
+      },
+      {
+        "entity": "chad",
+        "t": 5,
+        "duration": 2.4,
+        "kind": "say",
+        "text": "I meant to do that."
+      },
+      {
+        "entity": "chad",
+        "t": 5,
+        "duration": 3,
+        "kind": "play",
+        "clip": "Idle_B",
+        "loop": true
+      }
+    ],
+    "backdrop": {
+      "kind": "colour",
+      "colour": "#141026"
+    }
+  },
+  "sequences": {
+    "the-vault": {
+      "name": "The vault",
+      "takes": [
+        {
+          "scene": "main",
+          "from": 0,
+          "to": 8,
+          "speed": 1
+        }
+      ]
+    }
+  }
+}

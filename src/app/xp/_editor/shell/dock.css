@@ -1,0 +1,151 @@
+/* ---------------------------------------------------------------------------
+ * The dock, in the editor's own colours.
+ *
+ * Why a theme of our own and not `dockview-theme-abyss`
+ * ---------------------------------------------------------------------------
+ * Abyss is a blue-black: its group ground is #000c18 and its tab bar #1c1c2a,
+ * and every panel this editor mounts inside it is Tailwind's neutral-950. So
+ * each tab bar sat in a slightly different, slightly bluer dark than the
+ * panel under it and the chrome around it - not wrong enough to name, wrong
+ * enough that the whole thing read as three tools stacked rather than one.
+ * The tokens below are the editor's: neutral-950 ground, neutral-900 bars,
+ * neutral-800 hairlines, violet for the one thing that is active. They are
+ * written as hex rather than Tailwind classes because dockview reads them
+ * from custom properties and this is the one place it can.
+ *
+ * Built on the library's variables, not by restyling its DOM: the selectors
+ * under the token block are the few dockview has no variable for - the
+ * active tab's underline, the tab's face, the hairline between tabs - and
+ * each says which one it is and why.
+ * ------------------------------------------------------------------------- */
+.dockview-theme-kxb {
+  /* Ground and bars */
+  --dv-group-view-background-color: #0a0a0a;
+  --dv-tabs-and-actions-container-background-color: #111111;
+  --dv-tabs-and-actions-container-height: 32px;
+  --dv-tabs-and-actions-container-font-size: 11px;
+  --dv-tab-font-size: 11px;
+  --dv-tab-margin: 0;
+  --dv-border-radius: 0px;
+  --dv-tab-border-radius: 0px;
+  --dv-spacing-padding: 0px;
+
+  /* Tabs: the visible one sits on the panel's ground, the rest are quiet. */
+  --dv-activegroup-visiblepanel-tab-background-color: #0a0a0a;
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #0a0a0a;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-activegroup-visiblepanel-tab-color: #e5e5e5;
+  --dv-activegroup-hiddenpanel-tab-color: #737373;
+  --dv-inactivegroup-visiblepanel-tab-color: #a3a3a3;
+  --dv-inactivegroup-hiddenpanel-tab-color: #525252;
+  --dv-tab-divider-color: transparent;
+  --dv-tab-close-icon-size: 10px;
+
+  /* Hairlines, in the one grey every border in the editor is. */
+  --dv-separator-border: #262626;
+  --dv-paneview-header-border-color: #262626;
+
+  /* The one colour that means "this": violet-500, as the toolbar and rail use it. */
+  --dv-paneview-active-outline-color: rgb(139 92 246 / 0.6);
+  --dv-drag-over-background-color: rgb(139 92 246 / 0.1);
+  --dv-drag-over-border-color: rgb(139 92 246 / 0.55);
+  --dv-drag-over-border: 1px solid var(--dv-drag-over-border-color);
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: rgb(139 92 246 / 0.5);
+  --dv-active-sash-transition-duration: 0.1s;
+  --dv-active-sash-transition-delay: 0.3s;
+  --dv-icon-hover-background-color: rgb(255 255 255 / 0.06);
+  --dv-tabs-container-scrollbar-color: #404040;
+
+  /* Floating groups, should anybody tear one off. */
+  --dv-floating-box-shadow: 0 8px 32px rgb(0 0 0 / 0.5), 0 2px 8px rgb(0 0 0 / 0.3);
+  --dv-floating-border: 1px solid #262626;
+  --dv-floating-group-border: 1px solid #262626;
+  --dv-floating-titlebar-height: 22px;
+  --dv-floating-titlebar-background-color: #111111;
+  --dv-floating-titlebar-border-bottom: 1px solid #262626;
+  --dv-floating-group-dragging-opacity: 0.5;
+  --dv-overlay-z-index: 999;
+  --dv-dropdown-border-radius: 6px;
+  --dv-sash-border-radius: 0px;
+
+  /* Group chips, which this editor never shows; kept sane in case it does. */
+  --dv-tab-group-chip-padding: 2px 6px;
+  --dv-tab-group-chip-border-radius: 4px;
+  --dv-tab-group-chip-font-size: 10px;
+  --dv-tab-group-line-height: 2px;
+  --dv-tab-group-line-opacity: 0.6;
+  --dv-tab-group-color-grey: #525252;
+  --dv-tab-group-color-blue: #60a5fa;
+  --dv-tab-group-color-red: #f87171;
+  --dv-tab-group-color-yellow: #fbbf24;
+  --dv-tab-group-color-green: #4ade80;
+  --dv-tab-group-color-pink: #f472b6;
+  --dv-tab-group-color-purple: #a78bfa;
+  --dv-tab-group-color-cyan: #22d3ee;
+  --dv-tab-group-color-orange: #fb923c;
+}
+
+/* A tab's face: the panel's own small tracked capitals, so a tab and the
+   section labels under it are visibly the same family. */
+.dockview-theme-kxb .dv-tab {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: 0.04em;
+  padding: 0 0.75rem;
+  transition: color 140ms ease-out;
+}
+
+.dockview-theme-kxb .dv-tab:hover {
+  color: #d4d4d4;
+}
+
+/* The line under the tab whose panel is showing. Violet when the group has
+   focus, a grey when it does not - the same two states the rail's lit and
+   unlit buttons have. Drawn as a pseudo-element so it needs no markup. */
+.dockview-theme-kxb .dv-groupview > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-active-tab::after {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #404040;
+  pointer-events: none;
+}
+
+.dockview-theme-kxb .dv-groupview.dv-active-group > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-active-tab::after {
+  background: rgb(139 92 246 / 0.9);
+}
+
+/* The focus ring dockview draws with the divider colour, which is transparent
+   here on purpose. A keyboard focus is still shown - as the same violet the
+   rest of the editor uses for it. */
+.dockview-theme-kxb .dv-tab:focus-visible::after {
+  outline: 1px solid rgb(139 92 246 / 0.6) !important;
+  outline-offset: -1px;
+}
+
+/* The hairline under every tab bar, so a bar over a panel reads as a header
+   and not as a band of slightly-different dark. */
+.dockview-theme-kxb .dv-groupview > .dv-tabs-and-actions-container {
+  border-bottom: 1px solid #1f1f1f;
+}
+
+/* The close mark: quiet until hovered, and round rather than square. */
+.dockview-theme-kxb .dv-tab .dv-default-tab .dv-default-tab-action {
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+}
+
+.dockview-theme-kxb .dv-tab .dv-default-tab .dv-default-tab-action:hover {
+  opacity: 1;
+}
+
+/* Drop targets, when a panel is being dragged: a violet wash inside a violet
+   hairline, instead of the library's grey. */
+.dockview-theme-kxb .dv-drop-target-selection {
+  border-radius: 4px;
+}

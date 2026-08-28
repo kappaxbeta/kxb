@@ -1,0 +1,74 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts",
+    ".next-shots/types/**/*.ts",
+    ".next-shots/dev/types/**/*.ts",
+    ".next-shots2/types/**/*.ts",
+    ".next-shots2/dev/types/**/*.ts",
+    ".next-build/types/**/*.ts",
+    ".next-build/dev/types/**/*.ts",
+    ".next-verify/types/**/*.ts",
+    ".next-verify/dev/types/**/*.ts",
+    ".next-classname/types/**/*.ts",
+    ".next-classname/dev/types/**/*.ts",
+    ".next-healthverify/types/**/*.ts",
+    ".next-healthverify/dev/types/**/*.ts",
+    ".next-xpui/types/**/*.ts",
+    ".next-xpui/dev/types/**/*.ts",
+    ".next-shots3/types/**/*.ts",
+    ".next-shots3/dev/types/**/*.ts",
+    ".next-store/types/**/*.ts",
+    ".next-store/dev/types/**/*.ts",
+    ".next-render/types/**/*.ts",
+    ".next-render/dev/types/**/*.ts",
+    ".next-probe/types/**/*.ts",
+    ".next-probe/dev/types/**/*.ts",
+    ".next-probe2/types/**/*.ts",
+    ".next-probe2/dev/types/**/*.ts",
+    ".next-interndoc/types/**/*.ts",
+    ".next-interndoc/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".agents",
+    ".claude",
+    ".codes",
+    ".impeccable",
+    ".next-shots",
+    ".next-shots2"
+  ]
+}
