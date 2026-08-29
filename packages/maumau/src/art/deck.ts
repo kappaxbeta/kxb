@@ -52,7 +52,7 @@ export interface Cell {
 }
 
 /** Which deck art. See the header for why this is not a house rule. */
-export const FINISHES = ['kaykit', 'pixel'] as const
+export const FINISHES = ['kaykit', 'pixel', 'kxb'] as const
 export type FinishId = (typeof FINISHES)[number]
 
 export interface Finish {
@@ -125,7 +125,41 @@ export const PIXEL: Finish = {
   pixelated: true,
 }
 
-export const FINISH: Record<FinishId, Finish> = { kaykit: KAYKIT, pixel: PIXEL }
+/**
+ * Ours, drawn by `scripts/maumau-cards.ts` rather than downloaded.
+ *
+ * The other two finishes start from a pack somebody made; this one starts from
+ * an HTML page and a headless browser, which is possible because a deck of
+ * cards is a layout rather than an illustration - see the header of that
+ * script for the argument.
+ *
+ * Two consequences worth naming here, where the table is:
+ *
+ *   - It is the finish that always works. The packs are downloads that a fresh
+ *     checkout does not have, and a deployment missing them has, until now, had
+ *     no cards at all. This one is generated from the repository.
+ *   - Its geometry is KayKit's on purpose. Same cell, same grid, ink filling
+ *     the frame - so `cellOf` and the renderer treat the two identically and
+ *     the only difference is which sheet is fetched. Matching an existing
+ *     finish was cheaper than teaching anything a third shape, and the shape
+ *     was already the right one.
+ *
+ * The back is column 13 of row 0, as KayKit's is, and is the one cell here that
+ * is not a playing card: a woven pink-and-indigo panel, which is this product's
+ * two colours rather than a generic red lattice.
+ */
+export const KXB: Finish = {
+  id: 'kxb',
+  label: 'kxb',
+  sheet: 'cards-kxb.png',
+  cell: { width: 184, height: 251 },
+  grid: { columns: 14, rows: 4 },
+  ink: { x: 0, y: 0, width: 184, height: 251 },
+  back: { column: 13, row: 0 },
+  pixelated: false,
+}
+
+export const FINISH: Record<FinishId, Finish> = { kaykit: KAYKIT, pixel: PIXEL, kxb: KXB }
 
 /** The default, and what an unrecognised name falls back to. */
 export const finishOf = (id: unknown): Finish =>
