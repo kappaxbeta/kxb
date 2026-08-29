@@ -68,6 +68,50 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const topicFor = (room: string) => `xp:${room}`
 
 /**
+ * One channel setup at a time, per topic, for the whole tab.
+ *
+ * Module-level and not per `realtimeNetwork`, because the thing being protected
+ * is: `createClient()` hands every caller the *same* browser client, so the
+ * channel list is one list however many networks are made against it.
+ *
+ * What it protects is the window between asking for a channel and binding the
+ * presence handler onto it. `RealtimeClient.channel(topic)` returns the
+ * *existing* channel when one is registered under that topic, so two joins of
+ * one topic that overlap end with the second one binding a handler onto a
+ * channel the first has already subscribed - which is the "cannot add
+ * `presence` callbacks for realtime:xp:<id> after `subscribe()`" reported from
+ * production, and the case the `stale` removal below cannot close on its own:
+ * it looks for a channel that is *registered*, and the join it is racing has
+ * not registered one yet.
+ *
+ * Which happens on the ordinary path rather than a strange one. A room mounts
+ * two joins - the scene's topic and the instance's (see ./room-scene) - and any
+ * remount re-runs both while the first pair is still settling. The old failure
+ * mode is the nasty kind: the throw is inside a promise nobody awaits, so the
+ * console has an error and the room has a door that quietly never reached
+ * anybody.
+ *
+ * Only the *setup* is queued, deliberately - not the subscribe. Waiting for a
+ * subscription to complete would make a second join hang for as long as the
+ * first takes to be admitted, and a channel refused by the policy never
+ * completes at all.
+ */
+const setups = new Map<string, Promise<unknown>>()
+
+/** Run `work` once whatever was setting this topic up has finished. */
+function afterSetup<T>(topic: string, work: () => Promise<T>): Promise<T> {
+  const previous = setups.get(topic) ?? Promise.resolve()
+  // Both arms, so one join that failed does not strand every later one behind
+  // a rejected promise.
+  const next = previous.then(work, work)
+  setups.set(
+    topic,
+    next.catch(() => {}),
+  )
+  return next
+}
+
+/**
  * How many updates a second a client sends.
  *
  * The lounge's number, unchanged, and for the reason its own comment gives: at
@@ -89,78 +133,95 @@ export function realtimeNetwork(me: XpPlayer): XpNetwork {
     async join(room: string): Promise<XpSocket> {
       const topic = topicFor(room)
 
-      /**
-       * Any channel still registered for this room, gone before we ask for one.
-       *
-       * Reported from production as "cannot add 'presence' callbacks for
-       * realtime:xp:<id> after subscribe()", which reads like a mistake in the
-       * order of the lines below and is not - the presence handler is bound
-       * before `subscribe` and always has been.
-       *
-       * `RealtimeClient.channel(topic)` **returns the existing channel** when
-       * one with that topic is already registered rather than making a new one.
-       * `removeChannel` is asynchronous, so a client that re-joins the same room
-       * - a remount, a swapped level, a reconnect - can reach here while the
-       * previous channel is still in the list, be handed that one back, and then
-       * try to bind a handler on something that has already subscribed.
-       *
-       * Awaited rather than fired and forgotten, which is the whole fix: the
-       * point is to be certain it is gone before asking, and `void`ing it would
-       * reproduce exactly the race being closed. It is why this function is
-       * `async` - and it costs nothing in the common case, where there is
-       * nothing to remove.
-       */
-      const stale = supabase.getChannels().find((existing) => existing.topic === `realtime:${topic}`)
-      if (stale) await supabase.removeChannel(stale)
-
-      /**
-       * `private: true` makes Realtime check the policy before letting us in.
-       * Without it the topic is open to anyone holding the anon key who can
-       * guess a room id, and the anon key is in the page.
-       */
-      const channel: RealtimeChannel = supabase.channel(topic, {
-        config: { private: true, presence: { key: me.id } },
-      })
-
       let peers: XpPlayer[] = []
       const rosters = new Set<(peers: XpPlayer[]) => void>()
 
-      channel.on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState<{
-          id: string
-          name: string
-          skin?: string
-          team?: string
-        }>()
+      /**
+       * Asked for, cleared and bound in one go, with no other join of this topic
+       * able to run in the middle of it - see `afterSetup` above for why that is
+       * the unit rather than any one of the three lines.
+       *
+       * Reported from production as "cannot add 'presence' callbacks for
+       * realtime:xp:<id> after subscribe()", which reads like a mistake in the
+       * order of the lines below and is not: the presence handler is bound
+       * before `subscribe` and always has been. What it is instead is two of
+       * these running at once.
+       */
+      const channel: RealtimeChannel = await afterSetup(topic, async () => {
+        /**
+         * Any channel still registered for this room, gone before we ask for one.
+         *
+         * `RealtimeClient.channel(topic)` **returns the existing channel** when
+         * one with that topic is already registered rather than making a new one.
+         * `removeChannel` is asynchronous, so a client that re-joins the same room
+         * - a remount, a swapped level, a reconnect - can reach here while the
+         * previous channel is still in the list, be handed that one back, and then
+         * try to bind a handler on something that has already subscribed.
+         *
+         * Awaited rather than fired and forgotten: the point is to be certain it
+         * is gone before asking, and `void`ing it would reproduce exactly the
+         * race being closed. It costs nothing in the common case, where there is
+         * nothing to remove.
+         */
+        const stale = supabase
+          .getChannels()
+          .find((existing) => existing.topic === `realtime:${topic}`)
+        if (stale) await supabase.removeChannel(stale)
 
         /**
-         * Everybody in the room, ourselves included.
-         *
-         * Including us is what `peers()` promises, and it is what the election a
-         * mode will one day need - "who owns the ball" is answered by sorting a
-         * roster everybody agrees on, so a roster that leaves one person out is
-         * one that gives two different answers.
-         *
-         * One entry per *person* rather than per connection: somebody with two
-         * tabs open is one player, and drawing them twice would mean two bodies
-         * fighting over one position with a network round trip in between.
+         * `private: true` makes Realtime check the policy before letting us in.
+         * Without it the topic is open to anyone holding the anon key who can
+         * guess a room id, and the anon key is in the page.
          */
-        const next: XpPlayer[] = []
-        for (const entries of Object.values(state)) {
-          for (const entry of entries) {
-            if (!entry?.id) continue
-            if (next.some((player) => player.id === entry.id)) continue
-            next.push({
-              id: entry.id,
-              name: entry.name || 'Someone',
-              ...(entry.skin ? { skin: entry.skin } : {}),
-              ...(entry.team ? { team: entry.team } : {}),
-            })
-          }
-        }
-        peers = next
-        for (const listen of rosters) listen(next)
+        const made: RealtimeChannel = supabase.channel(topic, {
+          config: { private: true, presence: { key: me.id } },
+        })
+        bindPresence(made)
+        return made
       })
+
+      /**
+       * The roster, off presence. A function only so that binding it can happen
+       * inside the queued block above rather than a microtask after it.
+       */
+      function bindPresence(channel: RealtimeChannel) {
+        channel.on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState<{
+            id: string
+            name: string
+            skin?: string
+            team?: string
+          }>()
+
+          /**
+           * Everybody in the room, ourselves included.
+           *
+           * Including us is what `peers()` promises, and it is what the election a
+           * mode will one day need - "who owns the ball" is answered by sorting a
+           * roster everybody agrees on, so a roster that leaves one person out is
+           * one that gives two different answers.
+           *
+           * One entry per *person* rather than per connection: somebody with two
+           * tabs open is one player, and drawing them twice would mean two bodies
+           * fighting over one position with a network round trip in between.
+           */
+          const next: XpPlayer[] = []
+          for (const entries of Object.values(state)) {
+            for (const entry of entries) {
+              if (!entry?.id) continue
+              if (next.some((player) => player.id === entry.id)) continue
+              next.push({
+                id: entry.id,
+                name: entry.name || 'Someone',
+                ...(entry.skin ? { skin: entry.skin } : {}),
+                ...(entry.team ? { team: entry.team } : {}),
+              })
+            }
+          }
+          peers = next
+          for (const listen of rosters) listen(next)
+        })
+      }
 
       return new Promise<XpSocket>((resolve) => {
         const handlers = new Map<string, Set<(payload: unknown, from: string) => void>>()

@@ -15,7 +15,7 @@
 
 import * as THREE from 'three'
 import type { SolidTest } from '@/app/world/lounge/_sim/physics'
-import { TILE, tileKey, type TileKey } from '@/domain/world/grid'
+import { TILE, tileKey, type TileKey } from '@kxb/peepz-world/grid'
 
 /** Scratch. Allocated once, reused forever. */
 const FORWARD = new THREE.Vector3()

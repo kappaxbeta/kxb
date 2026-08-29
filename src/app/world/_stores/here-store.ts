@@ -1,7 +1,7 @@
 'use client'
 
 import { useSyncExternalStore } from 'react'
-import type { PlaceId } from '@/domain/world/places'
+import type { PlaceId } from '@kxb/peepz-world/places'
 
 /**
  * Who is standing in the room with you, published out of the scene.

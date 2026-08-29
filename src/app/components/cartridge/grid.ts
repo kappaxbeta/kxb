@@ -35,7 +35,15 @@ export const PITCH_X = CART.width + 0.3
 /** Row pitch: the shell, the name under it, and the same gap again. */
 export const PITCH_Y = CART.height + PLATE_HEIGHT + 0.05 + 0.34
 
-/** Roughly how wide one cartridge wants to be on screen, in CSS pixels. */
+/**
+ * Roughly how wide one cartridge wants to be on screen, in CSS pixels.
+ *
+ * A default rather than a constant, because how big a cartridge should be is a
+ * question about the *surface* and not about cartridges. In a picker inside a
+ * wizard it is a thing you are choosing between and wants to be small enough
+ * that a dozen fit; in the shop window it is the argument the page is making
+ * and wants to be big enough to look at.
+ */
 const IDEAL_PX = 190
 
 const MIN_COLUMNS = 2
@@ -64,9 +72,9 @@ export const SHELF_MARGIN = 0.28
  * two slightly small ones instead of one enormous one. The floor at two is what
  * keeps a phone from drawing a single cartridge per row, which is a list.
  */
-export function columnsFor(width: number): number {
+export function columnsFor(width: number, ideal: number = IDEAL_PX): number {
   if (width <= 0) return MIN_COLUMNS
-  return Math.max(MIN_COLUMNS, Math.min(MAX_COLUMNS, Math.round(width / IDEAL_PX)))
+  return Math.max(MIN_COLUMNS, Math.min(MAX_COLUMNS, Math.round(width / ideal)))
 }
 
 /** Where one cartridge sits, given its place in the list and the grid's shape. */

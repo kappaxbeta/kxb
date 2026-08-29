@@ -38,6 +38,20 @@ describe('columnsFor', () => {
   })
 })
 
+describe('columnsFor, given a size', () => {
+  test('a bigger cartridge means fewer of them', () => {
+    // The store's whole reason for the knob: the same container, three
+    // cartridges instead of six, because the page is arguing rather than
+    // listing.
+    expect(columnsFor(1200, 330)).toBeLessThan(columnsFor(1200))
+  })
+
+  test('the floor and the ceiling still hold', () => {
+    expect(columnsFor(200, 330)).toBeGreaterThanOrEqual(2)
+    expect(columnsFor(9000, 40)).toBe(columnsFor(9000, 10))
+  })
+})
+
 describe('placeOnShelf', () => {
   test('centres the grid on the origin', () => {
     const { columns, rows } = shelfExtent(6, 3)

@@ -45,7 +45,7 @@ import {
   type TileKey,
   parseTile,
   tileToWorld,
-} from '@/domain/world/grid'
+} from '@kxb/peepz-world/grid'
 
 /**
  * How long an agent stays in one part of the room, in milliseconds.

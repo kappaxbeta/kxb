@@ -2,10 +2,10 @@ import {
   isTopper,
   prop as cafeProp,
   refundOf as cafeRefund,
-} from '@/domain/cafe/catalog'
-import { homeProp, refundOf as homeRefund } from '@/domain/home/catalog'
+} from '@kxb/dream-restaurant/catalog'
+import { homeProp, refundOf as homeRefund } from '@kxb/peepz-world/catalog'
 import type { PlaceId } from '@/domain/homestead/events'
-import { recipe } from '@/domain/cafe/recipes'
+import { recipe } from '@kxb/dream-restaurant/recipes'
 
 /**
  * One aggregate, two catalogues.

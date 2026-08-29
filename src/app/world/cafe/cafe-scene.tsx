@@ -2,7 +2,6 @@
 
 import { PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useRouter } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { AvatarModel } from '@/app/world/lounge/_canvas/avatar-model'
@@ -57,7 +56,7 @@ import {
   prop,
   PROPS,
   WALL_MODELS,
-} from '@/domain/cafe/catalog'
+} from '@kxb/dream-restaurant/catalog'
 import {
   buyTile,
   canBuyTile,
@@ -80,8 +79,8 @@ import {
   surfaceAt,
   tick,
   type Customer,
-} from '@/domain/cafe/game'
-import { wallsFor } from '@/domain/cafe/grid'
+} from '@kxb/dream-restaurant/game'
+import { wallsFor } from '@kxb/dream-restaurant/grid'
 import {
   cellToTileAxis,
   parseTile,
@@ -90,9 +89,9 @@ import {
   tileToWorld,
   worldToTile,
   type TileKey,
-} from '@/domain/world/grid'
-import { recipe } from '@/domain/cafe/recipes'
-import { hrefFor, type PlaceId } from '@/domain/world/places'
+} from '@kxb/peepz-world/grid'
+import { recipe } from '@kxb/dream-restaurant/recipes'
+import type { PlaceId } from '@kxb/peepz-world/places'
 import { cafeDict, interactionWords } from '@/app/i18n/cafe'
 import { useLocale } from '@/app/i18n/locale-context'
 import {
@@ -234,17 +233,17 @@ export function CafeGame({
    * Where the front door goes, and who takes you there.
    *
    * ---------------------------------------------------------------------------
-   * Absent is the world, present is a cartridge
+   * Required, since there is nowhere to navigate to any more
    * ---------------------------------------------------------------------------
-   * On `/t/<slug>/cafe` the doorway is the way back to the garden and taking it
-   * is a navigation, which is what the default below still does. The café
-   * *cartridge* is a game about running a café and nothing else: the garden is
-   * inside the house cartridge, and a route push out of a framed game would
-   * leave the room it is being played in.
+   * `/t/<slug>/cafe` used to be a page and the doorway a navigation to the
+   * garden next door. The route is gone: the café, the house and the garden are
+   * one cartridge world entered from a shelf, and the doorway swaps which part
+   * of it is drawn without leaving the canvas.
    *
-   * So the frame passes an empty `to`, and the door stops offering a journey it
-   * cannot make. It stays a door - it is the one the customers come through,
-   * and it is drawn from the café's own grid rather than from this list.
+   * A `to` this door is not in means the door offers no journey - which is a
+   * state worth keeping, because it stays a door either way: it is the one the
+   * customers come through, and it is drawn from the café's own grid rather
+   * than from this list.
    */
   travel,
 }: {
@@ -254,7 +253,7 @@ export function CafeGame({
   presence: { tenantId: string; userId: string; name: string }
   owner: { userId: string; name: string }
   agents: AgentView[]
-  travel?: { to: readonly PlaceId[]; go: (to: PlaceId) => void }
+  travel: { to: readonly PlaceId[]; go: (to: PlaceId) => void }
 }) {
   useAudioGate()
 
@@ -428,7 +427,6 @@ export function CafeGame({
     setSnapshot({ ...gameRef.current })
   }, [])
 
-  const router = useRouter()
 
   /**
    * Standing in the café's own doorway is the way back to the garden.
@@ -437,7 +435,7 @@ export function CafeGame({
    * a prompt offering a journey that will not happen is worse than no prompt.
    */
   const atDoor =
-    (!travel || travel.to.includes('outdoor')) &&
+    travel.to.includes('outdoor') &&
     standing === tileKey(snapshot.door.tile.x, snapshot.door.tile.z)
   const atDoorRef = useRef(atDoor)
   useEffect(() => {
@@ -445,15 +443,10 @@ export function CafeGame({
   }, [atDoor])
 
   const doLeave = useCallback(() => {
-    // Handed over whole when something else owns the journey. `atDoor` is
-    // already false when there is nowhere to go, so this is only ever reached
-    // by a door that leads somewhere.
-    if (travel) {
-      travel.go('outdoor')
-      return
-    }
-    router.push(hrefFor('outdoor', slug))
-  }, [router, slug, travel])
+    // `atDoor` is already false when the garden is not somewhere this world can
+    // reach, so this is only ever called by a door that leads somewhere.
+    travel.go('outdoor')
+  }, [travel])
 
   const handleStart = useCallback(() => setStarted(true), [])
 
@@ -891,7 +884,7 @@ export function CafeGame({
       )}
 
       {/* Last, so it covers everything above when you are not welcome yet. */}
-      <DoorScreen room={room} ownerName={owner.name} place="cafe" slug={slug} />
+      <DoorScreen room={room} ownerName={owner.name} place="cafe" />
     </div>
   )
 }

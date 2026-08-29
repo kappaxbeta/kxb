@@ -86,6 +86,17 @@ export interface ShelfItem {
    * in `@kxb/xp`'s `./finish` for why declaring one is the exception.
    */
   hue?: number
+  /**
+   * A sentence about the level, for the list beside the canvas.
+   *
+   * Only the store passes one, and the reason is that page specifically: it is
+   * the shop window, read by people with no account, and its words *are* the
+   * product. A canvas has no text in it, so the blurb has to be in the document
+   * somewhere or the page stops saying anything to a screen reader or a
+   * crawler. Everywhere else the surrounding page already carries the prose and
+   * a name is enough to identify a row by.
+   */
+  description?: string
 }
 
 /** Where the pointer is on the shelf plane, shared by every cartridge on it. */

@@ -24,7 +24,7 @@ import {
   propThumbUrl,
   refundOf,
   type Theme,
-} from '@/domain/home/catalog'
+} from '@kxb/peepz-world/catalog'
 import {
   comfort,
   contentsValue,
@@ -32,10 +32,10 @@ import {
   MAX_COMFORT,
   propAt,
   type Verdict,
-} from '@/domain/home/game'
-import type { Exit } from '@/domain/home/plan'
-import type { TileKey } from '@/domain/world/grid'
-import type { DecoratablePlace } from '@/domain/world/places'
+} from '@kxb/peepz-world/game'
+import type { Exit } from '@kxb/peepz-world/plan'
+import type { TileKey } from '@kxb/peepz-world/grid'
+import type { DecoratablePlace } from '@kxb/peepz-world/places'
 
 /**
  * Selling the ground under the cursor, when that is a thing you could do.

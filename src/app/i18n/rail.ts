@@ -1,5 +1,5 @@
 import type { BattleMode } from '@/domain/battle/events'
-import type { PlaceId } from '@/domain/world/places'
+import type { PlaceId } from '@kxb/peepz-world/places'
 import type { Locale } from '@/domain/i18n/locale'
 import type { TenantRoleName } from '@/lib/supabase/types'
 

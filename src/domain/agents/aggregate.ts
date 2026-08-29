@@ -6,7 +6,7 @@ import {
 import type { AgentCommand } from '@/domain/agents/commands'
 import { AVATARS } from '@/domain/lounge/avatars'
 import { DomainError } from '@/es/errors'
-import type { PlaceId } from '@/domain/world/places'
+import type { PlaceId } from '@kxb/peepz-world/places'
 import type { Decider } from '@/es/types'
 
 /**

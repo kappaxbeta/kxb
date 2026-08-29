@@ -2,7 +2,6 @@
 
 import { PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useRouter } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { HomeHud } from '@/app/world/home/home-hud'
@@ -64,7 +63,7 @@ import {
   propsFor,
   SHELLS,
   type Theme,
-} from '@/domain/home/catalog'
+} from '@kxb/peepz-world/catalog'
 import {
   canExtend,
   canMove,
@@ -94,7 +93,7 @@ import {
   shrinkRefund,
   standUp,
   sitOn,
-} from '@/domain/home/game'
+} from '@kxb/peepz-world/game'
 import {
   blockedEdges,
   blockedTiles,
@@ -103,7 +102,7 @@ import {
   type Plan,
   reachable,
   wallsFor,
-} from '@/domain/home/plan'
+} from '@kxb/peepz-world/plan'
 import {
   cellToTileAxis,
   parseTile,
@@ -112,13 +111,13 @@ import {
   tileToWorld,
   worldToTile,
   type TileKey,
-} from '@/domain/world/grid'
-import { type DecoratablePlace, hrefFor } from '@/domain/world/places'
+} from '@kxb/peepz-world/grid'
+import type { DecoratablePlace } from '@kxb/peepz-world/places'
 import { createRoamer, type Roamable, seedFrom } from '@/domain/world/autonomy'
-import { comfortKey, STARTING_COINS } from '@/domain/world/save'
+import { comfortKey, STARTING_COINS } from '@kxb/peepz-world/save'
 import { readShared, watchShared, writeShared } from '@/app/world/_stores/shared-save'
 import { homeDict } from '@/app/i18n/home'
-import type { PlaceId } from '@/domain/world/places'
+import type { PlaceId } from '@kxb/peepz-world/places'
 import { useLocale } from '@/app/i18n/locale-context'
 
 /**
@@ -246,22 +245,21 @@ export function HomeGame({
    */
   agents: initialAgents,
   /**
-   * Who takes you through a doorway, when it is not the router.
+   * Who takes you through a doorway.
    *
    * ---------------------------------------------------------------------------
-   * Absent is the world, present is a cartridge
+   * Required, since there is nowhere to navigate to any more
    * ---------------------------------------------------------------------------
-   * On `/t/<slug>/home` each place is its own page with its own save, and
-   * walking out of the front door is a navigation - which is what the default
-   * below still does. The house *cartridge* is one game holding both rooms, so
-   * the same doorway is a view change inside a canvas that is already mounted:
-   * a route push there would leave the room, the match and the frame it is
-   * being played in.
+   * This used to be optional, and absent meant *the router owns the journey* -
+   * `/t/<slug>/home` and `/t/<slug>/outdoor` were two pages and a doorway was a
+   * navigation between them. Those routes are gone: the house, the garden and
+   * the café are one cartridge world entered from a shelf, and a doorway is a
+   * view change inside a canvas that is already mounted. A route push there
+   * would leave the room, the match and the frame being played in.
    *
-   * `to` is the other half and cannot be inferred from `go`. The garden has a
-   * gap in its hedge that leads to the café, and the café is a *different*
-   * cartridge - so that exit has to stop being a hole in the shell rather than
-   * merely stop being pressable. See `reachable`.
+   * `to` is the other half and cannot be inferred from `go`. An exit is also a
+   * hole in the shell, so a destination this game cannot reach has to stop
+   * being a doorway rather than merely stop being pressable - see `reachable`.
    */
   travel,
 }: {
@@ -272,7 +270,7 @@ export function HomeGame({
   presence: { tenantId: string; userId: string; name: string }
   owner: { userId: string; name: string }
   agents: AgentView[]
-  travel?: { to: readonly PlaceId[]; go: (to: PlaceId) => void }
+  travel: { to: readonly PlaceId[]; go: (to: PlaceId) => void }
 }) {
   // Named for what it is rather than `room`, which in this file already means
   // "which room of the house is under the cursor".
@@ -336,10 +334,7 @@ export function HomeGame({
    */
   const [game, setGame] = useState<HomeState>(() => {
     const base = initialState(place)
-    return applyHomestead(
-      travel ? { ...base, plan: reachable(base.plan, travel.to) } : base,
-      initial,
-    )
+    return applyHomestead({ ...base, plan: reachable(base.plan, travel.to) }, initial)
   })
 
   /**
@@ -391,7 +386,6 @@ export function HomeGame({
   const [rotation, setRotation] = useState(0)
   const [moving, setMoving] = useState<TileKey | null>(null)
 
-  const router = useRouter()
   const isTouch = useIsTouch()
   /* Which way round the touch rig goes. See ./_hud/touch-controls' anchors. */
   const { hand } = useHand()
@@ -690,16 +684,10 @@ export function HomeGame({
   const doTravel = useCallback(() => {
     const found = exitRef.current
     if (!found) return
-    // Handed over whole when something else owns the journey - the house
-    // cartridge holds both rooms and swaps the view. See `travel`.
-    if (travel) {
-      travel.go(found.to)
-      return
-    }
-    // Slug-aware, or walking out of a workspace's front door drops you into
-    // your own single-player garden with somebody else's furniture in it.
-    router.push(hrefFor(found.to, slug))
-  }, [router, slug, travel])
+    // Handed over whole: the cartridge holds every place this can reach and
+    // swaps which one is drawn. See `travel`.
+    travel.go(found.to)
+  }, [travel])
 
   /** Sit on, or get out of, whatever the crosshair is on. */
   const doUse = useCallback(() => {
@@ -955,7 +943,7 @@ export function HomeGame({
       <DoorPanel room={presenceRoom} slug={slug} door={initial.door} />
 
       {/* Last, so it covers everything above when you are not welcome yet. */}
-      <DoorScreen room={presenceRoom} ownerName={owner.name} place={place} slug={slug} />
+      <DoorScreen room={presenceRoom} ownerName={owner.name} place={place} />
 
       {isTouch && started && (
         <>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { prop as cafeProp, refundOf as cafeRefund } from '@/domain/cafe/catalog'
+import { prop as cafeProp, refundOf as cafeRefund } from '@kxb/dream-restaurant/catalog'
 import {
   decide,
   evolve,

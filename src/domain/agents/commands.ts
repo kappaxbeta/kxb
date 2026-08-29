@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { PlaceId } from '@/domain/world/places'
+import type { PlaceId } from '@kxb/peepz-world/places'
 
 /**
  * The write side's edge.

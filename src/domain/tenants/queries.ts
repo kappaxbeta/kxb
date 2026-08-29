@@ -387,16 +387,26 @@ export async function findPublicTenant(
     if (byId) return mapRow(byId as never)
   }
 
-  // 1. Try finding by slug in tenants_read_model
-  const { data: bySlug } = await supabase
-    .from('tenants_read_model')
-    .select('id, slug, name, archived, is_public_lounge')
-    .eq('slug', slugOrId.toLowerCase())
-    .maybeSingle()
-
-  if (bySlug) return mapRow(bySlug as never)
-
-  // 2. Try resolving via tenant_slugs table
+  /**
+   * 1. The claim table decides which space a slug names.
+   *
+   * This used to read `tenants_read_model.slug` first and fall back to here,
+   * and the order was the bug. That column is a denormalised copy maintained by
+   * a projection, its UPDATE policy is `is_tenant_member(id)`, and this
+   * function is called by `/v/[slug]` - a public page - with the *service-role*
+   * client, which bypasses RLS entirely. So the read model's copy was a slug
+   * any member of any space could write, consulted ahead of the table whose
+   * primary key is the slug.
+   *
+   * `tenant_slugs` is where a slug is claimed, one row per name, and where the
+   * uniqueness is real. Asking it first means the read model is only ever the
+   * row this lookup has already named, rather than the thing that names it.
+   *
+   * 20270101000000 adds the unique index the copy should always have had, so
+   * the two can no longer disagree about how many spaces a slug names. Both are
+   * worth having: the index stops the second row existing, and this order stops
+   * the copy being authoritative even when it is the only row.
+   */
   const tenantId = await findTenantIdBySlug(supabase, slugOrId)
   if (tenantId) {
     const { data: byResolvedId } = await supabase
@@ -406,6 +416,23 @@ export async function findPublicTenant(
       .maybeSingle()
     if (byResolvedId) return mapRow(byResolvedId as never)
   }
+
+  /**
+   * 2. The read model's own copy, kept as a fallback rather than dropped.
+   *
+   * A space with no claim row is not a thing this deployment makes - the slug is
+   * claimed before the first event, and locally nothing violates that - but it
+   * is a thing an old space could be, and losing the ability to resolve one
+   * would be a worse bug than the one being fixed. So the copy still answers,
+   * second, once the table that owns the question has said no.
+   */
+  const { data: bySlug } = await supabase
+    .from('tenants_read_model')
+    .select('id, slug, name, archived, is_public_lounge')
+    .eq('slug', slugOrId.toLowerCase())
+    .maybeSingle()
+
+  if (bySlug) return mapRow(bySlug as never)
 
   return null
 }

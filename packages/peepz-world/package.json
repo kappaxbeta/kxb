@@ -1,0 +1,15 @@
+{
+  "name": "@kxb/peepz-world",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Peepz World: a house, a garden, and the grid both of them and the café stand on. Rules only - the renderer is the host's.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./grid": "./src/world/grid.ts",
+    "./places": "./src/world/places.ts",
+    "./save": "./src/world/save.ts",
+    "./catalog": "./src/rules/catalog.ts",
+    "./plan": "./src/rules/plan.ts",
+    "./game": "./src/rules/game.ts"
+  }
+}

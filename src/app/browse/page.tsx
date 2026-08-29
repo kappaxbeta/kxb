@@ -1,15 +1,16 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MarketingShell } from '@/app/components/marketing-shell'
-import { XpCard } from '@/app/browse/xp-card'
+import { XpShelf, type StoreCartridge } from '@/app/browse/xp-shelf'
 import { WorldCard } from '@/app/worlds/world-card'
-import { listXpCatalogue } from '@/domain/xps/catalogue'
+import { listXpCatalogue, type XpSummary } from '@/domain/xps/catalogue'
 import { readXpViewer, type XpViewer } from '@/domain/xps/viewer'
 import { listPublicWorlds } from '@/domain/worlds/queries'
 import { createClient, getUser } from '@/lib/supabase/server'
 import { fill } from '@/app/i18n/fill'
 import { readLocale } from '@/app/i18n/preference'
 import { storeDict, type StoreDict } from '@/app/i18n/store'
+import type { Locale } from '@/domain/i18n/locale'
 import { workspaceDict } from '@/app/i18n/workspace'
 
 /**
@@ -106,20 +107,24 @@ export default async function BrowsePage() {
             {t.xpBody}
           </p>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {xps.map((xp, index) => (
-              // The first row is above the fold on every width this grid has,
-              // so those covers are fetched rather than deferred. `lazy` on an
-              // image that is already on screen buys nothing and costs the one
-              // moment the page is being judged.
-              <XpCard key={xp.id} xp={xp} eager={index < 3} t={t} locale={locale} />
-            ))}
-            {/* The create door is the last tile rather than a button in the
-                header, and it is doing two jobs. It is where somebody is when
-                they think "I could make one of these", and it fills the row -
-                which matters more than it sounds, because a store with five
-                things in it must look like a store that just opened rather than
-                one that failed. */}
+          {/*
+            A shelf, not a grid of cards. See `xp-shelf.tsx` for why this page
+            was the last to change and what the trade was.
+          */}
+          <div className="mt-6">
+            <XpShelf xps={xps.map((xp) => storeCartridge(xp, t, locale))} t={t} />
+          </div>
+
+          {/*
+            The create door, under the shelf rather than the last tile in it.
+
+            It was a tile because the grid had a hole to fill - a store with five
+            things in it must look like one that just opened rather than one that
+            failed - and a shelf has no hole: an unfinished row of cartridges
+            reads as a shelf with room on it, which is exactly right. So the door
+            can stop pretending to be a game and be a door.
+          */}
+          <div className="mt-6 sm:max-w-md">
             <MakeOne viewer={viewer} t={t} />
           </div>
         </section>
@@ -170,6 +175,53 @@ export default async function BrowsePage() {
       </div>
     </MarketingShell>
   )
+}
+
+/**
+ * One published level, as the shelf needs it.
+ *
+ * The counts and the capability words are composed here rather than in the
+ * browser, which is the call every other shelf made: they are finished the
+ * moment the page renders and never change again, and shipping `fill` plus a
+ * dictionary into the client to reassemble them is a second bill on a component
+ * already paying for a WebGL context.
+ */
+function storeCartridge(xp: XpSummary, t: StoreDict, locale: Locale): StoreCartridge {
+  return {
+    id: xp.id,
+    name: xp.name,
+    blurb: xp.blurb,
+    cover: xp.cover,
+    finish: xp.finish,
+    hue: xp.hue,
+    href: `/browse/xp/${xp.id}`,
+    /*
+      Pieces before things, and both before whether it is scripted, because
+      "how big" and "is anything happening" are the two questions a summary can
+      answer and the rest is trivia until you open it. The card made this
+      argument first; the ordering is its.
+    */
+    facts: `${fill(xp.pieces === 1 ? t.pieceOne : t.pieces, {
+      n: xp.pieces.toLocaleString(locale),
+    })} · ${fill(xp.things === 1 ? t.thingOne : t.things, {
+      n: xp.things.toLocaleString(locale),
+    })}${xp.scripted ? ` ${t.scripted}` : ''}`,
+    chips: xp.capabilities.map((capability) => CAPABILITY_WORDS[capability] ?? capability),
+  }
+}
+
+/**
+ * A short word per capability, which the long ones in `describeCapability` are
+ * not: that function writes a sentence for an operator picking a level out of a
+ * dropdown, and this is a chip on a panel somebody is scanning.
+ *
+ * Moved here with the card it used to live on.
+ */
+const CAPABILITY_WORDS: Record<string, string> = {
+  freeplay: 'wander',
+  match: 'match',
+  football: 'football',
+  competition: 'timed',
 }
 
 /**

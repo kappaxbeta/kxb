@@ -108,7 +108,7 @@ export default async function XpStorePage({ params }: { params: Promise<{ id: st
             <div className="relative isolate overflow-hidden rounded-2xl border border-line/50 bg-[oklch(0.06_0.02_265)]">
               {xp.cover ? (
                 /* eslint-disable-next-line @next/next/no-img-element -- drawn by
-                   our own rasteriser and checked in; see the note on XpCard. */
+                   our own rasteriser and checked in; see the note in `xp-shelf`. */
                 <img
                   src={xp.cover}
                   alt={`${xp.name}, drawn from inside the level`}

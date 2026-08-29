@@ -13,7 +13,7 @@
  * forking them.
  */
 
-import { KEYS, normaliseShared, type Shared } from '@/domain/world/save'
+import { KEYS, normaliseShared, type Shared } from '@kxb/peepz-world/save'
 
 /**
  * A shared number, or null when nobody has ever written one.

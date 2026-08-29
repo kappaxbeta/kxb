@@ -1,0 +1,17 @@
+{
+  "name": "@kxb/dream-restaurant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Peepz My Dream Restaurant: the lunch service, the shop and the barista who can run it. Rules only - the renderer is the host's.",
+  "dependencies": {
+    "@kxb/peepz-world": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./catalog": "./src/rules/catalog.ts",
+    "./grid": "./src/rules/grid.ts",
+    "./recipes": "./src/rules/recipes.ts",
+    "./game": "./src/rules/game.ts",
+    "./barista": "./src/rules/barista.ts"
+  }
+}

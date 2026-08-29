@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { HOME_EN, homeDict } from '@/app/i18n/home'
-import { HOME_PROPS } from '@/domain/home/catalog'
+import { HOME_PROPS } from '@kxb/peepz-world/catalog'
 import { DEFAULT_LOCALE, LOCALES } from '@/domain/i18n/locale'
 
 /**

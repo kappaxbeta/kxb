@@ -1,5 +1,5 @@
 import type { DomainEvent } from '@/es/types'
-import type { PlaceId } from '@/domain/world/places'
+import type { PlaceId } from '@kxb/peepz-world/places'
 
 /**
  * The creatures that live in a member's rooms and decide for themselves what to

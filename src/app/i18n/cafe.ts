@@ -1,7 +1,7 @@
 import type { Locale } from '@/domain/i18n/locale'
 import type { ItemWords } from '@/app/i18n/home'
-import type { Interaction } from '@/domain/cafe/game'
-import { ITEMS } from '@/domain/cafe/recipes'
+import type { Interaction } from '@kxb/dream-restaurant/game'
+import { ITEMS } from '@kxb/dream-restaurant/recipes'
 
 /**
  * The café: the service HUD, the build sheet, the shop and the menu.

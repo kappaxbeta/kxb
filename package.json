@@ -30,6 +30,7 @@
     "boxing:publish": "bun run scripts/boxing-assets.ts --publish",
     "maumau:assets": "bun run scripts/maumau-assets.ts",
     "maumau:cards": "bun run scripts/maumau-cards.ts",
+    "community": "bun run scripts/community-sync.ts",
     "maumau:publish": "bun run scripts/maumau-assets.ts --publish",
     "xp:shapes": "bun run scripts/xp-shapes.ts",
     "xp:catalogue": "bun run scripts/xp-catalogue.ts",
@@ -49,7 +50,10 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
+    "@kxb/community": "workspace:*",
+    "@kxb/dream-restaurant": "workspace:*",
     "@kxb/maumau": "workspace:*",
+    "@kxb/peepz-world": "workspace:*",
     "@kxb/xp": "workspace:*",
     "@react-three/drei": "^10.7.7",
     "@react-three/xr": "^6.6.30",

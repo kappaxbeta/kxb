@@ -1,7 +1,7 @@
 import 'server-only'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
-import type { XpCapabilities, XpDocument } from '@kxb/xp'
+import type { Finish, XpCapabilities, XpDocument } from '@kxb/xp'
 import { PACKS } from '@kxb/xp/packs'
 import {
   listBuiltinIds,
@@ -60,6 +60,15 @@ export interface XpSummary {
    * room the XP does not have.
    */
   cover: string | null
+  /**
+   * What the shell is made of, and its colour, as the level declared them.
+   *
+   * Straight off the document - see `@kxb/xp`'s `./finish`. Null in both means
+   * the level never said, which is a real answer rather than a missing one: the
+   * shelf draws plastic in a hue derived from the id.
+   */
+  finish: Finish | null
+  hue: number | null
   /** What the product may do with it. Drives the badges on the card. */
   capabilities: XpCapabilities
   /** Architecture. The number that answers "how big is this place". */
@@ -99,6 +108,9 @@ export function summarise(
     name: document.name,
     blurb: document.blurb ?? null,
     cover,
+    finish: document.finish ?? null,
+    // A presence check, because zero is a hue - it is red.
+    hue: document.hue ?? null,
     capabilities: document.capabilities,
     pieces: document.world.placements.length,
     things: document.entities.length,

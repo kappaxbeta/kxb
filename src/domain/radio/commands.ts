@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { MAX_TRACK_TITLE_LENGTH, type RadioScope } from '@/domain/radio/events'
 import { PROVIDER_LIST, providerForHost } from '@/domain/radio/providers'
-import { PLACE_IDS } from '@/domain/world/places'
+import { PLACE_IDS } from '@kxb/peepz-world/places'
 
 /**
  * Commands against the radio.

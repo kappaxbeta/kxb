@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { radioActions, useRadio } from '@/app/world/_stores/radio-store'
 import { PROVIDER_LIST } from '@/domain/radio/providers'
-import { PLACES } from '@/domain/world/places'
+import { PLACES } from '@kxb/peepz-world/places'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
 import { railDict, type RailDict } from '@/app/i18n/rail'

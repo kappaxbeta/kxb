@@ -1,12 +1,11 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState, useTransition } from 'react'
 import { clearDoor, publishDoor } from '@/app/world/_stores/door-store'
 import type { Room } from '@/app/world/_presence/room-presence'
 import { setHomesteadAccess } from '@/domain/homestead/actions'
 import type { DoorMode } from '@/domain/homestead/events'
-import { hrefFor, type OwnedPlace } from '@/domain/world/places'
+import { type OwnedPlace } from '@kxb/peepz-world/places'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
 import { worldDict, type WorldDict } from '@/app/i18n/world'
@@ -72,12 +71,10 @@ export function DoorScreen({
   room,
   ownerName,
   place,
-  slug,
 }: {
   room: Room
   ownerName: string
   place: OwnedPlace
-  slug: string
 }) {
   const t = worldDict(useLocale()).door
   const shown = doorway(room.admission, ownerName, t.theirs[place], t)
@@ -110,15 +107,23 @@ export function DoorScreen({
               {t.knockAgain}
             </button>
           )}
-          {/* Always a way out that is not the back button. Somebody stuck at a
-              door they cannot open needs somewhere to go, and their own house
-              is the one place they are always welcome. */}
-          <Link
-            href={hrefFor(place, slug)}
-            className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
-          >
-            {fill(t.goToYourOwn, { place: t.yourOwn[place] })}
-          </Link>
+          {/*
+            The way out used to be a link to your own café, and there is no such
+            route any more.
+
+            This whole screen is the *visitor's* half of the door, and visiting
+            is currently unreachable: a homestead is opened by a cartridge now
+            and `openHomesteadFrame` opens the one belonging to whoever is
+            holding the controller. The screen and the knock behind it are kept
+            rather than deleted because the door itself is not going anywhere -
+            `HomesteadAccessSet` is an event, the policy is still enforced, and
+            when visiting comes back it belongs inside the game as a control
+            rather than as a link in a rail.
+
+            What is not kept is a button pointing at a page nobody serves. A
+            dead link out of a screen somebody is already stuck on is worse than
+            no button: it looks like the way out and is not.
+          */}
         </div>
       </div>
     </div>

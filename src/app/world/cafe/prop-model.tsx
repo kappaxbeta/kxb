@@ -7,8 +7,8 @@ import {
   propUrl,
   type PropDef,
   type PropExtra,
-} from '@/domain/cafe/catalog'
-import { ITEMS, type ItemId } from '@/domain/cafe/recipes'
+} from '@kxb/dream-restaurant/catalog'
+import { ITEMS, type ItemId } from '@kxb/dream-restaurant/recipes'
 
 /**
  * One model out of the restaurant pack.

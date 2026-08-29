@@ -10,7 +10,7 @@ import {
   openHomesteadFrame,
 } from '@/domain/homestead/frame-actions'
 import type { PlaceId } from '@/domain/homestead/events'
-import type { PlaceId as WorldPlace } from '@/domain/world/places'
+import type { PlaceId as WorldPlace } from '@kxb/peepz-world/places'
 
 /**
  * The three rooms of a homestead, as the list a scene is handed.

@@ -8,7 +8,7 @@ import {
   type Roam,
   type Roamable,
 } from '@/domain/world/autonomy'
-import { rectangleRoom, tileKey } from '@/domain/world/grid'
+import { rectangleRoom, tileKey } from '@kxb/peepz-world/grid'
 
 /**
  * A roamer pinned to one answer.

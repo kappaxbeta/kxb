@@ -29,7 +29,6 @@ import {
 } from '@/domain/guests/queries'
 import { roomsProjection } from '@/domain/rooms/projection'
 import { listRooms } from '@/domain/rooms/queries'
-import { listNeighbours } from '@/domain/homestead/queries'
 import { emailVerified } from '@/domain/profile/email-verification'
 import { readProfileAvatar, readSpaceAvatar } from '@/domain/profile/avatar-queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
@@ -164,20 +163,6 @@ export default async function TenantLayout({
     tenant.role === 'owner' &&
     !tenant.entitled &&
     (await mayClaimFreeMonth(supabase, user.id))
-
-  /**
-   * Everybody else's front door, for the rail's People band.
-   *
-   * Only when the café flag is on, because homesteads are what that flag
-   * gates - without it there are no places to visit and the query would be two
-   * round trips for a list nothing renders.
-   */
-  // Not for a guest: they cannot enter anybody's homestead, so this would be a
-  // list of doors that refuse them - and two round trips to build it.
-  const neighbours =
-    features.cafe && tenant.role !== 'guest'
-      ? await listNeighbours(supabase, tenant.id, user.id)
-      : []
 
   /**
    * What this event's guests may reach, decided here and passed down.
@@ -421,11 +406,6 @@ export default async function TenantLayout({
                   role={tenant.role}
                   tier={tenant.tier}
                   guestSurfaces={guestSurfaces}
-                  neighbours={neighbours.map((neighbour) => ({
-                      userId: neighbour.userId,
-                      name: neighbour.name,
-                      door: neighbour.door,
-                  }))}
                   guestAccess={guestAccess}
                   rooms={rooms}
                   canManageRooms={canManageRooms}

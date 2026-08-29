@@ -32,12 +32,18 @@ export const DEFAULT_LOCALE = 'en' satisfies Locale
 /**
  * The locales the public site is published in.
  *
- * Narrower than `Locale` on purpose. The marketing pages, the sign-in forms and
- * the legal pages are indexed documents with addresses - `/de/events` is German
- * because the URL says so - and adding a language to that set is a decision
- * about routes, sitemaps and `hreflang`, not about a dictionary. Bulgarian was
- * added as an app language and has none of those, so its public copy is
- * English.
+ * Narrower than `Locale` on purpose, and narrower than "the public site" too:
+ * the front page is published in every locale, and this is everything *below*
+ * it. The booking form, the sign-in pages and the legal documents are indexed
+ * pages with addresses - `/de/events` is German because the URL says so - and
+ * adding a language to that set is a decision about routes, sitemaps and
+ * `hreflang`, not about a dictionary. Bulgarian has a front page and none of
+ * those, so its copy below the front page is English.
+ *
+ * The line falls where it does because of what each page is *for*. A landing
+ * page is what a link opens onto and is worth having in any language somebody
+ * can then read the app in; an enquiry form in a language nobody here answers
+ * enquiries in is a worse experience than the English one, not a better one.
  *
  * The type is what keeps that from being a guess. The public *tables* are keyed
  * by it - the dictionaries, the `hreflang` block, the legal shell's two-way

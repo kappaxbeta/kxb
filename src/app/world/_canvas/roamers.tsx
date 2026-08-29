@@ -14,7 +14,7 @@ import {
   type Roamable,
   seedFrom,
 } from '@/domain/world/autonomy'
-import { parseTile, type Tile, type TileKey } from '@/domain/world/grid'
+import { parseTile, type Tile, type TileKey } from '@kxb/peepz-world/grid'
 
 /**
  * The bodies of the creatures that decide for themselves.

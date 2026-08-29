@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useRainbowFor, useRainbowSkin } from '@/app/world/_canvas/rainbow'
 import { type AvatarClip, avatarUrl } from '@/domain/lounge/avatars'
-import { modelUrl as tinyUrl } from '@/domain/home/catalog'
+import { modelUrl as tinyUrl } from '@kxb/peepz-world/catalog'
 import { modelUrl as blockUrl } from '@/domain/lounge/palette'
 import {
   EMOTE_COLUMNS,

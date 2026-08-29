@@ -1,5 +1,5 @@
 import type { Locale } from '@/domain/i18n/locale'
-import type { Theme } from '@/domain/home/catalog'
+import type { Theme } from '@kxb/peepz-world/catalog'
 
 /**
  * The house and the garden: the HUD around them, and the catalogue inside it.

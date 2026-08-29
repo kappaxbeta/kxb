@@ -54,7 +54,7 @@ import { leaveHere, publishHere } from '@/app/world/_stores/here-store'
 import { type DoorMode } from '@/domain/homestead/events'
 import { type EmoteId, isEmote } from '@/domain/world/emotes'
 import { DEFAULT_AVATAR, isKnownAvatar } from '@/domain/lounge/avatars'
-import type { OwnedPlace } from '@/domain/world/places'
+import type { OwnedPlace } from '@kxb/peepz-world/places'
 import { createClient } from '@/lib/supabase/client'
 
 /** Somebody standing in the room. */

@@ -34,8 +34,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import sharp from 'sharp'
-import { PROPS, propUrl } from '@/domain/cafe/catalog'
-import { HOME_PROPS, modelUrl } from '@/domain/home/catalog'
+import { PROPS, propUrl } from '@kxb/dream-restaurant/catalog'
+import { HOME_PROPS, modelUrl } from '@kxb/peepz-world/catalog'
 import { PALETTE, modelUrl as blockUrl } from '@/domain/lounge/palette'
 import { loadTriangles, render, type Placement, type Vec3 } from './gltf-raster'
 

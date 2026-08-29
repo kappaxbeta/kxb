@@ -1,5 +1,5 @@
-import { squarePrice } from '@/domain/cafe/game'
-import { groundPrice } from '@/domain/home/game'
+import { squarePrice } from '@kxb/dream-restaurant/game'
+import { groundPrice } from '@kxb/peepz-world/game'
 import {
   DEFAULT_DOOR,
   type DoorMode,

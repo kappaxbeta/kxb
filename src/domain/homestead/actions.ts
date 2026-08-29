@@ -1,7 +1,7 @@
 'use server'
 
-import { initialState as initialCafe } from '@/domain/cafe/game'
-import { initialState as initialHome } from '@/domain/home/game'
+import { initialState as initialCafe } from '@kxb/dream-restaurant/game'
+import { initialState as initialHome } from '@kxb/peepz-world/game'
 import { homesteadDecider } from '@/domain/homestead/aggregate'
 import {
   buyGroundSchema,

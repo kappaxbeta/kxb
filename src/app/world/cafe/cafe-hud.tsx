@@ -14,7 +14,7 @@ import {
   wasd,
   type ControlRow,
 } from '@/app/world/_hud/hud'
-import { PROPS, prop, propThumbUrl, refundOf } from '@/domain/cafe/catalog'
+import { PROPS, prop, propThumbUrl, refundOf } from '@kxb/dream-restaurant/catalog'
 import {
   ambience,
   canBuyTile,
@@ -26,9 +26,9 @@ import {
   seats,
   tipMultiplier,
   type CafeState,
-} from '@/domain/cafe/game'
-import type { TileKey } from '@/domain/world/grid'
-import { ITEMS, recipe } from '@/domain/cafe/recipes'
+} from '@kxb/dream-restaurant/game'
+import type { TileKey } from '@kxb/peepz-world/grid'
+import { ITEMS, recipe } from '@kxb/dream-restaurant/recipes'
 import { cafeDict, cafeItemName, cafePropWords, type CafeDict } from '@/app/i18n/cafe'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'

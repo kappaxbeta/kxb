@@ -51,6 +51,7 @@ export function CartridgeShelf({
   selected = null,
   onOpen,
   columns: fixed,
+  ideal,
   /** Read out to a screen reader in place of the canvas. */
   label,
 }: {
@@ -66,6 +67,11 @@ export function CartridgeShelf({
    * nothing else.
    */
   columns?: number
+  /**
+   * How wide one cartridge should be, in CSS pixels. Defaults to a picker's
+   * size; the store passes something bigger. See `columnsFor`.
+   */
+  ideal?: number
   label: string
 }) {
   const frame = useRef<HTMLDivElement>(null)
@@ -84,7 +90,10 @@ export function CartridgeShelf({
     return () => observer.disconnect()
   }, [])
 
-  const { columns, rows, ...world } = shelfExtent(items.length, fixed ?? columnsFor(width))
+  const { columns, rows, ...world } = shelfExtent(
+    items.length,
+    fixed ?? columnsFor(width, ideal),
+  )
 
   /*
     Shared by every cartridge, written by a DOM handler, read in `useFrame`.
@@ -212,6 +221,9 @@ export function CartridgeShelf({
             <button type="button" onClick={() => onOpen(item.ref)}>
               {item.name}
             </button>
+            {/* Outside the button, so the accessible name of the control stays
+                the level's name rather than a paragraph. See `description`. */}
+            {item.description && <p>{item.description}</p>}
           </li>
         ))}
       </ul>

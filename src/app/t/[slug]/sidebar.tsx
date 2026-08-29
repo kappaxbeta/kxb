@@ -26,9 +26,8 @@ import { useCurrentMatch } from '@/app/t/[slug]/match-store'
 import { useHere } from '@/app/world/_stores/here-store'
 import type { EventSurface } from '@/domain/events/presets'
 import type { GuestLinkView, GuestView } from '@/domain/guests/queries'
-import type { DoorMode } from '@/domain/homestead/events'
 import { createRoom } from '@/domain/rooms/actions'
-import { hrefFor, isOwnedPlace, type PlaceId } from '@/domain/world/places'
+import { hrefFor, isOwnedPlace, type PlaceId } from '@kxb/peepz-world/places'
 import { type Tier, tierAtLeast } from '@/domain/billing/tiers'
 import type { TenantRoleName } from '@/lib/supabase/types'
 import { useRefusal } from '@/app/i18n/use-refusal'
@@ -62,12 +61,6 @@ import { useRefusal } from '@/app/i18n/use-refusal'
  *             the roster falling off the bottom - and "where do I go" and "who
  *             is around" are two different questions anyway.
  */
-
-export interface SidebarNeighbour {
-  userId: string
-  name: string
-  door: DoorMode
-}
 
 export interface SidebarFeatures {
   pages: boolean
@@ -188,8 +181,6 @@ export function Sidebar(props: {
   tier: Tier
   /** What this event lets its guests reach. Empty for everybody else. */
   guestSurfaces: GuestSurfaces
-  /** Everybody else's homestead, for the list of places you could walk to. */
-  neighbours: SidebarNeighbour[]
   /** Guest links, for an owner or admin. Null for everybody else. */
   guestAccess: SidebarGuestAccess | null
   /**
@@ -923,14 +914,12 @@ const ROOMS_SHOWN = 5
 function Places({
   slug,
   features,
-  neighbours,
   role,
   rooms,
   canManageRooms,
 }: {
   slug: string
   features: SidebarFeatures
-  neighbours: SidebarNeighbour[]
   role: TenantRoleName
   rooms: RoomView[]
   canManageRooms: boolean
@@ -962,17 +951,22 @@ function Places({
   // leave your side a player down.
   if (guest && inMatch(pathname, slug)) return null
 
-  const places: PlaceId[] = guest
-    ? features.lounge
-      ? (['lounge'] as const).slice()
-      : []
-    : [
-        ...(features.lounge ? (['lounge'] as const) : []),
-        ...(features.cafe ? (['cafe', 'home', 'outdoor'] as const) : []),
-      ]
+  /**
+   * The lounge, and nothing else - because it is the last place that is a page.
+   *
+   * The café, the house and the garden were three rows here and three routes
+   * behind them. They are cartridges now: `dream-restaurant` and `peepz-world`
+   * in the XP shelf, opened in a room like any other game, which is why the
+   * Rooms band below is where they turn up. A rail row is a *place in the
+   * product*, and a row pointing at a route nobody serves is the worst kind of
+   * navigation - it looks like the feature is broken rather than moved.
+   *
+   * The `cafe` flag still gates the homestead itself: it is what
+   * `openHomesteadFrame` checks before a cartridge opens, and what the purse
+   * lives behind. It just no longer decides whether a *link* is drawn.
+   */
+  const places: PlaceId[] = features.lounge ? (['lounge'] as const).slice() : []
   if (places.length === 0) return null
-
-  const visiting = of ? neighbours.find((entry) => entry.userId === of) : undefined
 
   return (
     <nav aria-label={t.bands.places}>
@@ -1063,16 +1057,6 @@ function Places({
         )
       })}
 
-      {visiting && (
-        <p className="px-3 pt-1.5 text-[11px] text-ink-muted">
-          {t.rooms.visitingLead}{' '}
-          <span className="text-accent-2">{visiting.name}</span>
-          {t.rooms.visitingTail}{' '}
-          <Link href={hrefFor('home', slug)} className="underline hover:text-ink">
-            {t.rooms.goHome}
-          </Link>
-        </p>
-      )}
     </nav>
   )
 }
@@ -1191,17 +1175,7 @@ function NewRoom({ slug }: { slug: string }) {
  * on a tablet, standing in its own panel on the right from `xl` up. Both copies
  * read the same store and the same props, so there is no "real" one.
  */
-function People({
-  slug,
-  features,
-  neighbours,
-  username,
-}: {
-  slug: string
-  features: SidebarFeatures
-  neighbours: SidebarNeighbour[]
-  username: string
-}) {
+function People({ username }: { username: string }) {
   const here = useHere()
   /**
    * Null unless you are standing in your own homestead, which is the only place
@@ -1221,9 +1195,21 @@ function People({
       */}
       <Online here={here} username={username} owner={door !== null} />
 
-      {features.cafe && neighbours.length > 0 && (
-        <Neighbours slug={slug} neighbours={neighbours} here={here} />
-      )}
+      {/*
+        Everybody else's front door used to be a band here, and it went with the
+        routes it linked to.
+
+        It was the only way to reach `?of=` without hand-editing a URL - one
+        click from your café to Sam's - and `?of=` was a *page* parameter. A
+        cartridge has no address bar: `openHomesteadFrame` opens the homestead
+        of whoever is holding the controller, deliberately, so that a room
+        pinned to the café is one door that leads each member to their own.
+
+        Visiting is therefore a thing this product does not currently do, rather
+        than a thing hidden here. When it comes back it belongs *inside* the
+        game - the door and the knock are still in the log, `HomesteadAccessSet`
+        and all - as a control in the cartridge rather than a link in a rail.
+      */}
     </div>
   )
 }
@@ -1374,80 +1360,6 @@ function Peep({
         </button>
       )}
     </li>
-  )
-}
-
-/**
- * How each door reads before you travel to it. Words, not colours alone.
- *
- * Only the colour is left here. The word and its tooltip moved into the rail
- * dictionary, because they are the half that changes with the language - and a
- * hue that means "walk straight in" does not.
- */
-const DOOR_TONE: Record<DoorMode, string> = {
-  open: 'text-emerald-600',
-  knock: 'text-amber-600',
-  closed: 'text-ink-muted',
-}
-
-/**
- * Everybody else's front door.
- *
- * The only way to reach `?of=` without hand-editing a URL, which is why it
- * survived the travel bar. Each entry lands you in the same room you are
- * standing in, so going from your café to Sam's café is one click.
- */
-function Neighbours({
-  slug,
-  neighbours,
-  here,
-}: {
-  slug: string
-  neighbours: SidebarNeighbour[]
-  here: ReturnType<typeof useHere>
-}) {
-  const pathname = usePathname()
-  const search = useSearchParams()
-  const of = search.get('of')
-  const t = railDict(useLocale())
-
-
-  /** Which of their rooms to open: the one you are in, or their front door. */
-  const room: PlaceId =
-    (['cafe', 'home', 'outdoor'] as const).find((id) =>
-      pathname.startsWith(`/t/${slug}/${id}`),
-    ) ?? 'home'
-
-  return (
-    <nav aria-label={t.bands.people}>
-      <Band>{t.bands.people}</Band>
-      {neighbours.map((neighbour) => {
-        const hint = t.doors[neighbour.door]
-        // Somebody in the room with you is not somewhere to travel to - they
-        // are already here, and the dot in the band above says so.
-        const present = here.people.some((person) => person.userId === neighbour.userId)
-
-        return (
-          <Link
-            key={neighbour.userId}
-            href={hrefFor(room, slug, neighbour.userId)}
-            aria-current={of === neighbour.userId ? 'page' : undefined}
-            className="rail-link"
-          >
-            <Face name={neighbour.name} here={present} />
-            <span className="min-w-0 flex-1 truncate">{neighbour.name}</span>
-            <span
-              title={hint.title}
-              className={`shrink-0 text-[10px] ${
-                present ? 'text-emerald-600' : DOOR_TONE[neighbour.door]
-              }`}
-            >
-              {present ? t.who.here : hint.word}
-            </span>
-          </Link>
-        )
-      })}
-    </nav>
   )
 }
 

@@ -1,7 +1,7 @@
 import type * as THREE from 'three'
 import { CATCH_UP, type Drift } from '@/app/world/_sim/autopilot'
-import { canReach, type Errand, nextErrand } from '@/domain/cafe/barista'
-import { type CafeState, isWalkable } from '@/domain/cafe/game'
+import { canReach, type Errand, nextErrand } from '@kxb/dream-restaurant/barista'
+import { type CafeState, isWalkable } from '@kxb/dream-restaurant/game'
 import { EYE_HEIGHT } from '@/app/world/lounge/_sim/physics'
 import {
   findPath,
@@ -10,7 +10,7 @@ import {
   type TileKey,
   tileToWorld,
   worldToTile,
-} from '@/domain/world/grid'
+} from '@kxb/peepz-world/grid'
 
 /**
  * The hands and feet behind `@/domain/cafe/barista`.

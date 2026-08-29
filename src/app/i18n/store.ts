@@ -62,6 +62,15 @@ export interface StoreDict {
 
   /** A card, and the page behind it. */
   noPicture: string
+  /**
+   * The shelf of cartridges, and the panel one opens.
+   *
+   * `shelfLabel` names the plain-button list that stands beside the canvas for
+   * anybody not using a pointer - see `components/cartridge/shelf.tsx`.
+   */
+  shelfLabel: string
+  openIt: string
+  closeSheet: string
   /** `{n}` pieces and `{n}` things it is built from. */
   pieces: string
   pieceOne: string
@@ -121,6 +130,9 @@ export const STORE_EN: StoreDict = {
   seeHowItWorks: 'See how it works',
 
   noPicture: 'No picture of this one yet',
+  shelfLabel: 'The games in the store',
+  openIt: 'Have a look',
+  closeSheet: 'Close',
   pieces: '{n} pieces',
   pieceOne: '{n} piece',
   things: '{n} things',
@@ -181,6 +193,9 @@ export const STORE_DE: StoreDict = {
   seeHowItWorks: 'Ansehen, wie das geht',
 
   noPicture: 'Von diesem gibt es noch kein Bild',
+  shelfLabel: 'Die Spiele im Store',
+  openIt: 'Ansehen',
+  closeSheet: 'Schließen',
   pieces: '{n} Teile',
   pieceOne: '{n} Teil',
   things: '{n} Dinge',
@@ -241,6 +256,9 @@ export const STORE_BG: StoreDict = {
   seeHowItWorks: 'Вижте как става',
 
   noPicture: 'От тази още няма снимка',
+  shelfLabel: 'Игрите в магазина',
+  openIt: 'Разгледайте',
+  closeSheet: 'Затваряне',
   pieces: '{n} части',
   pieceOne: '{n} част',
   things: '{n} неща',

@@ -1,6 +1,6 @@
 import 'server-only'
 import type { Client } from '@/es/store'
-import type { PlaceId } from '@/domain/world/places'
+import type { PlaceId } from '@kxb/peepz-world/places'
 
 /** One creature, as a scene needs it. */
 export interface AgentView {

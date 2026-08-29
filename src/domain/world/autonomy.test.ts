@@ -19,7 +19,7 @@ import {
   WINDOW_MS,
   windowAt,
 } from '@/domain/world/autonomy'
-import { rectangleRoom, TILE, tileKey } from '@/domain/world/grid'
+import { rectangleRoom, TILE, tileKey } from '@kxb/peepz-world/grid'
 
 /**
  * A five-by-four room with nothing in it, which is the café's opening plan.

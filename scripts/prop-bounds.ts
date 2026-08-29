@@ -32,8 +32,8 @@ import {
   modelUrl,
   WALL_SKIN,
   widthOf,
-} from '@/domain/home/catalog'
-import { TILE } from '@/domain/world/grid'
+} from '@kxb/peepz-world/catalog'
+import { TILE } from '@kxb/peepz-world/grid'
 import { loadTriangles, type Placement } from './gltf-raster'
 
 const PUBLIC = path.join(import.meta.dir, '..', 'public')

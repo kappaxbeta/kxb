@@ -330,6 +330,72 @@ const eslintConfig = defineConfig([
   },
 
   /**
+   * The homestead's two packages are *all* rules and no renderer.
+   *
+   * ---------------------------------------------------------------------------
+   * One block rather than two lists, because the bans have to add up
+   * ---------------------------------------------------------------------------
+   * `@kxb/peepz-world` and `@kxb/dream-restaurant` came out of
+   * `src/domain/home` and `src/domain/cafe`, where every rule below was a
+   * *folder convention*: `src/domain` has banned React and the browser since
+   * long before any of this. Moving the files must not lose that, so the
+   * convention moves with them and becomes a check.
+   *
+   * They are written here in full rather than by adding two globs to boxing's
+   * blocks, and the reason is a trap worth naming: `no-restricted-imports` is
+   * *replaced* by a later matching block rather than merged with it. Adding
+   * these packages to the rules-only block below would have silently dropped
+   * the no-importing-the-app ban from the block above - which is exactly what
+   * it did, and the guard file that proved it imported `@supabase/supabase-js`
+   * without a murmur.
+   *
+   * ---------------------------------------------------------------------------
+   * No renderer, and that is the difference from boxing
+   * ---------------------------------------------------------------------------
+   * Boxing has `src/play/` and is allowed React and three there, because it
+   * drew its own pixels from the first day and shipping them is what makes
+   * "lift the folder out" true.
+   *
+   * A café is drawn with *this app's* presence channel, its peeps, its emotes
+   * and its audio - all of which the lounge draws with too. A package that
+   * shipped a copy would be a fork of a live surface, maintained twice. So the
+   * scene stayed in `src/app/world/`, the rules came here, and the seam between
+   * them is the one the old folders already described: the domain owns every
+   * rule and the scene owns none of them.
+   */
+  {
+    files: [
+      "packages/peepz-world/**/*.ts",
+      "packages/dream-restaurant/**/*.ts",
+      // The handbook is prose as data - even less of a browser program than the
+      // rules packages are, and bound for its own repository, so the same fence.
+      "packages/community/**/*.ts",
+    ],
+    rules: {
+      "no-restricted-globals": ["error",
+        { name: "window", message: "The rules are not browser code - the scene that draws them is." },
+        { name: "document", message: "The rules are not browser code - the scene that draws them is." },
+        { name: "localStorage", message: "The rules keep nothing. What survives a reload is an event in the app's log." },
+        { name: "sessionStorage", message: "The rules keep nothing. What survives a reload is an event in the app's log." },
+      ],
+      "no-restricted-imports": ["error", {
+        paths: [
+          { name: "react", message: "These packages hold no components. Drawing belongs in src/app/world." },
+          { name: "react-dom", message: "These packages hold no components. Drawing belongs in src/app/world." },
+          { name: "three", message: "The rules are renderer-agnostic - they return numbers and the scene draws them." },
+          { name: "@supabase/supabase-js", message: "The purse is an aggregate in the app's event log. A rule is handed a state, never a database." },
+        ],
+        patterns: [
+          {
+            group: ["@/*"],
+            message: "A game package must not import the app. Anything it needs is passed in - see the state a rules function is handed.",
+          },
+        ],
+      }],
+    },
+  },
+
+  /**
    * `packages/xp` is a game engine, and it does not know this app exists.
    *
    * It has no `@/` alias - it is outside `src/` - so the app is already out of
@@ -393,7 +459,10 @@ const eslintConfig = defineConfig([
    * as props. That is what keeps "lift the folder out" a true sentence.
    */
   {
-    files: ["packages/boxing/**/*.ts", "packages/boxing/**/*.tsx"],
+    files: [
+      "packages/boxing/**/*.ts",
+      "packages/boxing/**/*.tsx",
+    ],
     rules: {
       "no-restricted-imports": ["error", {
         paths: [
@@ -402,7 +471,7 @@ const eslintConfig = defineConfig([
         patterns: [
           {
             group: ["@/*"],
-            message: "packages/boxing must not import the app. Anything it needs is passed in - see the props on <BoxingGame>.",
+            message: "A game package must not import the app. Anything it needs is passed in - see the props on <BoxingGame>, or the state a rules function is handed.",
           },
         ],
       }],
@@ -440,6 +509,23 @@ const eslintConfig = defineConfig([
           { name: "react", message: "The rules hold no components. Drawing belongs in src/play." },
           { name: "react-dom", message: "The rules hold no components. Drawing belongs in src/play." },
           { name: "three", message: "The rules are renderer-agnostic - they return numbers and src/play draws them." },
+          /*
+            And the two the block above bans, restated.
+
+            Not belt and braces: `no-restricted-imports` is *replaced* by a
+            later matching block rather than merged with it, so every path
+            listed there was silently off for these three folders - the
+            strictest part of the package, with the loosest import rule on it.
+            Found by a guard file that imported `@supabase/supabase-js` into
+            `packages/peepz-world` and was waved through.
+          */
+          { name: "@supabase/supabase-js", message: "The game talks to a backend through XpHost, never to one directly." },
+        ],
+        patterns: [
+          {
+            group: ["@/*"],
+            message: "packages/boxing must not import the app. Anything it needs is passed in - see the props on <BoxingGame>.",
+          },
         ],
       }],
     },

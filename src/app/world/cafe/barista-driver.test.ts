@@ -10,8 +10,8 @@ import {
   interact,
   isWalkable,
   tick,
-} from '@/domain/cafe/game'
-import { tileKey, worldToTile } from '@/domain/world/grid'
+} from '@kxb/dream-restaurant/game'
+import { tileKey, worldToTile } from '@kxb/peepz-world/grid'
 
 /**
  * The driver, run frame by frame against the real kitchen.

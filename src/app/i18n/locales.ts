@@ -1,5 +1,5 @@
 /**
- * Two *public* locales, and only the landing page and the legal pages have them.
+ * Two *public* locales, and a front page that has three.
  *
  * Everything behind a login is left alone on purpose. Those pages are not
  * crawled, so a locale in their URL buys nothing and would cost a rewrite of
@@ -14,12 +14,14 @@
  * for no gain. German lives at `/de` and the two point at each other with
  * `alternates`, which is what actually tells a crawler they are the same page.
  *
- * Bulgarian is a third locale but not a third site: it is chosen in settings
- * and read behind the login, and has no route here. Everything in this file
- * therefore answers for it in English, by way of `publicLocale`. That is not a
- * gap to be filled in later without thinking - a `/bg` landing page is a page
- * somebody has to write, an `hreflang` entry is a promise to a crawler that the
- * page exists, and neither follows from a dictionary being translated.
+ * Bulgarian is a third locale but not a third site. It has a front page at
+ * `/bg`, because that is the page a shared link opens onto and it is worth
+ * having in a language somebody can then read the whole app in. It has nothing
+ * under it: no `/bg/events`, no `/bg/contact`, and the legal pages are German
+ * documents that are not getting a third translation. `localePath` is where
+ * that asymmetry lives - it answers in English for a locale with no sub-pages,
+ * so a Bulgarian reader clicking through to the booking form gets a form rather
+ * than a 404.
  *
  * The primitives - `LOCALES`, `Locale`, `isLocale`, `localeFromPath` - live in
  * `@/domain/i18n/locale` and are re-exported here, because two server actions
@@ -36,20 +38,33 @@ export {
   publicLocale,
   type PublicLocale,
 } from '@/domain/i18n/locale'
-import {
-  DEFAULT_LOCALE,
-  type Locale,
-  publicLocale,
-  type PublicLocale,
-} from '@/domain/i18n/locale'
+import { DEFAULT_LOCALE, type Locale, publicLocale } from '@/domain/i18n/locale'
 
 /**
- * Where a locale's landing page lives. English is the bare root, and a locale
- * the site is not published in gets English rather than a URL that 404s.
+ * Where a locale's landing page lives. English is the bare root.
+ *
+ * Every locale, not just the published pair: the front page is the one public
+ * page that exists in all three, so this does *not* narrow. It used to, and
+ * that was the bug - the header's language switch renders a link per locale, so
+ * narrowing here turned the Bulgarian option into a second link to the English
+ * page. A control that visibly offers a language and then does not change it is
+ * worse than not offering it.
  */
 export function landingHref(locale: Locale): string {
-  const published = publicLocale(locale)
-  return published === DEFAULT_LOCALE ? '/' : `/${published}`
+  return locale === DEFAULT_LOCALE ? '/' : `/${locale}`
+}
+
+/**
+ * The door the header's language switch points at.
+ *
+ * Not `landingHref` directly, because pressing the switch is a statement about
+ * which language somebody reads and the landing pages are the only ones that
+ * carry a locale in the path - everything under them answers from the cookie.
+ * `/lang/{code}` writes it and then lands on the page; see the note on that
+ * route handler for why the extra hop is the right trade here and nowhere else.
+ */
+export function switchHref(locale: Locale): string {
+  return `/lang/${locale}`
 }
 
 /**
@@ -80,12 +95,13 @@ export function localePath(locale: Locale, path: string): string {
  * is no picker: an unmatched language should get the canonical page, not a
  * choice it did not ask for.
  */
-export function landingAlternates(locale: PublicLocale) {
+export function landingAlternates(locale: Locale) {
   return {
     canonical: landingHref(locale),
     languages: {
       en: '/',
       de: '/de',
+      bg: '/bg',
       'x-default': '/',
     },
   }

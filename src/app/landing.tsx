@@ -22,7 +22,13 @@ import {
   type RowId,
   type ScreenId,
 } from '@/app/i18n/landing'
-import { DEFAULT_LOCALE, landingHref, LOCALES, type Locale } from '@/app/i18n/locales'
+import {
+  DEFAULT_LOCALE,
+  landingHref,
+  LOCALES,
+  type Locale,
+  switchHref,
+} from '@/app/i18n/locales'
 import { type Tier, tierLimit, tierPrice } from '@/domain/billing/tiers'
 import { landingTiers, type TierRow } from '@/domain/billing/tier-table'
 import { type EventDoorView, listFeaturedDoors } from '@/domain/events/door'
@@ -916,51 +922,63 @@ const CHIPS: { id: ChipId; hue: number; href: string; icon: React.ReactNode }[] 
 ]
 
 /**
- * EN | DE, in the header pill.
+ * EN / DE / BG, in the header pill.
  *
- * Two plain links rather than a `<select>` or a dropdown. There are exactly two
- * languages and both fit in the width of the word "Pricing", so a control that
- * has to be opened before it shows its options is machinery around a link -
- * and a `<select>` here would need client JS to navigate, on a page that is
- * otherwise entirely server-rendered.
+ * Plain links rather than a `<select>` or a dropdown. Three languages still fit
+ * in the width of the word "Pricing", so a control that has to be opened before
+ * it shows its options is machinery around a link - and a `<select>` here would
+ * need client JS to navigate, on a page that is otherwise entirely
+ * server-rendered.
  *
- * Deliberately stateless: it does not set a cookie and nothing redirects on the
- * strength of a past choice. A remembered locale is the thing that makes a
- * shared URL open in the wrong language for the person it was shared with, and
- * this page's whole premise is a link somebody sends to somebody else.
+ * Each link goes through `/lang/{code}`, which writes the cookie and lands on
+ * the page. It used to point straight at the page and write nothing; the note
+ * on that route handler is the whole argument for the hop, and the short of it
+ * is that the landing pages carry their locale in the path while everything
+ * under them reads a cookie, so a switch that only changed the path changed the
+ * front page and nothing behind it.
  *
  * `aria-current` rather than only a colour, so the active language is announced
  * rather than merely looking brighter.
  */
 function LanguageSwitch({ locale }: { locale: Locale }) {
+  /*
+   * Below `sm`, only the languages you are not reading.
+   *
+   * The header pill has 38px of slack at 375px and each code with its separator
+   * costs about 29px, so the full set does not fit and never did - with two
+   * locales this dropped the active one and showed a lone "EN", which was
+   * exactly enough. Three do not fit either way, so below `sm` the control
+   * collapses to the *next* language rather than to all the others: one tap
+   * cycles EN → DE → BG → EN, which is a whole control in one code's width.
+   *
+   * At `sm` and up there is room for the honest thing, so all three are drawn
+   * with the current one marked.
+   */
+  const next = LOCALES[(LOCALES.indexOf(locale) + 1) % LOCALES.length]
+
   return (
     <span className="mx-1 inline-flex items-center gap-1 text-xs" aria-label="Language">
+      <Link
+        href={switchHref(next)}
+        hrefLang={next}
+        lang={next}
+        className="uppercase text-ink-muted transition hover:text-ink sm:hidden"
+      >
+        {next}
+      </Link>
+
       {LOCALES.map((code, i) => {
         const active = code === locale
         return (
-          /*
-           * Below `sm` only the language you are *not* reading is shown.
-           *
-           * The pair costs 58px in the header pill and there are 38px of slack
-           * at 375px, so rendering both pushed the page 20px wider than the
-           * screen - a landing page that scrolls sideways on a phone, which is
-           * the one width most of this traffic arrives at. Dropping the active
-           * half is the cheapest fix that keeps the control in the header where
-           * it was asked for: with two languages, a lone "EN" on a German page
-           * is unambiguously the way out of it.
-           */
-          <span
-            key={code}
-            className={`items-center gap-1 ${active ? 'hidden sm:inline-flex' : 'inline-flex'}`}
-          >
-            {i > 0 && <span className="hidden text-ink-muted/40 sm:inline">/</span>}
+          <span key={code} className="hidden items-center gap-1 sm:inline-flex">
+            {i > 0 && <span className="text-ink-muted/40">/</span>}
             {active ? (
               <span aria-current="true" className="font-medium text-ink uppercase">
                 {code}
               </span>
             ) : (
               <Link
-                href={landingHref(code)}
+                href={switchHref(code)}
                 hrefLang={code}
                 lang={code}
                 className="uppercase text-ink-muted transition hover:text-ink"

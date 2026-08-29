@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { CAFE_EN, cafeDict } from '@/app/i18n/cafe'
-import { PROPS } from '@/domain/cafe/catalog'
-import { ITEMS } from '@/domain/cafe/recipes'
+import { PROPS } from '@kxb/dream-restaurant/catalog'
+import { ITEMS } from '@kxb/dream-restaurant/recipes'
 import { DEFAULT_LOCALE, LOCALES } from '@/domain/i18n/locale'
 
 /**

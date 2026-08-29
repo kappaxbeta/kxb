@@ -1,0 +1,14 @@
+{
+  "name": "@kxb/community",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The community handbook: everything the public pages say, as data. Prose, per language, with no renderer in it - the app draws it. Written to be lifted out into its own repository.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./text": "./src/text.ts",
+    "./guide": "./src/guide.ts",
+    "./countries": "./src/countries/index.ts",
+    "./chapters": "./src/chapters/index.ts",
+    "./dict": "./src/dict.ts"
+  }
+}

@@ -9,8 +9,8 @@ import {
   type HomeExtra,
   modelUrl,
   widthOf,
-} from '@/domain/home/catalog'
-import { drawOffset } from '@/domain/home/game'
+} from '@kxb/peepz-world/catalog'
+import { drawOffset } from '@kxb/peepz-world/game'
 
 /**
  * One model out of the Tiny Treats pack.
