@@ -131,7 +131,27 @@ export function Framed({ xp, room, me, startedAt, match }: FramedProps) {
    * and a second host would start a second clock at a different zero.
    */
   const host = useMemo(
-    () => (me ? realtimeHost(me, room ?? xp.id, xp.id) : null),
+    /**
+     * A room, or no wire at all - and never the level's own id.
+     *
+     * This read `room ?? xp.id`, which named the topic after the document when
+     * nobody supplied a room. 20260920000000 admits any signed-in person to any
+     * `xp:` topic on purpose - *"the room id is the secret; hold it and you are
+     * in"* - and a level id is not a secret: it is in the URL of the public
+     * host and `builtin_xps` is readable by `anon`. So the fallback quietly
+     * turned a capability into a public address.
+     *
+     * It was unreachable, which is why nobody saw it: every caller either
+     * passes a room (the battle its id, the XP room its slug) or passes no
+     * `me` (the editor's preview, and `/xp/<id>` itself, which reads
+     * `me = room ? await whoAmI() : null`). The fallback was one added prop
+     * away from being live, in a file where adding `me` looks harmless.
+     *
+     * So the rule is written into the shape instead: a host needs somebody to
+     * be *and* somewhere to be it. Sharing an instance is `?room=`, which the
+     * public host already reads, and that room id is the capability.
+     */
+    () => (me && room ? realtimeHost(me, room, xp.id) : null),
     [me, room, xp.id],
   )
 

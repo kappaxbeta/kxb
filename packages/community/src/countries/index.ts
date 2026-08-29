@@ -1,8 +1,47 @@
 import type { Guide } from '../guide'
 import { langsOf, type Text } from '../text'
+import { UAE } from './ae'
+import { ARGENTINA } from './ar'
+import { AUSTRIA } from './at'
+import { AUSTRALIA } from './au'
 import { BULGARIA } from './bg'
+import { BRAZIL } from './br'
+import { CANADA } from './ca'
+import { SWITZERLAND } from './ch'
+import { CZECHIA } from './cz'
 import { GERMANY } from './de'
+import { DENMARK } from './dk'
+import { ESTONIA } from './ee'
+import { EGYPT } from './eg'
+import { SPAIN } from './es'
+import { FINLAND } from './fi'
+import { FRANCE } from './fr'
+import { UNITED_KINGDOM } from './gb'
+import { GHANA } from './gh'
+import { GREECE } from './gr'
+import { CROATIA } from './hr'
+import { HUNGARY } from './hu'
+import { IRELAND } from './ie'
+import { INDIA } from './in'
+import { ITALY } from './it'
+import { JAPAN } from './jp'
+import { KENYA } from './ke'
+import { LITHUANIA } from './lt'
+import { LATVIA } from './lv'
+import { MEXICO } from './mx'
 import { NIGERIA } from './ng'
+import { NETHERLANDS } from './nl'
+import { NORWAY } from './no'
+import { NEW_ZEALAND } from './nz'
+import { POLAND } from './pl'
+import { PORTUGAL } from './pt'
+import { ROMANIA } from './ro'
+import { SWEDEN } from './se'
+import { SINGAPORE } from './sg'
+import { TURKIYE } from './tr'
+import { UKRAINE } from './ua'
+import { UNITED_STATES } from './us'
+import { SOUTH_AFRICA } from './za'
 
 /**
  * Every country the handbook means to cover, written or not.
@@ -53,47 +92,47 @@ export type Continent = (typeof CONTINENTS)[number]
 export const COUNTRIES: Country[] = [
   { slug: 'al', continent: 'europe', name: 'Albania', flag: '🇦🇱' },
   { slug: 'ad', continent: 'europe', name: 'Andorra', flag: '🇦🇩' },
-  { slug: 'at', continent: 'europe', name: 'Austria', flag: '🇦🇹' },
+  { slug: 'at', continent: 'europe', name: 'Austria', flag: '🇦🇹', guide: AUSTRIA },
   { slug: 'by', continent: 'europe', name: 'Belarus', flag: '🇧🇾' },
   { slug: 'be', continent: 'europe', name: 'Belgium', flag: '🇧🇪' },
   { slug: 'ba', continent: 'europe', name: 'Bosnia and Herzegovina', flag: '🇧🇦' },
   { slug: 'bg', continent: 'europe', name: 'Bulgaria', flag: '🇧🇬', guide: BULGARIA },
-  { slug: 'hr', continent: 'europe', name: 'Croatia', flag: '🇭🇷' },
+  { slug: 'hr', continent: 'europe', name: 'Croatia', flag: '🇭🇷', guide: CROATIA },
   { slug: 'cy', continent: 'europe', name: 'Cyprus', flag: '🇨🇾' },
-  { slug: 'cz', continent: 'europe', name: 'Czechia', flag: '🇨🇿' },
-  { slug: 'dk', continent: 'europe', name: 'Denmark', flag: '🇩🇰' },
-  { slug: 'ee', continent: 'europe', name: 'Estonia', flag: '🇪🇪' },
-  { slug: 'fi', continent: 'europe', name: 'Finland', flag: '🇫🇮' },
-  { slug: 'fr', continent: 'europe', name: 'France', flag: '🇫🇷' },
+  { slug: 'cz', continent: 'europe', name: 'Czechia', flag: '🇨🇿', guide: CZECHIA },
+  { slug: 'dk', continent: 'europe', name: 'Denmark', flag: '🇩🇰', guide: DENMARK },
+  { slug: 'ee', continent: 'europe', name: 'Estonia', flag: '🇪🇪', guide: ESTONIA },
+  { slug: 'fi', continent: 'europe', name: 'Finland', flag: '🇫🇮', guide: FINLAND },
+  { slug: 'fr', continent: 'europe', name: 'France', flag: '🇫🇷', guide: FRANCE },
   { slug: 'de', continent: 'europe', name: 'Germany', flag: '🇩🇪', guide: GERMANY },
-  { slug: 'gr', continent: 'europe', name: 'Greece', flag: '🇬🇷' },
-  { slug: 'hu', continent: 'europe', name: 'Hungary', flag: '🇭🇺' },
+  { slug: 'gr', continent: 'europe', name: 'Greece', flag: '🇬🇷', guide: GREECE },
+  { slug: 'hu', continent: 'europe', name: 'Hungary', flag: '🇭🇺', guide: HUNGARY },
   { slug: 'is', continent: 'europe', name: 'Iceland', flag: '🇮🇸' },
-  { slug: 'ie', continent: 'europe', name: 'Ireland', flag: '🇮🇪' },
-  { slug: 'it', continent: 'europe', name: 'Italy', flag: '🇮🇹' },
-  { slug: 'lv', continent: 'europe', name: 'Latvia', flag: '🇱🇻' },
+  { slug: 'ie', continent: 'europe', name: 'Ireland', flag: '🇮🇪', guide: IRELAND },
+  { slug: 'it', continent: 'europe', name: 'Italy', flag: '🇮🇹', guide: ITALY },
+  { slug: 'lv', continent: 'europe', name: 'Latvia', flag: '🇱🇻', guide: LATVIA },
   { slug: 'li', continent: 'europe', name: 'Liechtenstein', flag: '🇱🇮' },
-  { slug: 'lt', continent: 'europe', name: 'Lithuania', flag: '🇱🇹' },
+  { slug: 'lt', continent: 'europe', name: 'Lithuania', flag: '🇱🇹', guide: LITHUANIA },
   { slug: 'lu', continent: 'europe', name: 'Luxembourg', flag: '🇱🇺' },
   { slug: 'mt', continent: 'europe', name: 'Malta', flag: '🇲🇹' },
   { slug: 'md', continent: 'europe', name: 'Moldova', flag: '🇲🇩' },
   { slug: 'mc', continent: 'europe', name: 'Monaco', flag: '🇲🇨' },
   { slug: 'me', continent: 'europe', name: 'Montenegro', flag: '🇲🇪' },
-  { slug: 'nl', continent: 'europe', name: 'Netherlands', flag: '🇳🇱' },
+  { slug: 'nl', continent: 'europe', name: 'Netherlands', flag: '🇳🇱', guide: NETHERLANDS },
   { slug: 'mk', continent: 'europe', name: 'North Macedonia', flag: '🇲🇰' },
-  { slug: 'no', continent: 'europe', name: 'Norway', flag: '🇳🇴' },
-  { slug: 'pl', continent: 'europe', name: 'Poland', flag: '🇵🇱' },
-  { slug: 'pt', continent: 'europe', name: 'Portugal', flag: '🇵🇹' },
-  { slug: 'ro', continent: 'europe', name: 'Romania', flag: '🇷🇴' },
+  { slug: 'no', continent: 'europe', name: 'Norway', flag: '🇳🇴', guide: NORWAY },
+  { slug: 'pl', continent: 'europe', name: 'Poland', flag: '🇵🇱', guide: POLAND },
+  { slug: 'pt', continent: 'europe', name: 'Portugal', flag: '🇵🇹', guide: PORTUGAL },
+  { slug: 'ro', continent: 'europe', name: 'Romania', flag: '🇷🇴', guide: ROMANIA },
   { slug: 'sm', continent: 'europe', name: 'San Marino', flag: '🇸🇲' },
   { slug: 'rs', continent: 'europe', name: 'Serbia', flag: '🇷🇸' },
   { slug: 'sk', continent: 'europe', name: 'Slovakia', flag: '🇸🇰' },
   { slug: 'si', continent: 'europe', name: 'Slovenia', flag: '🇸🇮' },
-  { slug: 'es', continent: 'europe', name: 'Spain', flag: '🇪🇸' },
-  { slug: 'se', continent: 'europe', name: 'Sweden', flag: '🇸🇪' },
-  { slug: 'ch', continent: 'europe', name: 'Switzerland', flag: '🇨🇭' },
-  { slug: 'ua', continent: 'europe', name: 'Ukraine', flag: '🇺🇦' },
-  { slug: 'gb', continent: 'europe', name: 'United Kingdom', flag: '🇬🇧' },
+  { slug: 'es', continent: 'europe', name: 'Spain', flag: '🇪🇸', guide: SPAIN },
+  { slug: 'se', continent: 'europe', name: 'Sweden', flag: '🇸🇪', guide: SWEDEN },
+  { slug: 'ch', continent: 'europe', name: 'Switzerland', flag: '🇨🇭', guide: SWITZERLAND },
+  { slug: 'ua', continent: 'europe', name: 'Ukraine', flag: '🇺🇦', guide: UKRAINE },
+  { slug: 'gb', continent: 'europe', name: 'United Kingdom', flag: '🇬🇧', guide: UNITED_KINGDOM },
   { slug: 'va', continent: 'europe', name: 'Vatican City', flag: '🇻🇦' },
   { slug: 'dz', continent: 'africa', name: 'Algeria', flag: '🇩🇿' },
   { slug: 'ao', continent: 'africa', name: 'Angola', flag: '🇦🇴' },
@@ -110,17 +149,17 @@ export const COUNTRIES: Country[] = [
   { slug: 'cd', continent: 'africa', name: 'DR Congo', flag: '🇨🇩' },
   { slug: 'ci', continent: 'africa', name: 'Côte d’Ivoire', flag: '🇨🇮' },
   { slug: 'dj', continent: 'africa', name: 'Djibouti', flag: '🇩🇯' },
-  { slug: 'eg', continent: 'africa', name: 'Egypt', flag: '🇪🇬' },
+  { slug: 'eg', continent: 'africa', name: 'Egypt', flag: '🇪🇬', guide: EGYPT },
   { slug: 'gq', continent: 'africa', name: 'Equatorial Guinea', flag: '🇬🇶' },
   { slug: 'er', continent: 'africa', name: 'Eritrea', flag: '🇪🇷' },
   { slug: 'sz', continent: 'africa', name: 'Eswatini', flag: '🇸🇿' },
   { slug: 'et', continent: 'africa', name: 'Ethiopia', flag: '🇪🇹' },
   { slug: 'ga', continent: 'africa', name: 'Gabon', flag: '🇬🇦' },
   { slug: 'gm', continent: 'africa', name: 'Gambia', flag: '🇬🇲' },
-  { slug: 'gh', continent: 'africa', name: 'Ghana', flag: '🇬🇭' },
+  { slug: 'gh', continent: 'africa', name: 'Ghana', flag: '🇬🇭', guide: GHANA },
   { slug: 'gn', continent: 'africa', name: 'Guinea', flag: '🇬🇳' },
   { slug: 'gw', continent: 'africa', name: 'Guinea-Bissau', flag: '🇬🇼' },
-  { slug: 'ke', continent: 'africa', name: 'Kenya', flag: '🇰🇪' },
+  { slug: 'ke', continent: 'africa', name: 'Kenya', flag: '🇰🇪', guide: KENYA },
   { slug: 'ls', continent: 'africa', name: 'Lesotho', flag: '🇱🇸' },
   { slug: 'lr', continent: 'africa', name: 'Liberia', flag: '🇱🇷' },
   { slug: 'ly', continent: 'africa', name: 'Libya', flag: '🇱🇾' },
@@ -140,7 +179,7 @@ export const COUNTRIES: Country[] = [
   { slug: 'sc', continent: 'africa', name: 'Seychelles', flag: '🇸🇨' },
   { slug: 'sl', continent: 'africa', name: 'Sierra Leone', flag: '🇸🇱' },
   { slug: 'so', continent: 'africa', name: 'Somalia', flag: '🇸🇴' },
-  { slug: 'za', continent: 'africa', name: 'South Africa', flag: '🇿🇦' },
+  { slug: 'za', continent: 'africa', name: 'South Africa', flag: '🇿🇦', guide: SOUTH_AFRICA },
   { slug: 'ss', continent: 'africa', name: 'South Sudan', flag: '🇸🇸' },
   { slug: 'sd', continent: 'africa', name: 'Sudan', flag: '🇸🇩' },
   { slug: 'tz', continent: 'africa', name: 'Tanzania', flag: '🇹🇿' },
@@ -153,7 +192,7 @@ export const COUNTRIES: Country[] = [
   { slug: 'bs', continent: 'north-america', name: 'Bahamas', flag: '🇧🇸' },
   { slug: 'bb', continent: 'north-america', name: 'Barbados', flag: '🇧🇧' },
   { slug: 'bz', continent: 'north-america', name: 'Belize', flag: '🇧🇿' },
-  { slug: 'ca', continent: 'north-america', name: 'Canada', flag: '🇨🇦' },
+  { slug: 'ca', continent: 'north-america', name: 'Canada', flag: '🇨🇦', guide: CANADA },
   { slug: 'cr', continent: 'north-america', name: 'Costa Rica', flag: '🇨🇷' },
   { slug: 'cu', continent: 'north-america', name: 'Cuba', flag: '🇨🇺' },
   { slug: 'dm', continent: 'north-america', name: 'Dominica', flag: '🇩🇲' },
@@ -164,17 +203,17 @@ export const COUNTRIES: Country[] = [
   { slug: 'ht', continent: 'north-america', name: 'Haiti', flag: '🇭🇹' },
   { slug: 'hn', continent: 'north-america', name: 'Honduras', flag: '🇭🇳' },
   { slug: 'jm', continent: 'north-america', name: 'Jamaica', flag: '🇯🇲' },
-  { slug: 'mx', continent: 'north-america', name: 'Mexico', flag: '🇲🇽' },
+  { slug: 'mx', continent: 'north-america', name: 'Mexico', flag: '🇲🇽', guide: MEXICO },
   { slug: 'ni', continent: 'north-america', name: 'Nicaragua', flag: '🇳🇮' },
   { slug: 'pa', continent: 'north-america', name: 'Panama', flag: '🇵🇦' },
   { slug: 'kn', continent: 'north-america', name: 'St. Kitts and Nevis', flag: '🇰🇳' },
   { slug: 'lc', continent: 'north-america', name: 'St. Lucia', flag: '🇱🇨' },
   { slug: 'vc', continent: 'north-america', name: 'St. Vincent and the Grenadines', flag: '🇻🇨' },
   { slug: 'tt', continent: 'north-america', name: 'Trinidad and Tobago', flag: '🇹🇹' },
-  { slug: 'us', continent: 'north-america', name: 'United States', flag: '🇺🇸' },
-  { slug: 'ar', continent: 'south-america', name: 'Argentina', flag: '🇦🇷' },
+  { slug: 'us', continent: 'north-america', name: 'United States', flag: '🇺🇸', guide: UNITED_STATES },
+  { slug: 'ar', continent: 'south-america', name: 'Argentina', flag: '🇦🇷', guide: ARGENTINA },
   { slug: 'bo', continent: 'south-america', name: 'Bolivia', flag: '🇧🇴' },
-  { slug: 'br', continent: 'south-america', name: 'Brazil', flag: '🇧🇷' },
+  { slug: 'br', continent: 'south-america', name: 'Brazil', flag: '🇧🇷', guide: BRAZIL },
   { slug: 'cl', continent: 'south-america', name: 'Chile', flag: '🇨🇱' },
   { slug: 'co', continent: 'south-america', name: 'Colombia', flag: '🇨🇴' },
   { slug: 'ec', continent: 'south-america', name: 'Ecuador', flag: '🇪🇨' },
@@ -194,12 +233,12 @@ export const COUNTRIES: Country[] = [
   { slug: 'kh', continent: 'asia', name: 'Cambodia', flag: '🇰🇭' },
   { slug: 'cn', continent: 'asia', name: 'China', flag: '🇨🇳' },
   { slug: 'ge', continent: 'asia', name: 'Georgia', flag: '🇬🇪' },
-  { slug: 'in', continent: 'asia', name: 'India', flag: '🇮🇳' },
+  { slug: 'in', continent: 'asia', name: 'India', flag: '🇮🇳', guide: INDIA },
   { slug: 'id', continent: 'asia', name: 'Indonesia', flag: '🇮🇩' },
   { slug: 'ir', continent: 'asia', name: 'Iran', flag: '🇮🇷' },
   { slug: 'iq', continent: 'asia', name: 'Iraq', flag: '🇮🇶' },
   { slug: 'il', continent: 'asia', name: 'Israel', flag: '🇮🇱' },
-  { slug: 'jp', continent: 'asia', name: 'Japan', flag: '🇯🇵' },
+  { slug: 'jp', continent: 'asia', name: 'Japan', flag: '🇯🇵', guide: JAPAN },
   { slug: 'jo', continent: 'asia', name: 'Jordan', flag: '🇯🇴' },
   { slug: 'kz', continent: 'asia', name: 'Kazakhstan', flag: '🇰🇿' },
   { slug: 'kw', continent: 'asia', name: 'Kuwait', flag: '🇰🇼' },
@@ -218,7 +257,7 @@ export const COUNTRIES: Country[] = [
   { slug: 'ph', continent: 'asia', name: 'Philippines', flag: '🇵🇭' },
   { slug: 'qa', continent: 'asia', name: 'Qatar', flag: '🇶🇦' },
   { slug: 'sa', continent: 'asia', name: 'Saudi Arabia', flag: '🇸🇦' },
-  { slug: 'sg', continent: 'asia', name: 'Singapore', flag: '🇸🇬' },
+  { slug: 'sg', continent: 'asia', name: 'Singapore', flag: '🇸🇬', guide: SINGAPORE },
   { slug: 'kr', continent: 'asia', name: 'South Korea', flag: '🇰🇷' },
   { slug: 'lk', continent: 'asia', name: 'Sri Lanka', flag: '🇱🇰' },
   { slug: 'sy', continent: 'asia', name: 'Syria', flag: '🇸🇾' },
@@ -226,19 +265,19 @@ export const COUNTRIES: Country[] = [
   { slug: 'tj', continent: 'asia', name: 'Tajikistan', flag: '🇹🇯' },
   { slug: 'th', continent: 'asia', name: 'Thailand', flag: '🇹🇭' },
   { slug: 'tl', continent: 'asia', name: 'Timor-Leste', flag: '🇹🇱' },
-  { slug: 'tr', continent: 'asia', name: 'Türkiye', flag: '🇹🇷' },
+  { slug: 'tr', continent: 'asia', name: 'Türkiye', flag: '🇹🇷', guide: TURKIYE },
   { slug: 'tm', continent: 'asia', name: 'Turkmenistan', flag: '🇹🇲' },
-  { slug: 'ae', continent: 'asia', name: 'United Arab Emirates', flag: '🇦🇪' },
+  { slug: 'ae', continent: 'asia', name: 'United Arab Emirates', flag: '🇦🇪', guide: UAE },
   { slug: 'uz', continent: 'asia', name: 'Uzbekistan', flag: '🇺🇿' },
   { slug: 'vn', continent: 'asia', name: 'Vietnam', flag: '🇻🇳' },
   { slug: 'ye', continent: 'asia', name: 'Yemen', flag: '🇾🇪' },
-  { slug: 'au', continent: 'oceania', name: 'Australia', flag: '🇦🇺' },
+  { slug: 'au', continent: 'oceania', name: 'Australia', flag: '🇦🇺', guide: AUSTRALIA },
   { slug: 'fj', continent: 'oceania', name: 'Fiji', flag: '🇫🇯' },
   { slug: 'ki', continent: 'oceania', name: 'Kiribati', flag: '🇰🇮' },
   { slug: 'mh', continent: 'oceania', name: 'Marshall Islands', flag: '🇲🇭' },
   { slug: 'fm', continent: 'oceania', name: 'Micronesia', flag: '🇫🇲' },
   { slug: 'nr', continent: 'oceania', name: 'Nauru', flag: '🇳🇷' },
-  { slug: 'nz', continent: 'oceania', name: 'New Zealand', flag: '🇳🇿' },
+  { slug: 'nz', continent: 'oceania', name: 'New Zealand', flag: '🇳🇿', guide: NEW_ZEALAND },
   { slug: 'pw', continent: 'oceania', name: 'Palau', flag: '🇵🇼' },
   { slug: 'pg', continent: 'oceania', name: 'Papua New Guinea', flag: '🇵🇬' },
   { slug: 'ws', continent: 'oceania', name: 'Samoa', flag: '🇼🇸' },

@@ -1392,6 +1392,22 @@ export function Landing({
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
             {dict.pricing.body}
           </p>
+          {/* The fourth option the cards do not show: the code is public, and
+              hosting it yourself costs a server instead of a tier. Said in the
+              pricing section on purpose - a price table that hides the free
+              exit reads like it is hiding it. "Community Edition" is left as a
+              product name rather than a dictionary key, like the footer's
+              "Community". */}
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-ink-muted">
+            <Link
+              href={locale === 'de' ? '/de/community/start-kxb' : '/community/start-kxb'}
+              className="text-accent-2 hover:underline"
+            >
+              {locale === 'de'
+                ? 'Oder betreib die Community Edition selbst →'
+                : 'Or run the Community Edition yourself →'}
+            </Link>
+          </p>
         </header>
 
         {/*
@@ -1566,6 +1582,13 @@ export function Landing({
         <nav className="flex flex-wrap gap-5">
           <Link href="/events" className="nav-link">
             {dict.footer.events}
+          </Link>
+          {/* The handbook. "Community" is the same word in all three page
+              languages, so it is a literal rather than a dictionary key - the
+              German handbook lives under its own prefix and gets linked to
+              directly. */}
+          <Link href={locale === 'de' ? '/de/community' : '/community'} className="nav-link">
+            Community
           </Link>
           <Link href={legal.imprint} className="nav-link">
             {dict.footer.impressum}

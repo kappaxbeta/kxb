@@ -18,6 +18,35 @@ import type { Lang } from './text'
  */
 export interface CommunityDict {
   meta: { title: string; description: string }
+  /** The sidebar. Structure lives in the app; every word lives here. */
+  nav: {
+    /** The eye-catcher block at the top. */
+    important: string
+    starter: string
+    starterHint: string
+    legal: string
+    legalHint: string
+    guides: string
+    countries: string
+    blog: string
+    resources: string
+    editorGuide: string
+    repo: string
+    backToSite: string
+  }
+  /** The geo greeting when the browser's locale names a written country. */
+  geo: {
+    /** Before the country name. */
+    lead: string
+    /** The link text after the country card. */
+    open: string
+  }
+  blog: {
+    title: string
+    standfirst: string
+    /** Prefix before a post's date on the index. */
+    posted: string
+  }
   /** The index page. */
   index: {
     title: string
@@ -65,6 +94,29 @@ export const COMMUNITY_EN: CommunityDict = {
     description:
       'How to register a business, country by country: the offices, the forms, the boxes on the forms - plus Stripe, the legal shell of a website, and what to check before you promote.',
   },
+  nav: {
+    important: 'Start here',
+    starter: 'KXB Starter Guide',
+    starterHint: 'Run the whole thing yourself',
+    legal: 'Basic Legal',
+    legalHint: 'The four documents before you take money',
+    guides: 'Guides',
+    countries: 'Countries',
+    blog: 'Blog',
+    resources: 'Resources',
+    editorGuide: 'XP editor guide',
+    repo: 'The kxb repository',
+    backToSite: '← kxb.team',
+  },
+  geo: {
+    lead: 'Looks like you are in',
+    open: 'Open your guide',
+  },
+  blog: {
+    title: 'Blog',
+    standfirst: 'Notes from building the handbook and the world it belongs to.',
+    posted: 'Posted',
+  },
   index: {
     title: 'The handbook',
     standfirst:
@@ -110,6 +162,29 @@ export const COMMUNITY_DE: CommunityDict = {
     title: 'Community-Handbuch - selbstständig gründen und bleiben',
     description:
       'Gewerbe anmelden, Land für Land: die Ämter in der richtigen Reihenfolge, die Felder auf den Formularen - dazu Stripe, das rechtliche Grundgerüst einer Website und was vor der ersten Werbung zu prüfen ist.',
+  },
+  nav: {
+    important: 'Fang hier an',
+    starter: 'KXB Starter-Guide',
+    starterHint: 'Betreib das Ganze selbst',
+    legal: 'Recht kompakt',
+    legalHint: 'Die vier Dokumente, bevor Geld fließt',
+    guides: 'Guides',
+    countries: 'Länder',
+    blog: 'Blog',
+    resources: 'Ressourcen',
+    editorGuide: 'XP-Editor-Guide',
+    repo: 'Das kxb-Repository',
+    backToSite: '← kxb.team',
+  },
+  geo: {
+    lead: 'Sieht aus, als wärst du in',
+    open: 'Deinen Guide öffnen',
+  },
+  blog: {
+    title: 'Blog',
+    standfirst: 'Notizen vom Bau des Handbuchs und der Welt, zu der es gehört.',
+    posted: 'Veröffentlicht',
   },
   index: {
     title: 'Das Handbuch',
