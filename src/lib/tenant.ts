@@ -16,9 +16,7 @@ import { GUEST_LEFT_PATH } from '@/domain/guests/session'
 import type { SpaceCapability } from '@/domain/tenants/events'
 import { resolveFeatures } from '@/domain/flags/queries'
 import type { FeatureKey, Features } from '@/domain/flags/keys'
-import { tenantsProjection } from '@/domain/tenants/projection'
 import { findTenantIdBySlug } from '@/domain/tenants/queries'
-import { runProjection } from '@/es/projection'
 import type { Client } from '@/es/store'
 import { requireUser } from '@/lib/auth'
 import { asTenantRole, type TenantRoleName } from '@/lib/supabase/types'
@@ -504,32 +502,36 @@ export function writeBlockedReason(
 }
 
 /**
- * Read the tenant's read-model row, catching the projection up if it is behind.
+ * Read the tenant's read-model row.
  *
- * Membership is written synchronously by the database trigger while the name
- * and slug are projected asynchronously in TypeScript, so there is a window
- * where you are demonstrably a member of a workspace that has no row yet. That
- * window is exactly one projection run wide, so run it rather than 404.
+ * This used to catch a projection up first, and the comment here described the
+ * window it was closing: membership was written synchronously by the database
+ * trigger while the name and slug were projected asynchronously in TypeScript,
+ * so you could be demonstrably a member of a workspace that had no row yet.
+ *
+ * There is no such window any more. 20270102000000 moved the row under the same
+ * trigger, so it is written in the transaction that appends `TenantCreated` -
+ * the space and its membership arrive together or not at all. A missing row now
+ * means no `TenantCreated`, which is not a space, and the caller's `notFound()`
+ * is the right answer rather than a repair.
+ *
+ * The four fields after the name are why that mattered: `archived`,
+ * `lounge_mode`, `chat_enabled` and `capabilities` are all gated on, so this
+ * row is authorization state and had no business being user-writable. See the
+ * migration, and the audit entry it closes.
  */
 async function loadTenantRow(supabase: Client, tenantId: string) {
-  const read = async () => {
-    const { data, error } = await supabase
-      .from('tenants_read_model')
-      .select('slug, name, archived, lounge_mode, chat_enabled, capabilities')
-      .eq('id', tenantId)
-      .maybeSingle()
+  const { data, error } = await supabase
+    .from('tenants_read_model')
+    .select('slug, name, archived, lounge_mode, chat_enabled, capabilities')
+    .eq('id', tenantId)
+    .maybeSingle()
 
-    if (error) {
-      throw new Error(`Failed to load space: ${error.message}`)
-    }
-    return data
+  if (error) {
+    throw new Error(`Failed to load space: ${error.message}`)
   }
 
-  const first = await read()
-  if (first) return first
-
-  await runProjection(supabase, tenantsProjection, tenantId)
-  return read()
+  return data
 }
 
 /**

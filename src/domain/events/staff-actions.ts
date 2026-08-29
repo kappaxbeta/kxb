@@ -6,12 +6,10 @@ import { z } from 'zod'
 import { tenantDecider } from '@/domain/tenants/aggregate'
 import { inviteMemberSchema, changeRoleSchema } from '@/domain/tenants/commands'
 import { tokenInvitee, userInvitee } from '@/domain/tenants/events'
-import { tenantsProjection } from '@/domain/tenants/projection'
 import { resolveSeatLimit } from '@/domain/flags/queries'
 import { recordBackofficeAction } from '@/domain/backoffice/audit'
 import { executeCommand } from '@/es/command'
 import { ConcurrencyError, DomainError } from '@/es/errors'
-import { runProjection } from '@/es/projection'
 import { requireBackofficeSection } from '@/lib/backoffice'
 
 export type StaffResult = { ok: true } | { ok: false; error: string }
@@ -141,7 +139,6 @@ export async function inviteEventStaff(
     return toError(error)
   }
 
-  await runProjection(admin, tenantsProjection, id.data)
 
   await recordBackofficeAction({
     actor: user,
@@ -176,7 +173,7 @@ export async function setEventStaffRole(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid role' }
   }
 
-  const { supabase, admin, user } = await requireBackofficeSection('events', 'write')
+  const { supabase, user } = await requireBackofficeSection('events', 'write')
 
   try {
     await executeCommand({
@@ -197,7 +194,6 @@ export async function setEventStaffRole(
     return toError(error)
   }
 
-  await runProjection(admin, tenantsProjection, id.data)
 
   await recordBackofficeAction({
     actor: user,
@@ -219,7 +215,7 @@ export async function removeEventStaff(
   const target = z.uuid().safeParse(userId)
   if (!id.success || !target.success) return { ok: false, error: 'Unknown member' }
 
-  const { supabase, admin, user } = await requireBackofficeSection('events', 'write')
+  const { supabase, user } = await requireBackofficeSection('events', 'write')
 
   try {
     await executeCommand({
@@ -239,7 +235,6 @@ export async function removeEventStaff(
     return toError(error)
   }
 
-  await runProjection(admin, tenantsProjection, id.data)
 
   await recordBackofficeAction({
     actor: user,
@@ -330,7 +325,6 @@ export async function joinEventSpace(
     return toError(error)
   }
 
-  await runProjection(admin, tenantsProjection, id.data)
 
   await recordBackofficeAction({
     actor: user,
@@ -358,7 +352,7 @@ export async function leaveEventSpace(tenantId: string): Promise<StaffResult> {
   const id = tenantIdSchema.safeParse(tenantId)
   if (!id.success) return { ok: false, error: 'Unknown event' }
 
-  const { supabase, admin, user } = await requireBackofficeSection('events', 'write')
+  const { supabase, user } = await requireBackofficeSection('events', 'write')
 
   try {
     await executeCommand({
@@ -373,7 +367,6 @@ export async function leaveEventSpace(tenantId: string): Promise<StaffResult> {
     return toError(error)
   }
 
-  await runProjection(admin, tenantsProjection, id.data)
 
   await recordBackofficeAction({
     actor: user,

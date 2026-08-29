@@ -14,7 +14,6 @@ import { roomDecider } from '@/domain/rooms/aggregate'
 import { tenantDecider } from '@/domain/tenants/aggregate'
 import { createTenantSchema } from '@/domain/tenants/commands'
 import { roomsProjection } from '@/domain/rooms/projection'
-import { tenantsProjection } from '@/domain/tenants/projection'
 import { recordBackofficeAction } from '@/domain/backoffice/audit'
 import { executeCommand } from '@/es/command'
 import { DomainError } from '@/es/errors'
@@ -183,7 +182,6 @@ export async function createEvent(input: {
   // every other step from here on, and the message has to say the slug is gone
   // because retrying the form with the same name will collide.
   try {
-    await runProjection(admin, tenantsProjection, tenantId)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return {

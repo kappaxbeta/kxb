@@ -16,7 +16,6 @@ import { radioProjection } from '@/domain/radio/projection'
 import { roomsProjection } from '@/domain/rooms/projection'
 import { streaksProjection } from '@/domain/streaks/projection'
 import { tasksProjection } from '@/domain/tasks/projection'
-import { tenantsProjection } from '@/domain/tenants/projection'
 import { tournamentsProjection } from '@/domain/tournament/projection'
 import { xpsProjection } from '@/domain/xps/projection'
 
@@ -70,7 +69,6 @@ export const ALL_PROJECTIONS: readonly Projection<DomainEvent>[] = [
   erase(roomsProjection),
   erase(streaksProjection),
   erase(tasksProjection),
-  erase(tenantsProjection),
   erase(tournamentsProjection),
   erase(xpsProjection),
 ]

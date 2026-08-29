@@ -14,11 +14,9 @@ import {
   type TenantCommand,
 } from '@/domain/tenants/commands'
 import { isSpaceCapability, tokenInvitee, userInvitee } from '@/domain/tenants/events'
-import { tenantsProjection } from '@/domain/tenants/projection'
 import { findTenantIdBySlug } from '@/domain/tenants/queries'
 import { executeCommand } from '@/es/command'
 import { ConcurrencyError, DomainError } from '@/es/errors'
-import { runProjection } from '@/es/projection'
 import type { Client } from '@/es/store'
 import { requireUser } from '@/lib/auth'
 import {
@@ -92,7 +90,6 @@ async function dispatch(
     return toResult(error)
   }
 
-  await runProjection(supabase, tenantsProjection, tenant.id)
   if (revalidateTenant) revalidatePath(`/t/${slug}`, 'layout')
   return { ok: true } as const
 }
@@ -256,7 +253,6 @@ export async function createTenant(name: string, slug: string): Promise<ActionRe
   // So: succeed, and send them in. `loadTenant` re-projects on a read miss, so
   // arriving at the space is itself the repair.
   try {
-    await runProjection(supabase, tenantsProjection, tenantId)
   } catch {
     // Deliberately swallowed. The write side is done; a read model that has not
     // caught up is the one failure this system is built to shrug off.
@@ -645,7 +641,6 @@ export async function acceptInvitation(tenantSlug: string): Promise<ActionResult
     return toResult(error)
   }
 
-  await runProjection(supabase, tenantsProjection, tenantId)
 
   revalidatePath('/invitations')
   revalidatePath('/tenants')
