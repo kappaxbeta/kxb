@@ -107,6 +107,11 @@ export function MarketingShell({
           <Link href="/#pricing" className="nav-pill-link">
             {t.nav.pricing}
           </Link>
+          {/* Literal, like the landing header: the word is the same in every
+              page language, and the handbook itself handles the locale. */}
+          <Link href={locale === 'de' ? '/de/community' : '/community'} className="nav-pill-link">
+            Community
+          </Link>
           <Link href="/login" className="nav-pill-link nav-pill-quiet">
             {t.nav.signIn}
           </Link>

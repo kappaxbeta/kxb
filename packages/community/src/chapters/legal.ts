@@ -88,4 +88,82 @@ export const LEGAL: Text<Guide> = {
       },
     ],
   },
+  de: {
+    title: 'Das rechtliche Grundgerüst einer Website',
+    standfirst:
+      'Die vier Dokumente, die eine kommerzielle Seite braucht, bevor Geld fließt - oder Werbung läuft - und was in jedes gehört. Nach deutschem Maßstab, also fast überall auf der sicheren Seite.',
+    checked: '2026-08-30',
+    sections: [
+      {
+        kind: 'prose',
+        id: 'why',
+        heading: 'Warum das in Deutschland nicht optional ist',
+        body: [
+          'Deutschland setzt Website-Recht auf eine Art durch, die es in den meisten Ländern nicht gibt: über Wettbewerber. Ein fehlendes Impressum oder eine fehlerhafte Widerrufsbelehrung kann per Abmahnung kommen - ein förmliches Schreiben vom Anwalt eines Konkurrenten mit Rechnung dran, ganz ohne Behörde. Die Dokumente unten sind billig richtig zu machen und vierstellig teuer falsch.',
+          'Der Moment, ab dem das gilt, ist der Moment, in dem die Seite kommerziell wird - also die erste Anzeige, der erste Preis, die erste Warteliste für etwas Bezahltes. Nicht der erste Verkauf.',
+        ],
+      },
+      {
+        kind: 'steps',
+        id: 'docs',
+        heading: 'Die vier Dokumente',
+        steps: [
+          {
+            title: 'Impressum',
+            body: [
+              'Pflicht nach § 5 DDG auf jeder geschäftlichen Seite, die von Deutschland aus erreichbar ist - der Paragraf ist im Mai 2024 vom TMG ins DDG umgezogen, eine Vorlage mit „§ 5 TMG" verrät also ihr Alter selbst.',
+              'Es muss die Person nennen: vollständiger Name (als Einzelunternehmer dein echter Vor- und Nachname - eine Marke allein reicht nicht), eine ladungsfähige Anschrift (kein Postfach), eine E-Mail-Adresse, und falls vorhanden USt-IdNr. und Handelsregistereintrag. Erreichbar von jeder Seite in zwei Klicks, unter einem Link, den man als solchen erkennt.',
+            ],
+            watch:
+              'Dass deine Wohnadresse öffentlich wird, ist der wahre Preis eines Home-Office-Gewerbes. Wenn das nicht geht, gibt es Lösungen (eine Büroadresse, an der du ladungsfähig bist) - ein Briefkastenservice, der keine Gerichtspost annimmt, zählt nicht.',
+          },
+          {
+            title: 'Datenschutzerklärung',
+            body: [
+              'Pflicht nach DSGVO, sobald du Daten verarbeitest - und ein Anmeldeformular, ein Analytics-Skript oder ein Server-Log ist das schon. Sie listet, was erhoben wird, auf welcher Rechtsgrundlage, wie lange, und wer es noch sieht - also jeden Drittdienst in der Kette: Hosting, Analytics, Zahlung, E-Mail.',
+              'Sie muss beschreiben, was die Seite wirklich tut, und mitwachsen, wenn sich der Stack ändert. Stripe einbauen heißt einen Absatz ergänzen. Eine kopierte Erklärung über Tools, die du nicht einsetzt, ist ihr eigener Verstoß.',
+              'Consent-Banner: nur nötig für das, was wirklich Einwilligung braucht (Tracking-Cookies, Dritt-Embeds). Eine Seite ohne Tracking-Cookies braucht kein Banner, und eines trotzdem einzubauen ist reine Reibung.',
+            ],
+          },
+          {
+            title: 'AGB',
+            body: [
+              'Nicht gesetzlich vorgeschrieben - ohne sie gilt schlicht das Gesetz - aber praktisch der Ort, an dem du regelst, was dir wichtig ist: was genau gekauft wird, wann Zugang beginnt und endet, was bei Nichtzahlung passiert, welches Recht gilt.',
+              'Gegenüber Verbrauchern binden AGB nur, wenn sie vor dem Kauf einbezogen werden, und nur, soweit sie das Verbraucherschutzrecht nicht unterlaufen - das lässt sich nicht wegvereinbaren. Aus US-Vorlagen übersetzte Klauseln („as is, keine Gewährleistung, Schiedsgericht in Delaware") sind in der EU teilweise nichtig und lesen sich auch so.',
+            ],
+          },
+          {
+            title: 'Widerrufsbelehrung und Erstattungen',
+            body: [
+              'EU-Verbraucher haben bei Online-Käufen ein 14-tägiges Widerrufsrecht. Für digitale Produkte und Abos gibt es die eingespielte Ausnahme: Das Recht erlischt, wenn der Verbraucher der sofortigen Bereitstellung ausdrücklich zustimmt und den Verlust des Widerrufsrechts bestätigt - deshalb trägt jeder Checkout für digitale Güter genau diese Checkbox. Ohne sie läuft die Frist, und der Kunde kann nach einem Monat Nutzung das Geld zurückverlangen.',
+              'Die Belehrung muss die Mechanik nennen: wie widerrufen wird, das gesetzliche Muster-Widerrufsformular, und was wann erstattet wird. Eine fehlerhafte Belehrung verlängert die Frist auf ein Jahr und ist ein Lieblingsziel von Abmahnungen.',
+            ],
+          },
+        ],
+      },
+      {
+        kind: 'watch',
+        id: 'watch',
+        heading: 'Die Fallen',
+        items: [
+          '„§ 5 TMG" zitieren. Seit Mai 2024 ist es § 5 DDG, und das alte Zitat markiert das ganze Dokument als ungepflegt.',
+          'Ein Impressum, das eine Marke nennt, aber keine natürliche oder juristische Person.',
+          'Eine Datenschutzerklärung, kopiert von einer Seite mit anderem Stack.',
+          'US-Vorlagen-AGB mit Gewährleistungsausschlüssen und Schiedsklauseln, die gegenüber EU-Verbrauchern nichtig sind.',
+          'Digitale Güter ohne die Sofort-Bereitstellungs-Checkbox verkaufen und das 14-tägige Widerrufsrecht am Leben lassen.',
+          'Anzeigen oder eine bezahlte Warteliste auf einer Seite, die von alledem noch nichts hat - kommerziell beginnt vor dem ersten Verkauf.',
+        ],
+      },
+      {
+        kind: 'sources',
+        id: 'sources',
+        heading: 'Wo du das selbst nachliest',
+        sources: [
+          { label: 'DDG - § 5', href: 'https://www.gesetze-im-internet.de/ddg/__5.html', note: 'Die Impressumspflicht, an ihrer aktuellen Adresse.' },
+          { label: 'DSGVO, amtlicher Text', href: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj', note: 'Art. 12-14 sind die Information; Art. 6 die Rechtsgrundlagen.' },
+          { label: 'BGB § 312g und Art. 246a EGBGB', href: 'https://www.gesetze-im-internet.de/bgb/__312g.html', note: 'Widerrufsrecht und seine Ausnahme für digitale Inhalte.' },
+        ],
+      },
+    ],
+  },
 }

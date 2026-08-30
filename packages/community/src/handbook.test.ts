@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { CHAPTERS } from './chapters/index'
 import { CONTINENTS, COUNTRIES, countriesByContinent } from './countries/index'
 import type { Guide } from './guide'
+import { STARTER } from './starter'
 import { langsOf, pick, type Text } from './text'
 
 /**
@@ -76,14 +77,23 @@ describe('every document', () => {
   })
 })
 
-describe('the German guide', () => {
-  test('Germany is written in both languages, and the two halves keep the same section skeleton', () => {
+describe('bilingual documents', () => {
+  test('Germany, the chapters and the starter guide are written in both languages', () => {
     const germany = COUNTRIES.find((c) => c.slug === 'de')!.guide!
     expect(langsOf(germany)).toEqual(['en', 'de'])
+    for (const chapter of CHAPTERS) expect(langsOf(chapter.guide)).toEqual(['en', 'de'])
+    expect(langsOf(STARTER)).toEqual(['en', 'de'])
+  })
+
+  test('every bilingual document keeps the same section skeleton in both halves', () => {
     // Same ids in the same order: the anchors a shared link carries must land
     // in both languages. Prose may differ; the skeleton may not.
-    const en = pick(germany, 'en').doc.sections.map((s) => `${s.kind}:${s.id}`)
-    const de = pick(germany, 'de').doc.sections.map((s) => `${s.kind}:${s.id}`)
-    expect(de).toEqual(en)
+    const all: [string, Text<import('./guide').Guide>][] = [...everyText(), ['starter', STARTER]]
+    for (const [name, text] of all) {
+      if (langsOf(text).length < 2) continue
+      const en = pick(text, 'en').doc.sections.map((s) => `${s.kind}:${s.id}`)
+      const de = pick(text, 'de').doc.sections.map((s) => `${s.kind}:${s.id}`)
+      expect(de, name).toEqual(en)
+    }
   })
 })

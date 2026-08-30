@@ -70,7 +70,7 @@ export function GeoCountry({
         <span className="block text-sm text-ink-muted">
           {labels.lead} {match.name}
         </span>
-        <span className="block truncate text-lg font-semibold text-ink transition group-hover:text-accent">
+        <span className="line-clamp-2 block text-lg font-semibold text-ink transition group-hover:text-accent">
           {match.standfirst}
         </span>
       </span>

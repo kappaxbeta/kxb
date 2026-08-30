@@ -103,4 +103,97 @@ export const STRIPE: Text<Guide> = {
       },
     ],
   },
+  de: {
+    title: 'Stripe einrichten',
+    standfirst:
+      'Was Stripe bei der Aktivierung wirklich sehen will, die Reihenfolge, die Doppelarbeit vermeidet, und die Steuereinstellungen, die man leicht überspringt und teuer nachholt.',
+    checked: '2026-08-30',
+    sections: [
+      {
+        kind: 'prose',
+        id: 'before',
+        heading: 'Bevor du das Dashboard öffnest',
+        body: [
+          'Die Stripe-Aktivierung ist eine Know-your-customer-Prüfung. Sie geht in einem Tag durch, wenn die Unterlagen bereitliegen, und hängt wochenlang, wenn improvisiert wird - der schnelle Weg ist also: erst die Gewerbeanmeldung fertig machen, dann hier anfangen.',
+          'Gefragt wird nach: was dein Unternehmen rechtlich ist und seiner Anschrift; deiner USt-IdNr., falls vorhanden; einem Bankkonto auf den Namen des Unternehmens (als Einzelunternehmer: dein eigener Name - das ist derselbe Name); einer Website, die sagt, was du verkaufst; und dem Ausweis der Person, die das Unternehmen besitzt oder vertritt.',
+          'Die Website zählt mehr, als man erwartet. Stripe prüft sie, und das Kartennetzwerk dahinter auch. Sie muss sagen, was du zu welchem Preis verkaufst, die juristische Person nennen, und auf AGB, Datenschutzerklärung und Erstattungsregeln verlinken. Eine Landingpage mit Warteliste und ohne Impressum fällt durch.',
+        ],
+      },
+      {
+        kind: 'steps',
+        id: 'steps',
+        heading: 'Der Ablauf',
+        steps: [
+          {
+            title: 'Konto anlegen und die Aktivierungsfragen beantworten',
+            where: 'dashboard.stripe.com',
+            takes: 'Eine halbe Stunde Formulare, dann meist ein Tag Prüfung',
+            body: [
+              'Antworte als das Unternehmen, nicht als du selbst - außer als Einzelunternehmer, wo du das Unternehmen bist und „Einzelunternehmer" wählst statt „Kapitalgesellschaft". „Company" als Einzelunternehmer anzuklicken ist der klassische Hänger: Stripe verlangt dann einen Registerauszug, den es nicht gibt.',
+              'Das hinterlegte Bankkonto ist das Auszahlungskonto. Es muss nicht bei einer deutschen Bank liegen, aber der Kontoinhaber muss zum Unternehmen passen.',
+            ],
+            watch:
+              'Das Aktivierungsformular fragt nach einer Geschäftsbeschreibung. Schreib in einfachen Worten, was du wirklich verkaufst. Vage Beschreibungen („diverse digitale Dienstleistungen") landen in der manuellen Prüfung.',
+          },
+          {
+            title: 'Entscheide, wie du abrechnest, bevor du etwas baust',
+            body: [
+              'Stripe ist mehrere Produkte unter einem Logo, und das falsche zu wählen kostet einen Umbau. Payment Links brauchen gar keinen Code - eine URL pro Produkt, gut für einen Launch. Checkout ist eine von Stripe gehostete Bezahlseite, zu der deine Seite weiterleitet - der richtige Default für fast alle: SCA, Wallets und Steueranzeige sind erledigt. Elements bettet das Formular in deine eigene Seite ein und macht dich für alles verantwortlich, was Checkout dir abgenommen hätte. Billing legt Abos, Rechnungen, Mahnwesen und das Kundenportal auf beides obendrauf.',
+              'Für ein Abo-Produkt: Products und Prices im Dashboard, Checkout im Subscription-Modus, dazu das Kundenportal, damit Leute selbst kündigen können. Ein handgebauter Kündigungsprozess ist eine Support-Warteschlange.',
+            ],
+          },
+          {
+            title: 'Stripe Tax einschalten',
+            takes: 'Zehn Minuten - und zwar die zehn Minuten, die alle überspringen',
+            body: [
+              'Stripe Tax berechnet die Umsatzsteuer pro Verkauf - für digitale Produkte an Verbraucher in der EU ab der 10.000-Euro-Schwelle aus den Länderguides zum Satz des Kundenlands. Es kostet eine kleine Gebühr pro Transaktion und ersetzt eine Tabelle, die du nicht pflegen willst.',
+              'Es berechnet und zieht ein, aber es registriert dich nirgends und meldet nichts an. Die One-Stop-Shop-Registrierung und die Quartalsmeldung bleiben deine; Stripe Tax liefert den Report, aus dem du meldest.',
+              'Stell zuerst deinen Registrierungsstatus im Dashboard ein - als deutscher Kleinunternehmer auch die Tatsache, dass du gar keine Umsatzsteuer berechnest. Von allein weiß Stripe das nicht.',
+            ],
+          },
+          {
+            title: 'Webhooks, Belege und die Kundenseite',
+            body: [
+              'Wenn in deinem Produkt irgendetwas angeht, weil jemand bezahlt hat, muss es ein Webhook anschalten - checkout.session.completed und die Abo-Lifecycle-Events - niemals der Browser, der auf deiner Erfolgsseite landet. Der Redirect geht verloren, sobald ein Tab zu früh schließt, und Zahlung ohne Produkt ist der schlimmste Fehler, den ein bezahltes Produkt haben kann.',
+              'Füll die öffentlichen Angaben aus: Statement Descriptor (was auf dem Kontoauszug steht - ein unbekannter ist eine Rückbuchung), Support-Adresse, Belege an. Teste den ganzen Weg im Testmodus mit den dokumentierten Testkarten, inklusive fehlgeschlagener Zahlung und 3D-Secure, bevor du live schaltest.',
+            ],
+            watch:
+              'Prüfe Webhook-Signaturen und verarbeite Wiederholungen idempotent - Stripe sendet erneut, bis du 200 antwortest, und ein Handler, der pro Zustellung einen Monat Zugang gewährt, gewährt an einem wackligen Tag drei.',
+          },
+          {
+            title: 'Auszahlungen und die Geldseite',
+            body: [
+              'Auszahlungen laufen rollierend, bei neuen Konten mit ein paar Tagen Verzögerung, die mit dem Kontoalter schrumpft. Geld bei Stripe ist kein Geld auf der Bank; gib es nicht doppelt aus.',
+              'Für die Buchhaltung zählt: Stripe zahlt netto nach Gebühren aus. Buche Bruttoumsatz und Gebühr getrennt - die Steuerberatung wird fragen, und der Jahresreport von Stripe hat beides.',
+            ],
+          },
+        ],
+      },
+      {
+        kind: 'watch',
+        id: 'watch',
+        heading: 'Die Fallen',
+        items: [
+          'Aktivieren, bevor die Website Impressum, AGB und Erstattungsregeln hat. Die Prüfung scheitert, und du fängst von vorn an.',
+          'Als Einzelunternehmer „Company" wählen und nach einem Handelsregisterauszug gefragt werden, den es nicht gibt.',
+          'Zugang über den Erfolgsseiten-Redirect freischalten statt über den Webhook.',
+          'Als Kleinunternehmer die Stripe-Tax-Einstellungen überspringen und 19 % berechnen, die du niemandem schuldest und erstatten musst.',
+          'Vergessen, dass Stripe Tax berichtet, aber weder registriert noch meldet. Die OSS-Anmeldung bleibt dein Job.',
+          'Ein Statement Descriptor, der nicht zur Marke passt. Wer die Abbuchung nicht erkennt, widerspricht - und ein Dispute kostet Gebühr, egal wie er ausgeht.',
+          'Auf Elements bauen, weil es professioneller aussieht, und SCA, Wallets und Steueranzeige erben, die Checkout schon gelöst hatte.',
+        ],
+      },
+      {
+        kind: 'sources',
+        id: 'sources',
+        heading: 'Wo du das selbst nachliest',
+        sources: [
+          { label: 'Stripe Docs - Checkout', href: 'https://docs.stripe.com/payments/checkout', note: 'Die Standard-Integration.' },
+          { label: 'Stripe Docs - Tax', href: 'https://docs.stripe.com/tax', note: 'Was es tut und was nicht.' },
+          { label: 'Stripe Docs - Webhooks', href: 'https://docs.stripe.com/webhooks', note: 'Signaturen, Wiederholungen, Event-Typen.' },
+          { label: 'Dein Länderguide auf dieser Seite', href: '/community', note: 'Die Umsatzsteuer-Entscheidung, die Stripe Tax gesagt bekommen muss.' },
+        ],
+      },
+    ],
+  },
 }

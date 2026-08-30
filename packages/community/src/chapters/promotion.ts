@@ -95,4 +95,88 @@ export const PROMOTION: Text<Guide> = {
       },
     ],
   },
+  de: {
+    title: 'Bevor du Werbung machst',
+    standfirst:
+      'Werbung fühlt sich wie der risikolose erste Schritt an. Rechtlich ist sie der Moment, ab dem alles andere fällig wird - hier steht, was vor dem ersten Post, der ersten Anzeige und dem ersten Rabattcode stimmen muss.',
+    checked: '2026-08-30',
+    sections: [
+      {
+        kind: 'prose',
+        id: 'moment',
+        heading: 'Werbung ist der Startschuss, nicht das Aufwärmen',
+        body: [
+          'Die Pflichten aus den Länderguides knüpfen am Beginn der geschäftlichen Tätigkeit an - und Gerichte lesen Werbung als genau das. Eine Landingpage mit einem Preis darauf macht die Seite geschäftlich: Impressum fällig, Datenschutzerklärung fällig, die Anmeldefrist läuft. Den Papierkram in der Woche nach dem Launch-Thread zu machen heißt, ihn zu spät zu machen.',
+          'Die praktische Reihenfolge ist kurz: anmelden, das rechtliche Grundgerüst online stellen, dann werben. Die ersten beiden kosten je einen Nachmittag; sie zu überspringen spart zwei Nachmittage und schafft eine Angriffsfläche, die ein Wettbewerber dir in Rechnung stellen kann.',
+        ],
+      },
+      {
+        kind: 'steps',
+        id: 'checks',
+        heading: 'Die Prüfungen, in dieser Reihenfolge',
+        steps: [
+          {
+            title: 'Der Name übersteht eine Suche',
+            body: [
+              'Bevor der Name in einem einzigen Post steht: Markenregister (DPMA für Deutschland, EUIPO für die EU), die App-Stores, falls du je dort sein wirst, und eine normale Websuche. Werbung ist das, was eine Namenskollision für die Gegenseite sichtbar macht - deren Anwalt findet dich über deinen eigenen Launch-Thread.',
+              'Die Handles zählen so viel wie die Domain: Der Name, den du bewirbst, sollte der sein, unter dem man dich auf jedem Kanal findet, den du wirklich nutzen wirst.',
+            ],
+          },
+          {
+            title: 'Die Seite, auf die du zeigst, ist angezogen',
+            body: [
+              'Wohin auch immer Anzeige oder Post verlinken: Die Seite braucht das komplette Grundgerüst aus dem Nachbarkapitel - Impressum, Datenschutzerklärung, und sobald etwas gekauft oder reserviert werden kann, AGB und Widerrufsbelehrung. Das ist die Seite, die ein Wettbewerber screenshottet.',
+              'Sammelt die Seite auch nur eine E-Mail-Adresse für eine Warteliste, muss die Datenschutzerklärung das abdecken und das Double-Opt-in verdrahtet sein - denn diese Liste ist das Erste, was du je anschreiben wirst.',
+            ],
+          },
+          {
+            title: 'Werberecht für das, was du tatsächlich sagst',
+            body: [
+              'Preise gegenüber Verbrauchern müssen Endpreise inklusive Umsatzsteuer sein - „5 €", die an der Kasse 5,95 € werden, sind ein Verstoß gegen die Preisangabenverordnung. Zeigst du als Kleinunternehmer Nettopreise „zzgl. USt.", ist das andersherum falsch: Deine Preise tragen keine Umsatzsteuer und sollten es nirgends behaupten.',
+              'Rabatte und Startangebote sind regulierte Behauptungen: Ein durchgestrichener „Statt"-Preis muss vorher wirklich verlangt worden sein, und ein Countdown, der sich zurücksetzt, ist Täuschung. Superlative („das beste", „Deutschlands erstes") müssen stimmen oder erkennbar Übertreibung sein.',
+              'Wenn andere für dich werben - Influencer, Affiliate-Links, deine eigenen Posts auf Privataccounts -, muss bezahlte oder begünstigte Werbung als Werbung gekennzeichnet sein. Die Kennzeichnungspflicht liegt beim Werbenden; im Urteil genannt wird die Marke.',
+            ],
+          },
+          {
+            title: 'E-Mail und Messenger sind einwilligungspflichtig',
+            body: [
+              'Werbe-E-Mails ohne vorherige ausdrückliche Einwilligung sind in Deutschland ein UWG-Verstoß pro Empfänger - für B2C gibt es keine Kaltakquise-Ausnahme, und die B2B-Ausnahme ist viel enger, als die Newsletter in deinem Posteingang vermuten lassen. Double-Opt-in ist der Beweisstandard: Du wirst die Einwilligung eines Tages nachweisen müssen, und der Bestätigungsklick ist der Nachweis.',
+              'Dasselbe gilt für Messenger und Push. Ein Kontaktformular ist keine Newsletter-Einwilligung; ein Kauf auch nicht - bis auf die enge Bestandskunden-Ausnahme mit ihrer eigenen Abmelde-Fußnote.',
+            ],
+          },
+          {
+            title: 'Gewinnspiele und Empfehlungscodes haben eigene Regeln',
+            body: [
+              'Ein Gewinnspiel braucht veröffentlichte Teilnahmebedingungen: wer mitmachen darf, wann es endet, wie gewinnt und benachrichtigt wird. Teilnahme an ein Follow oder Teilen zu knüpfen ist üblich und meist geduldet; sie an einen Kauf zu knüpfen ändert die rechtliche Natur.',
+              'Empfehlungs- und Rabattcodes sind Vertragsbedingungen - entscheide vor dem Launch, ob sie kombinierbar sind, wann sie verfallen und was bei einer Erstattung passiert, denn die erste Support-Mail wird genau das fragen.',
+            ],
+          },
+        ],
+      },
+      {
+        kind: 'watch',
+        id: 'watch',
+        heading: 'Die Fallen',
+        items: [
+          'Werben vor der Anmeldung, nach der Theorie „kein Umsatz, kein Gewerbe". Die Werbung ist die Tätigkeit.',
+          'Eine Launch-Seite mit Preis und ohne Impressum - der screenshotbarste Verstoß, den es gibt.',
+          'Nettopreise gegenüber Verbrauchern, oder USt.-Zeilen von einem Kleinunternehmer, der keine berechnet.',
+          'Ein „Statt X €"-Preis, den es nie gab, oder ein Countdown, der wiederkommt.',
+          'Eine Warteliste anschreiben, die nie per Double-Opt-in bestätigt hat.',
+          'Ungekennzeichnete bezahlte Werbung durch wen auch immer, der für dich postet.',
+          'Ein Gewinnspiel ohne veröffentlichte Bedingungen und ohne Enddatum.',
+        ],
+      },
+      {
+        kind: 'sources',
+        id: 'sources',
+        heading: 'Wo du das selbst nachliest',
+        sources: [
+          { label: 'UWG - Gesetz gegen den unlauteren Wettbewerb', href: 'https://www.gesetze-im-internet.de/uwg_2004/', note: '§ 7 ist die unzumutbare Belästigung; der Anhang ist die schwarze Liste.' },
+          { label: 'Preisangabenverordnung', href: 'https://www.gesetze-im-internet.de/pangv_2022/', note: 'Endpreise, und § 11 zu durchgestrichenen Referenzpreisen.' },
+          { label: 'DPMA / EUIPO Register', href: 'https://register.dpma.de', note: 'Die Namensprüfung, vor dem ersten Post.' },
+        ],
+      },
+    ],
+  },
 }

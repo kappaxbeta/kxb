@@ -99,6 +99,89 @@ export const STARTER: Text<Guide> = {
       },
     ],
   },
+  de: {
+    title: 'Betreib kxb selbst',
+    standfirst:
+      'Die Community Edition ist ein öffentliches Repository: eine Multiplayer-Welt im Browser mit event-sourced Backend, die du an einem Abend auf deiner eigenen Maschine zum Laufen bringst.',
+    checked: '2026-08-30',
+    sections: [
+      {
+        kind: 'prose',
+        id: 'what',
+        heading: 'Was du bekommst',
+        body: [
+          'kxb ist eine virtuelle Arcade im Browser: eine entspannte 3D-Lounge, Minispiele, ein Level-Editor und Spaces, in die du Leute per Link einlädst. Die Community Edition ist dieselbe Anwendung, die wir betreiben - minus unsere Infrastruktur, unsere Markendetails und unsere Kampagnen. Sie wird per Sync-Werkzeug aus dem privaten Baum gebaut und bleibt so aktuell, statt zum Fork zu verwittern.',
+          'Der Stack: Next.js auf Bun, Supabase (Postgres + Realtime + Auth) als Backend, ein event-sourced Kern - das Event-Log ist die Quelle der Wahrheit, Read Models sind Projektionen - und Three.js für die Welten. Kein Gameserver: Multiplayer läuft über Realtime-Channels mit Client-Arbitern.',
+          'Die Grafiken sind CC0, aber schwer, deshalb liegen sie nicht im Repository: Kits von Kenney, Kay Lousberg und anderen werden nach docs/assets.md geholt, das jeden Urheber ordentlich nennt.',
+        ],
+      },
+      {
+        kind: 'steps',
+        id: 'steps',
+        heading: 'Vom Clone in die Lounge',
+        steps: [
+          {
+            title: 'Werkzeuge installieren',
+            body: [
+              'Bun (Runtime und Paketmanager), Docker (für das lokale Supabase) und die Supabase-CLI. macOS oder Linux; Windows läuft über WSL.',
+            ],
+          },
+          {
+            title: 'Klonen und installieren',
+            where: 'github.com/kappaxbeta/kxb',
+            body: ['git clone, dann `bun install` im Wurzelverzeichnis. Die Workspace-Pakete lösen lokal auf.'],
+          },
+          {
+            title: 'Die Grafiken holen',
+            where: 'docs/assets.md im Repository',
+            body: [
+              'Das Dokument listet jedes CC0-Paket, wo sein Urheber es hostet und wohin es entpackt wird. Ein paar generierte Pakete bauen sich lokal mit den genannten `bun run`-Skripten neu.',
+            ],
+            watch: 'Wer das überspringt, bekommt eine Welt aus Platzhalter-Dummies. Das Dokument existiert, damit die Künstler ihre Credits und ihre Download-Zahlen bekommen.',
+          },
+          {
+            title: 'Backend und App starten',
+            body: [
+              '`supabase start` bringt lokales Postgres, Auth und Realtime in Docker hoch; `supabase db reset` spielt alle Migrationen ein. Dann `bun run dev` - die App erwartet den lokalen Stack und findet ihn auf den Standard-Ports.',
+            ],
+          },
+          {
+            title: 'Mach dich zum ersten Admin',
+            body: [
+              'Registriere dich in der App und trage dann deine E-Mail-Adresse in `backoffice_admins` deiner eigenen Datenbank ein - die Migration erklärt das Einzeiler-SQL. Das Repository liefert keinen vorbestückten Admin, weil es nicht weiß, wer du bist; alle nach dir kommen über das Backoffice selbst dazu.',
+            ],
+          },
+          {
+            title: 'Bevor du es online stellst',
+            body: [
+              'Ersetz die Platzhalter im Impressum des Legal-Shells - die Felder sind markiert, und die Kommentare erklären, warum ein fremder Name schlimmer ist als gar keiner. Danach übernehmen die Kapitel dieses Handbuchs: das rechtliche Grundgerüst deiner Seite, und was vor der ersten Werbung zu prüfen ist.',
+            ],
+          },
+        ],
+      },
+      {
+        kind: 'watch',
+        id: 'watch',
+        heading: 'Die Fallen',
+        items: [
+          'Gegen den Baum ohne Grafiken starten und schließen, der Renderer sei kaputt.',
+          'Mit den Impressums-Platzhaltern deployen.',
+          'Unsere Deploy-Skripte erwarten - das Community-Repo endet mit Absicht dort, wo deine Hosting-Entscheidungen anfangen.',
+          'Generierte Dateien editieren, die einem `bun run`-Skript gehören; beim nächsten Sync gewinnt das Skript.',
+        ],
+      },
+      {
+        kind: 'sources',
+        id: 'sources',
+        heading: 'Wie es weitergeht',
+        sources: [
+          { label: 'Das Repository', href: 'https://github.com/kappaxbeta/kxb', note: 'Code, README und der docs-Ordner.' },
+          { label: 'docs/assets.md', href: 'https://github.com/kappaxbeta/kxb/blob/main/docs/assets.md', note: 'Jedes Grafikpaket, mit Credit und Link.' },
+          { label: 'Der XP-Editor-Guide', href: '/create/xp/docs', note: 'Wie Spiele entstehen, sobald die Welt läuft.' },
+        ],
+      },
+    ],
+  },
 }
 
 /** The URL segment the starter guide lives under. */

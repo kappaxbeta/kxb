@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/brand/community-header.png" alt="kxb" width="900">
+</p>
+
 # kxb
 
 A browser-based virtual arcade with a chill lounge, built for groups and one-off
@@ -133,12 +137,15 @@ Built by **Jens Bösche** — [kappaxbeta](https://github.com/kappaxbeta).
 | | |
 |---|---|
 | Site | [kxb.team](https://kxb.team) |
+| Community | [kxb.team/community](https://kxb.team/community) |
 | GitHub | [@kappaxbeta](https://github.com/kappaxbeta) |
 | Instagram | [@kxbteam](https://instagram.com/kxbteam) |
 | X | [@kxbteam](https://x.com/kxbteam) |
 
 [kxb.team](https://kxb.team) is where it runs, hosted, with the art in place and
-nothing to set up.
+nothing to set up. [kxb.team/community](https://kxb.team/community) is the
+community handbook — a separate thing to this repository, about starting and
+running an independent business.
 
 ## Deploying
 

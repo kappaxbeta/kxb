@@ -1059,6 +1059,11 @@ export function Landing({
               {dict.nav[section.key]}
             </Link>
           ))}
+          {/* Literal for the same reason as the footer: "Community" is the
+              same word in all three page languages. */}
+          <Link href={locale === 'de' ? '/de/community' : '/community'} className="nav-pill-link">
+            Community
+          </Link>
           <LanguageSwitch locale={locale} />
           <Link href="/login" className="nav-pill-link nav-pill-quiet">
             {dict.nav.signIn}

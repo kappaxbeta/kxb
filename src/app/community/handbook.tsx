@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
@@ -79,19 +80,81 @@ const KIND_HUE: Record<Section['kind'], number> = {
   sources: 165,
 }
 
-function kickerColor(kind: Section['kind']): React.CSSProperties {
-  return { color: `oklch(0.78 0.14 ${KIND_HUE[kind]})` }
+/**
+ * A pool of light: two soft radial washes of one hue, sitting behind content.
+ *
+ * This is what replaced the cards. A section is not contained, it is *lit* -
+ * an off-axis aurora in the section-kind's hue says "this is one thing"
+ * without drawing an edge around it. Pre-softened gradients rather than a
+ * blur filter, so the fluff costs nothing to composite.
+ */
+function Glow({ hue, className }: { hue: number; className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none absolute -z-10 ${className ?? '-top-16 -left-24 h-[26rem] w-[34rem]'}`}
+      style={{
+        background: [
+          `radial-gradient(closest-side at 35% 40%, oklch(0.55 0.19 ${hue} / 0.26), transparent 70%)`,
+          `radial-gradient(closest-side at 70% 65%, oklch(0.6 0.16 ${hue + 40} / 0.15), transparent 70%)`,
+        ].join(', '),
+      }}
+    />
+  )
 }
 
-/** The kicker over each section, chrome in both page languages. */
-const KIND_LABEL: Record<Section['kind'], { en: string; de: string }> = {
-  prose: { en: 'Read first', de: 'Zuerst lesen' },
-  steps: { en: 'Procedure', de: 'Ablauf' },
-  choice: { en: 'Decision', de: 'Entscheidung' },
-  terms: { en: 'Vocabulary', de: 'Vokabular' },
-  costs: { en: 'Costs', de: 'Kosten' },
-  watch: { en: 'Traps', de: 'Fallen' },
-  sources: { en: 'Sources', de: 'Quellen' },
+/**
+ * A peep, shot not drawn: one of the lounge's own renders with the house
+ * double drop-shadow - a tight contact shadow to sit it on the page, and a
+ * wide hue-tinted one for the room's light. Decorative everywhere it appears,
+ * so it is always aria-hidden and never carries meaning the text does not.
+ */
+function Peep({
+  name,
+  angle,
+  hue,
+  size,
+  className,
+}: {
+  name: string
+  angle: 'front' | 'side' | 'three' | 'back' | 'low'
+  hue: number
+  /** CSS width, e.g. '7rem'. */
+  size: string
+  className?: string
+}) {
+  return (
+    <Image
+      src={`/xo/shots/${name}-${angle}.webp`}
+      alt=""
+      aria-hidden
+      width={512}
+      height={512}
+      className={`pointer-events-none select-none ${className ?? ''}`}
+      style={{
+        width: size,
+        height: 'auto',
+        filter: `drop-shadow(0 0.3rem 0.4rem oklch(0.05 0.03 285 / 0.8)) drop-shadow(0 0 1.6rem oklch(0.72 0.24 ${hue} / 0.45))`,
+      }}
+    />
+  )
+}
+
+/**
+ * Which peep fronts a document: hashed off the slug, so Germany always gets
+ * the same animal without anybody maintaining a casting table. Three-quarter
+ * shots only - the flattering angle for a mascot at the top of a page.
+ */
+const CAST = [
+  'penguin', 'fox', 'panda', 'koala', 'pig', 'cat', 'dog', 'bunny',
+  'beaver', 'chick', 'cow', 'deer', 'elephant', 'giraffe', 'monkey',
+  'parrot', 'polar', 'tiger', 'lion', 'hog', 'bee', 'crab', 'fish',
+] as const
+
+function castFor(slug: string): string {
+  let h = 0
+  for (const c of slug) h = (h * 31 + c.charCodeAt(0)) % 997
+  return CAST[h % CAST.length]
 }
 
 /* ------------------------------------------------------------------------- */
@@ -155,23 +218,28 @@ function CommunityShell({
 
   const sidebar = (
     <nav className="space-y-7">
-      {/* The eye-catcher: the site's glowing CTA on the two first doors. */}
-      <div className="space-y-2">
+      {/* The eye-catcher: the site's glowing CTA on the two first doors,
+          fronted by their own cast - the beaver builds the thing, and the
+          elephant, famously, never forgets a filing deadline. Shots, not
+          icons: the site draws nothing it cannot render. */}
+      <div className="relative space-y-2">
         <p className="px-1 text-xs font-semibold uppercase tracking-wide text-accent">
-          ★ {t.nav.important}
+          {t.nav.important}
         </p>
         <Link
           href={`${root}/${STARTER_SLUG}`}
-          className="summon-cta block rounded-full px-4 py-3 text-center text-sm font-semibold"
+          className="summon-cta flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold"
         >
-          🚀 {t.nav.starter}
+          <Peep name="beaver" angle="three" hue={322} size="1.9rem" />
+          {t.nav.starter}
         </Link>
         <p className="px-1 text-xs text-ink-muted">{t.nav.starterHint}</p>
         <Link
           href={`${root}/legal-shell`}
-          className="block rounded-full border border-accent-2/60 px-4 py-3 text-center text-sm font-semibold text-accent-2 transition hover:bg-accent-2/10"
+          className="flex items-center justify-center gap-2 rounded-full border border-accent-2/60 px-4 py-2.5 text-sm font-semibold text-accent-2 transition hover:bg-accent-2/10"
         >
-          ⚖️ {t.nav.legal}
+          <Peep name="elephant" angle="three" hue={195} size="1.9rem" />
+          {t.nav.legal}
         </Link>
         <p className="px-1 text-xs text-ink-muted">{t.nav.legalHint}</p>
       </div>
@@ -183,6 +251,26 @@ function CommunityShell({
             {pick(chapter.guide, lang).doc.title}
           </NavLink>
         ))}
+      </div>
+
+      <div>
+        <NavHeading>{t.nav.resources}</NavHeading>
+        <NavLink href="/create/xp/docs" current={false}>
+          {t.nav.editorGuide} ↗
+        </NavLink>
+        <a
+          href="https://github.com/kappaxbeta/kxb"
+          className="block px-3 py-1 text-sm text-ink-muted transition hover:translate-x-0.5 hover:text-ink"
+        >
+          {t.nav.repo} ↗
+        </a>
+      </div>
+
+      <div>
+        <NavHeading>{t.nav.blog}</NavHeading>
+        <NavLink href={`${root}/blog`} current={active === 'blog'}>
+          {t.blog.title}
+        </NavLink>
       </div>
 
       {/* The written countries as a tree: one closed branch per continent,
@@ -231,26 +319,6 @@ function CommunityShell({
           {t.index.plannedHeading} →
         </Link>
       </div>
-
-      <div>
-        <NavHeading>{t.nav.blog}</NavHeading>
-        <NavLink href={`${root}/blog`} current={active === 'blog'}>
-          {t.blog.title}
-        </NavLink>
-      </div>
-
-      <div>
-        <NavHeading>{t.nav.resources}</NavHeading>
-        <NavLink href="/create/xp/docs" current={false}>
-          {t.nav.editorGuide} ↗
-        </NavLink>
-        <a
-          href="https://github.com/kappaxbeta/kxb"
-          className="block px-3 py-1 text-sm text-ink-muted transition hover:translate-x-0.5 hover:text-ink"
-        >
-          {t.nav.repo} ↗
-        </a>
-      </div>
     </nav>
   )
 
@@ -287,7 +355,7 @@ function CommunityShell({
               same links, no second implementation. */}
           <details className="mb-6 lg:hidden">
             <summary className="cursor-pointer text-sm font-semibold text-accent">
-              ★ {t.nav.guides} · {t.nav.countries} · {t.nav.blog}
+              {t.nav.guides} · {t.nav.countries} · {t.nav.blog}
             </summary>
             <div className="mt-4">{sidebar}</div>
           </details>
@@ -356,7 +424,18 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
   return (
     <CommunityShell lang={lang} active="home">
       <div className="space-y-14">
-        <div>
+        <div className="relative">
+          <Glow hue={322} className="-top-24 -left-32 h-[30rem] w-[42rem]" />
+          {/* The queue at the counter: three of the lounge's own waiting to
+              be processed. The pig faces the wrong way, which is accurate. */}
+          <div
+            aria-hidden
+            className="absolute -top-4 right-0 hidden items-end gap-1 lg:flex"
+          >
+            <Peep name="penguin" angle="three" hue={322} size="6rem" />
+            <Peep name="pig" angle="back" hue={285} size="5rem" />
+            <Peep name="chick" angle="front" hue={195} size="3.5rem" />
+          </div>
           <h1 className="page-hero-title enter">{t.index.title}</h1>
           <p className="enter mt-4 max-w-2xl text-lg text-ink-muted" style={{ '--i': 2 } as React.CSSProperties}>
             {t.index.standfirst}
@@ -365,8 +444,9 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
 
         <GeoCountry countries={writtenForGeo} labels={t.geo} base={root} />
 
-        <section id="chapters">
-          <h2 className="text-xl font-semibold text-accent-2">{t.index.chaptersHeading}</h2>
+        <section id="chapters" className="relative">
+          <Glow hue={195} className="-top-12 -left-28 h-[22rem] w-[30rem]" />
+          <h2 className="font-pixel text-xl uppercase text-accent-2">{t.index.chaptersHeading}</h2>
           <p className="mt-1 max-w-2xl text-sm text-ink-muted">{t.index.chaptersIntro}</p>
           <div className="mt-4">
             {CHAPTERS.map((chapter) => {
@@ -383,8 +463,17 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
           </div>
         </section>
 
-        <section id="countries">
-          <h2 className="text-xl font-semibold text-accent-2">{t.index.countriesHeading}</h2>
+        <section id="countries" className="relative">
+          <Glow hue={285} className="-top-12 -right-20 left-auto h-[24rem] w-[32rem]" />
+          {/* The koala reads the departures board with everyone else. */}
+          <Peep
+            name="koala"
+            angle="back"
+            hue={285}
+            size="4.5rem"
+            className="absolute -top-6 right-4 hidden lg:block"
+          />
+          <h2 className="font-pixel text-xl uppercase text-accent-2">{t.index.countriesHeading}</h2>
           <p className="mt-1 max-w-2xl text-sm text-ink-muted">{t.index.countriesIntro}</p>
           <p className="max-w-2xl text-sm text-ink-muted">{t.index.plannedIntro}</p>
           <div className="mt-6 space-y-10">
@@ -442,22 +531,34 @@ export function resolveDoc(slug: string): Text<Guide> | undefined {
   return chapterBySlug(slug)?.guide ?? countryBySlug(slug)?.guide
 }
 
-/** One flowing document section: coloured kicker, heading, content. Air, not rules. */
+/**
+ * One flowing document section: heading in its pool of light, content, air.
+ *
+ * No kicker - the heading carries its own weight, and the section's kind
+ * speaks through the hue of the light it stands in. The traps section gets
+ * the crab, shot from below, because that is the angle trouble arrives at.
+ */
 function DocSection({
   section,
-  lang,
   t,
 }: {
   section: Section
-  lang: Lang
   t: CommunityDict
 }) {
+  const hue = KIND_HUE[section.kind]
   return (
-    <section id={section.id} className="scroll-mt-24">
-      <p className="text-xs font-semibold uppercase tracking-widest" style={kickerColor(section.kind)}>
-        ● {KIND_LABEL[section.kind][lang === 'de' ? 'de' : 'en']}
-      </p>
-      <h2 className="mt-1 mb-4 text-2xl font-semibold tracking-tight">{section.heading}</h2>
+    <section id={section.id} className="relative scroll-mt-24">
+      <Glow hue={hue} className="-top-14 -left-28 h-[22rem] w-[30rem]" />
+      {section.kind === 'watch' && (
+        <Peep
+          name="crab"
+          angle="low"
+          hue={hue}
+          size="5rem"
+          className="absolute -top-8 right-0 hidden sm:block"
+        />
+      )}
+      <h2 className="mb-4 text-2xl font-semibold tracking-tight">{section.heading}</h2>
       <div className="leading-relaxed text-ink-muted">
         <SectionBody section={section} t={t} />
       </div>
@@ -472,8 +573,18 @@ export function CommunityDoc({ lang, slug }: { lang: Lang; slug: string }) {
   const { doc, translated } = pick(text, lang)
   return (
     <CommunityShell lang={lang} active={slug}>
-      <article className="max-w-3xl space-y-12">
-        <div>
+      <article className="relative max-w-3xl space-y-12">
+        <div className="relative">
+          <Glow hue={322} className="-top-24 -left-32 h-[28rem] w-[38rem]" />
+          {/* Every guide has a resident: hashed off the slug, so Germany's
+              animal is Germany's animal on every visit. */}
+          <Peep
+            name={castFor(slug)}
+            angle="three"
+            hue={322}
+            size="6.5rem"
+            className="absolute -top-6 right-0 hidden lg:block"
+          />
           <h1 className="page-hero-title enter">{doc.title}</h1>
           <p className="enter mt-4 text-lg text-ink-muted" style={{ '--i': 2 } as React.CSSProperties}>
             {doc.standfirst}
@@ -498,10 +609,14 @@ export function CommunityDoc({ lang, slug }: { lang: Lang; slug: string }) {
         </nav>
 
         {doc.sections.map((section) => (
-          <DocSection key={section.id} section={section} lang={lang} t={t} />
+          <DocSection key={section.id} section={section} t={t} />
         ))}
 
-        <p className="text-sm text-ink-muted/70">{t.disclaimer}</p>
+        <div className="flex items-end gap-4">
+          {/* Seen out by the smallest member of staff. */}
+          <Peep name="chick" angle="front" hue={165} size="2.6rem" className="shrink-0" />
+          <p className="text-sm text-ink-muted/70">{t.disclaimer}</p>
+        </div>
       </article>
     </CommunityShell>
   )
@@ -518,26 +633,40 @@ export function CommunityBlogIndex({ lang }: { lang: Lang }) {
   return (
     <CommunityShell lang={lang} active="blog">
       <div className="max-w-3xl space-y-10">
-        <div>
+        <div className="relative">
+          <Glow hue={260} className="-top-20 -left-28 h-[24rem] w-[34rem]" />
+          {/* The parrot repeats everything we say. That is the job. */}
+          <Peep
+            name="parrot"
+            angle="three"
+            hue={260}
+            size="5.5rem"
+            className="absolute -top-4 right-0 hidden sm:block"
+          />
           <h1 className="page-hero-title enter">{t.blog.title}</h1>
           <p className="enter mt-4 text-lg text-ink-muted" style={{ '--i': 2 } as React.CSSProperties}>
             {t.blog.standfirst}
           </p>
         </div>
-        <div>
-          {posts.map((entry) => (
-            <div key={entry.slug} className="py-2">
-              <p className="text-xs uppercase tracking-wide text-ink-muted/70">
-                {t.blog.posted} {entry.doc.date}
-              </p>
-              <MenuRow
-                href={`${root}/blog/${entry.slug}`}
-                title={entry.doc.title}
-                sub={entry.doc.standfirst}
-              />
-            </div>
-          ))}
-        </div>
+        {posts.length === 0 ? (
+          /* The empty state: the parrot has nothing to repeat yet. */
+          <p className="text-ink-muted">{t.blog.comingSoon}</p>
+        ) : (
+          <div>
+            {posts.map((entry) => (
+              <div key={entry.slug} className="py-2">
+                <p className="text-xs uppercase tracking-wide text-ink-muted/70">
+                  {t.blog.posted} {entry.doc.date}
+                </p>
+                <MenuRow
+                  href={`${root}/blog/${entry.slug}`}
+                  title={entry.doc.title}
+                  sub={entry.doc.standfirst}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </CommunityShell>
   )
@@ -551,7 +680,15 @@ export function CommunityBlogPost({ lang, slug }: { lang: Lang; slug: string }) 
   return (
     <CommunityShell lang={lang} active="blog">
       <article className="max-w-3xl space-y-12">
-        <div>
+        <div className="relative">
+          <Glow hue={260} className="-top-20 -left-28 h-[24rem] w-[34rem]" />
+          <Peep
+            name={castFor(slug)}
+            angle="three"
+            hue={260}
+            size="5.5rem"
+            className="absolute -top-2 right-0 hidden lg:block"
+          />
           <p className="text-xs uppercase tracking-wide text-ink-muted">
             {t.blog.posted} {doc.date}
           </p>
@@ -568,7 +705,7 @@ export function CommunityBlogPost({ lang, slug }: { lang: Lang; slug: string }) 
         )}
 
         {doc.sections.map((section) => (
-          <DocSection key={section.id} section={section} lang={lang} t={t} />
+          <DocSection key={section.id} section={section} t={t} />
         ))}
       </article>
     </CommunityShell>

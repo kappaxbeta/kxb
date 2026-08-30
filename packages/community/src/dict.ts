@@ -46,6 +46,8 @@ export interface CommunityDict {
     standfirst: string
     /** Prefix before a post's date on the index. */
     posted: string
+    /** The empty state while no post is published. */
+    comingSoon: string
   }
   /** The index page. */
   index: {
@@ -116,11 +118,12 @@ export const COMMUNITY_EN: CommunityDict = {
     title: 'Blog',
     standfirst: 'Notes from building the handbook and the world it belongs to.',
     posted: 'Posted',
+    comingSoon: 'Nothing here yet - the first post is coming soon.',
   },
   index: {
     title: 'The handbook',
     standfirst:
-      'What it actually takes to start something of your own: the offices in order, the boxes on the forms, and the traps nobody writes down. Written by people who did it, one country at a time.',
+      'What it actually takes to start something of your own: the offices in order, the boxes on the forms, and the traps nobody writes down. Checked against the sources, dated, and open to corrections from people who walked it.',
     chaptersKicker: 'Read these once',
     countriesKicker: 'Where you are',
     chaptersHeading: 'True everywhere',
@@ -145,7 +148,7 @@ export const COMMUNITY_EN: CommunityDict = {
     contents: 'On this page',
   },
   disclaimer:
-    'This is a map drawn by people who walked the route, not legal or tax advice. Laws change; every guide carries the date it was last checked, and the sources to check it against yourself.',
+    'This is a map, not legal or tax advice - and an honest one about how it was drawn: the Germany guide was written by a person who walked the route; most other countries were drafted with AI against the official sources and have not yet been walked by someone who did it. Laws change. Every guide carries the date it was last checked and the sources to check it yourself - and if you have been through one of these routes, your corrections are exactly what this handbook wants.',
   countryNames: {},
   continents: {
     europe: 'Europe',
@@ -185,11 +188,12 @@ export const COMMUNITY_DE: CommunityDict = {
     title: 'Blog',
     standfirst: 'Notizen vom Bau des Handbuchs und der Welt, zu der es gehört.',
     posted: 'Veröffentlicht',
+    comingSoon: 'Hier ist noch nichts - der erste Beitrag kommt bald.',
   },
   index: {
     title: 'Das Handbuch',
     standfirst:
-      'Was es wirklich braucht, um etwas Eigenes anzufangen: die Ämter in der Reihenfolge, die Felder auf den Formularen und die Fallen, die niemand aufschreibt. Geschrieben von Leuten, die es getan haben - Land für Land.',
+      'Was es wirklich braucht, um etwas Eigenes anzufangen: die Ämter in der Reihenfolge, die Felder auf den Formularen und die Fallen, die niemand aufschreibt. Gegen die Quellen geprüft, datiert - und offen für Korrekturen von Leuten, die den Weg gegangen sind.',
     chaptersKicker: 'Einmal lesen',
     countriesKicker: 'Wo du bist',
     chaptersHeading: 'Gilt überall',
@@ -214,7 +218,7 @@ export const COMMUNITY_DE: CommunityDict = {
     contents: 'Auf dieser Seite',
   },
   disclaimer:
-    'Das hier ist eine Landkarte von Leuten, die den Weg gegangen sind - keine Rechts- oder Steuerberatung. Gesetze ändern sich; jeder Guide trägt das Datum seiner letzten Prüfung und die Quellen, an denen du ihn selbst prüfen kannst.',
+    'Das hier ist eine Landkarte, keine Rechts- oder Steuerberatung - und eine ehrliche darüber, wie sie entstanden ist: Der Deutschland-Guide stammt von jemandem, der den Weg gegangen ist; die meisten anderen Länder wurden mit KI aus den offiziellen Quellen erstellt und noch von niemandem abgelaufen, der es getan hat. Gesetze ändern sich. Jeder Guide trägt das Datum seiner letzten Prüfung und die Quellen zum Selbst-Nachlesen - und wer einen dieser Wege hinter sich hat: Genau diese Korrekturen wünscht sich das Handbuch.',
   countryNames: {
     al: 'Albanien',
     ad: 'Andorra',
