@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/brand/community-header.png" alt="kxb" width="900">
+  <img src="public/brand/community-header.png" alt="kxb — not here to chat, here to play" width="100%">
 </p>
 
 # kxb
