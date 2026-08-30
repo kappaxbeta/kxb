@@ -417,6 +417,25 @@ export interface RailDict {
     cancel: string
   }
 
+  /** `/battle` in the chat: the summon menu, and the interception it sends. */
+  summon: {
+    title: string
+    who: string
+    what: string
+    nobodyHere: string
+    loadingLevels: string
+    noLevels: string
+    summon: string
+    summoning: string
+    cancel: string
+    /** `{name}` is the summoner, resolved from the room's roster. */
+    inviteTitle: string
+    inviteHint: string
+    confirm: string
+    deny: string
+    someone: string
+  }
+
   /** Answering the door, and letting yourself out of a space you were let into. */
   visitors: {
     atTheDoor: string
@@ -596,6 +615,23 @@ export const RAIL_EN: RailDict = {
     reportSending: 'Sending…',
     reported: 'Reported. An admin will look at it — the sender is not told who reported it.',
     cancel: 'Cancel',
+  },
+
+  summon: {
+    title: 'Summon a match',
+    who: 'Who fights',
+    what: 'Which battle',
+    nobodyHere: 'Nobody else is in the room with you. You can still summon a match and they can walk in.',
+    loadingLevels: 'Looking at the shelf…',
+    noLevels: 'No battle levels to summon here.',
+    summon: 'Summon',
+    summoning: 'Summoning…',
+    cancel: 'Cancel',
+    inviteTitle: '{name} summons you',
+    inviteHint: 'Confirm and you are in the arena. Enter works too.',
+    confirm: 'Fight',
+    deny: 'Not now',
+    someone: 'Somebody',
   },
 
   visitors: {
@@ -1003,6 +1039,24 @@ export const RAIL_DE: RailDict = {
     reported:
       'Gemeldet. Ein Admin sieht sich das an — der Absender erfährt nicht, wer gemeldet hat.',
     cancel: 'Abbrechen',
+  },
+
+  summon: {
+    title: 'Match einberufen',
+    who: 'Wer kämpft',
+    what: 'Welches Battle',
+    nobodyHere:
+      'Sonst ist niemand im Raum. Du kannst trotzdem ein Match einberufen — reinkommen geht immer.',
+    loadingLevels: 'Regal wird durchgesehen …',
+    noLevels: 'Hier gibt es keine Battle-Level zum Einberufen.',
+    summon: 'Einberufen',
+    summoning: 'Wird einberufen …',
+    cancel: 'Abbrechen',
+    inviteTitle: '{name} ruft dich',
+    inviteHint: 'Bestätigen, und du bist in der Arena. Enter geht auch.',
+    confirm: 'Kämpfen',
+    deny: 'Jetzt nicht',
+    someone: 'Jemand',
   },
 
   visitors: {
@@ -1434,6 +1488,24 @@ export const RAIL_BG: RailDict = {
     reported:
       'Докладвано. Админ ще го погледне — подателят не разбира кой е докладвал.',
     cancel: 'Отказ',
+  },
+
+  summon: {
+    title: 'Свикай мач',
+    who: 'Кой се бие',
+    what: 'Кое battle',
+    nobodyHere:
+      'Няма никой друг в стаята. Пак можеш да свикаш мач — влизането е винаги отворено.',
+    loadingLevels: 'Преглеждане на рафта…',
+    noLevels: 'Тук няма battle нива за свикване.',
+    summon: 'Свикай',
+    summoning: 'Свиква се…',
+    cancel: 'Отказ',
+    inviteTitle: '{name} те вика',
+    inviteHint: 'Потвърди и си на арената. Enter също върши работа.',
+    confirm: 'Бий се',
+    deny: 'Не сега',
+    someone: 'Някой',
   },
 
   visitors: {

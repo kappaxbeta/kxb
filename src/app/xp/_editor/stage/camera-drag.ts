@@ -39,3 +39,30 @@ export function dragButtons(tool: Tool): DragButtons {
     RIGHT: THREE.MOUSE.PAN,
   }
 }
+
+export interface DragTouches {
+  ONE: THREE.TOUCH
+  TWO: THREE.TOUCH
+}
+
+/**
+ * The same decision for a screen with no buttons at all.
+ *
+ * Left out when `dragButtons` was written, and on a phone that left the camera
+ * on drei's defaults: one finger orbits a fixed point whatever tool is in hand,
+ * and the hand tool - the one way to *go* somewhere - did nothing a finger
+ * could reach. Orbiting a spot you cannot move away from is a viewport with a
+ * radius, which is how it was reported.
+ *
+ * One finger follows the tool the way the left button does, for the same
+ * reason: the two are the primary gesture on their respective machines. Two
+ * fingers pinch and pan in every tool - that pairing is one gesture to three,
+ * splitting it is not offered, and it is the touch answer to the middle and
+ * right buttons: the way out that no tool takes away.
+ */
+export function dragTouches(tool: Tool): DragTouches {
+  return {
+    ONE: tool === 'hand' ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN,
+  }
+}

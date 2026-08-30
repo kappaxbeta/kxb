@@ -200,6 +200,13 @@ export interface LandingDict {
     title: string
     items: readonly { q: string; a: string }[]
   }
+  /** The community edition box: the repo, and the handbook that explains it. */
+  community: {
+    title: string
+    body: string
+    ctaHandbook: string
+    ctaGithub: string
+  }
   closing: {
     title: string
     body: string
@@ -534,6 +541,12 @@ export const EN: LandingDict = {
         a: 'No. It’s a closed beta and there are things on this page marked soon because they are. Every page on this site has a “what it doesn’t do yet” section, and they are the sections worth reading.',
       },
     ],
+  },
+  community: {
+    title: 'Run it yourself',
+    body: 'kxb has a community edition: the same world, as a public repository on GitHub. Host it on your own server, read how it is built, or write a country guide for the handbook. The €20 buys you not having to.',
+    ctaHandbook: 'Open the handbook',
+    ctaGithub: 'kxb on GitHub',
   },
   closing: {
     title: 'Come and play. Bring somebody.',
@@ -878,6 +891,12 @@ export const DE: LandingDict = {
         a: 'Nein. Es ist eine Closed Beta, und was auf dieser Seite „bald“ heißt, heißt auch wirklich bald. Auf jeder Seite hier steht ein Abschnitt „Was es noch nicht kann“ – und das sind die Abschnitte, die sich zu lesen lohnen.',
       },
     ],
+  },
+  community: {
+    title: 'Betreib es selbst',
+    body: 'kxb gibt es als Community Edition: dieselbe Welt, als öffentliches Repository auf GitHub. Betreib sie auf deinem eigenen Server, lies nach, wie sie gebaut ist, oder schreib einen Länderguide fürs Handbuch. Die 20 € kaufen dir, das nicht zu müssen.',
+    ctaHandbook: 'Zum Handbuch',
+    ctaGithub: 'kxb auf GitHub',
   },
   closing: {
     title: 'Komm spielen. Bring jemanden mit.',
@@ -1225,6 +1244,12 @@ export const BG: LandingDict = {
         a: 'Не. Затворена бета е и на тази страница има неща, отбелязани със „скоро“, защото са точно това. Всяка страница на този сайт има раздел „какво още не прави“, и точно тези раздели си струва да се четат.',
       },
     ],
+  },
+  community: {
+    title: 'Пусни го сам',
+    body: 'kxb има community издание: същият свят, като публично хранилище в GitHub. Пусни го на собствен сървър, виж как е направен, или напиши наръчник за твоята страна. Двайсетте евро купуват това да не се налага.',
+    ctaHandbook: 'Отвори наръчника',
+    ctaGithub: 'kxb в GitHub',
   },
   closing: {
     title: 'Ела да играеш. Доведи някого.',

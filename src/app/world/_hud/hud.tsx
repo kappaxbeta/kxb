@@ -351,17 +351,25 @@ export function ControlsPanel({
         {/*
           The way in, above the settings rather than below them.
 
-          A button where there is one to offer, and otherwise the sentence that
-          says where the click should go. The sentence is not a worse button: on
-          a click-through gate the whole screen is the button, and drawing one
-          would suggest it is the only place that works.
-
           It used to sit last, under the camera and hand pickers, which on a
           phone put the only way into the world below the fold - "put the button
           to enter over the config, so you see to enter immediately and not just
           when you scroll down". The pickers are a thing you *might* want; the
           door is the thing everybody came for, so the door goes first and the
           settings become what you scroll to if you want them.
+
+          Both branches draw the same button - `summon-cta cta-pixel`, the
+          landing page's door, so the way into a world looks like the way into
+          everything else here. The difference is what it is made of. With an
+          `onEnter` it is a real control that takes the click. Without one -
+          the click-through gate, where a click on the *canvas* is the only
+          thing that can grant pointer lock - it is `pointer-events-none` on
+          purpose: the click passes straight through the glowing pill to the
+          canvas underneath, so the button can never be a lie about where the
+          click goes. The sentence that used to stand here alone moves under
+          it, because "anywhere works" is still true and still worth saying -
+          and it keeps the semantics for a screen reader, which is why the
+          pill itself is `aria-hidden`.
         */}
         {!interactive && (
           <div className="mt-6 text-center">
@@ -369,14 +377,22 @@ export function ControlsPanel({
               <button
                 type="button"
                 onClick={onEnter}
-                className="bg-accent pointer-events-auto rounded-full px-7 py-2.5 text-sm font-semibold"
+                className="summon-cta cta-pixel pointer-events-auto rounded-full px-8 py-3 transition"
               >
                 {isTouch ? t.tapEnter : t.enter}
               </button>
             ) : (
-              <p className="text-xs text-[var(--color-ink-muted)]">
-                {isTouch ? t.tapAnywhere : t.clickAnywhere}
-              </p>
+              <>
+                <p
+                  aria-hidden
+                  className="summon-cta cta-pixel pointer-events-none inline-block rounded-full px-8 py-3"
+                >
+                  {t.enter}
+                </p>
+                <p className="mt-2 text-xs text-[var(--color-ink-muted)]">
+                  {isTouch ? t.tapAnywhere : t.clickAnywhere}
+                </p>
+              </>
             )}
           </div>
         )}

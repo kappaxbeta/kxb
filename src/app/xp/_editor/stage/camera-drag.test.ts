@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import * as THREE from 'three'
-import { dragButtons } from '@/app/xp/_editor/stage/camera-drag'
+import { dragButtons, dragTouches } from '@/app/xp/_editor/stage/camera-drag'
 import type { Tool } from '@/app/xp/_editor/stage/stage'
 
 const BUILDING: Tool[] = ['place', 'draw', 'erase', 'line', 'rect', 'room']
@@ -64,5 +64,36 @@ describe('the buttons that do not depend on the tool', () => {
    */
   test('and pan is not rotate', () => {
     expect(THREE.MOUSE.PAN).not.toBe(THREE.MOUSE.ROTATE)
+  })
+})
+
+describe('the same decision for fingers', () => {
+  test('one finger pans with the hand', () => {
+    expect(dragTouches('hand').ONE).toBe(THREE.TOUCH.PAN)
+  })
+
+  /**
+   * The mobile shape of the same bug: the hand and Select doing the same thing
+   * on the primary gesture is a phone whose camera circles a point it cannot
+   * leave, because one finger is the only gesture a thumb has.
+   */
+  test('and that is different from what Select does', () => {
+    expect(dragTouches('hand').ONE).not.toBe(dragTouches('select').ONE)
+  })
+
+  test('every other tool still turns the camera', () => {
+    for (const tool of ['select', ...BUILDING] as Tool[]) {
+      expect(dragTouches(tool).ONE).toBe(THREE.TOUCH.ROTATE)
+    }
+  })
+
+  test('two fingers always pinch and pan, so no tool strands the view', () => {
+    for (const tool of ['select', 'hand', ...BUILDING] as Tool[]) {
+      expect(dragTouches(tool).TWO).toBe(THREE.TOUCH.DOLLY_PAN)
+    }
+  })
+
+  test('and touch pan is not touch rotate', () => {
+    expect(THREE.TOUCH.PAN).not.toBe(THREE.TOUCH.ROTATE)
   })
 })

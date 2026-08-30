@@ -1,4 +1,5 @@
 import type { Section } from './guide'
+import { POST_BATTLE_FROM_THE_CHAT } from './posts/battle-from-the-chat'
 import { pick, type Lang, type Text } from './text'
 
 /**
@@ -29,12 +30,14 @@ export interface BlogEntry {
 }
 
 /**
- * Empty on purpose: the first posts were drafted and then pulled - the blog
- * launches when there is something real to say, and until then the index
- * says "coming soon" rather than padding itself. The machinery above stays
- * so a post is one entry here, nothing else.
+ * This list was empty on purpose until there was something real to say - the
+ * first drafts were pulled, and the index said "coming soon" rather than
+ * padding itself. `/battle` is the something: a post is one entry here,
+ * nothing else, newest handled by the sort in `blogIndex`.
  */
-export const BLOG: BlogEntry[] = []
+export const BLOG: BlogEntry[] = [
+  { slug: 'battle-from-the-chat', post: POST_BATTLE_FROM_THE_CHAT },
+]
 
 export function blogBySlug(slug: string): BlogEntry | undefined {
   return BLOG.find((entry) => entry.slug === slug)

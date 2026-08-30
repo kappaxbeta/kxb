@@ -13,6 +13,7 @@ import { ContactWidget } from '@/app/components/contact-widget'
 import { TourWidget } from '@/app/components/tour-widget'
 import Logo from '@/app/components/logo'
 import { ChatDock } from '@/app/t/[slug]/chat-dock'
+import { SummonDock } from '@/app/t/[slug]/summon-dock'
 import type { ChatLine } from '@/app/t/[slug]/chat-panel'
 import { Band, Face } from '@/app/t/[slug]/rail-bits'
 import { Icon, type IconName } from '@/app/t/[slug]/rail-icons'
@@ -412,6 +413,22 @@ export function Sidebar(props: {
            * which rooms exist. Read once in the layout and handed to both.
            */
           rooms={props.rooms.map((room) => ({ roomId: room.roomId, name: room.name }))}
+        />
+      )}
+
+      {/*
+        The summons, mounted once for the same reason the chat is: the
+        interception has to reach somebody whether or not any rail is open.
+        Beside the dock rather than inside it because they share nothing but a
+        bell - see summon-store. Gated on `chat` because `/battle` is typed
+        into it: a space with the conversation off has no composer to type the
+        command in, and a topic nobody can ring needs no listener.
+      */}
+      {props.chat && (
+        <SummonDock
+          slug={props.slug}
+          tenantId={props.chat.tenantId}
+          userId={props.chat.userId}
         />
       )}
 

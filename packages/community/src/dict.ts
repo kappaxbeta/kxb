@@ -27,6 +27,8 @@ export interface CommunityDict {
     legal: string
     legalHint: string
     guides: string
+    /** The making-of shelf: how the games were built. */
+    making: string
     countries: string
     blog: string
     resources: string
@@ -48,6 +50,26 @@ export interface CommunityDict {
     posted: string
     /** The empty state while no post is published. */
     comingSoon: string
+  }
+  /** The closing word on the index: how to hold yourself while building. */
+  motto: {
+    title: string
+    lines: string[]
+  }
+  /** The country hub page under /community/<cc>. */
+  hub: {
+    /** Under the country name. */
+    lead: string
+    /** Over the guide links. */
+    guides: string
+    /** Over the official links lifted from the guide's sources. */
+    resources: string
+    /** The people registry: kxb users who founded here and take questions. */
+    people: string
+    peopleIntro: string
+    /** The empty state, ending in the get-listed link. */
+    peopleEmpty: string
+    peopleGetListed: string
   }
   /** The index page. */
   index: {
@@ -103,6 +125,7 @@ export const COMMUNITY_EN: CommunityDict = {
     legal: 'Basic Legal',
     legalHint: 'The four documents before you take money',
     guides: 'Guides',
+    making: 'How it was made',
     countries: 'Countries',
     blog: 'Blog',
     resources: 'Resources',
@@ -120,8 +143,27 @@ export const COMMUNITY_EN: CommunityDict = {
     posted: 'Posted',
     comingSoon: 'Nothing here yet - the first post is coming soon.',
   },
+  motto: {
+    title: 'A word before you go',
+    lines: [
+      'Every start is slow. That is not a verdict, it is the terrain.',
+      'Work confident, stay playful - the two are not opposites, they are the trick.',
+      'Respect the people you build with, and the ones you build for.',
+      'Don’t do evil. Not even the profitable kind.',
+      'And have fun. It shows in the work, and it is the whole point of the arcade.',
+    ],
+  },
+  hub: {
+    lead: 'Guides, official addresses and the chapters that apply everywhere - one page per country, growing into a web.',
+    guides: 'Guides',
+    resources: 'Official resources',
+    people: 'People who did it',
+    peopleIntro: 'kxb users who founded here and are happy to be asked.',
+    peopleEmpty: 'Nobody is listed here yet. If you run something in this country and would answer a question or two,',
+    peopleGetListed: 'get yourself listed',
+  },
   index: {
-    title: 'The handbook',
+    title: 'The Hitchhiker’s Guide through kxb',
     standfirst:
       'What it actually takes to start something of your own: the offices in order, the boxes on the forms, and the traps nobody writes down. Checked against the sources, dated, and open to corrections from people who walked it.',
     chaptersKicker: 'Read these once',
@@ -173,6 +215,7 @@ export const COMMUNITY_DE: CommunityDict = {
     legal: 'Recht kompakt',
     legalHint: 'Die vier Dokumente, bevor Geld fließt',
     guides: 'Guides',
+    making: 'Wie es gebaut wurde',
     countries: 'Länder',
     blog: 'Blog',
     resources: 'Ressourcen',
@@ -190,8 +233,27 @@ export const COMMUNITY_DE: CommunityDict = {
     posted: 'Veröffentlicht',
     comingSoon: 'Hier ist noch nichts - der erste Beitrag kommt bald.',
   },
+  motto: {
+    title: 'Ein Wort noch',
+    lines: [
+      'Jeder Anfang ist langsam. Das ist kein Urteil, das ist das Gelände.',
+      'Arbeite selbstbewusst, bleib verspielt - das ist kein Widerspruch, das ist der Trick.',
+      'Respektiere die, mit denen du baust, und die, für die du baust.',
+      'Tu nichts Böses. Auch nicht das profitable.',
+      'Und hab Spaß. Man sieht es der Arbeit an, und es ist der ganze Sinn der Arcade.',
+    ],
+  },
+  hub: {
+    lead: 'Guides, offizielle Adressen und die Kapitel, die überall gelten - eine Seite pro Land, die zu einem Netz zusammenwächst.',
+    guides: 'Guides',
+    resources: 'Offizielle Quellen',
+    people: 'Leute, die es getan haben',
+    peopleIntro: 'kxb-Nutzer, die hier gegründet haben und sich fragen lassen.',
+    peopleEmpty: 'Hier steht noch niemand. Wenn du in diesem Land etwas betreibst und die eine oder andere Frage beantworten würdest,',
+    peopleGetListed: 'lass dich eintragen',
+  },
   index: {
-    title: 'Das Handbuch',
+    title: 'Per Anhalter durch kxb',
     standfirst:
       'Was es wirklich braucht, um etwas Eigenes anzufangen: die Ämter in der Reihenfolge, die Felder auf den Formularen und die Fallen, die niemand aufschreibt. Gegen die Quellen geprüft, datiert - und offen für Korrekturen von Leuten, die den Weg gegangen sind.',
     chaptersKicker: 'Einmal lesen',

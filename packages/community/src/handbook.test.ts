@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { CHAPTERS } from './chapters/index'
 import { CONTINENTS, COUNTRIES, countriesByContinent } from './countries/index'
+import { MAKING } from './making/index'
 import type { Guide } from './guide'
+import { DEPLOY } from './deploy'
 import { STARTER } from './starter'
 import { langsOf, pick, type Text } from './text'
 
@@ -12,6 +14,7 @@ import { langsOf, pick, type Text } from './text'
 
 const everyText = (): [string, Text<Guide>][] => [
   ...CHAPTERS.map((c) => [`chapter ${c.slug}`, c.guide] as [string, Text<Guide>]),
+  ...MAKING.map((m) => [`making ${m.slug}`, m.guide] as [string, Text<Guide>]),
   ...COUNTRIES.filter((c) => c.guide).map((c) => [`country ${c.slug}`, c.guide!] as [string, Text<Guide>]),
 ]
 
@@ -82,18 +85,32 @@ describe('bilingual documents', () => {
     const germany = COUNTRIES.find((c) => c.slug === 'de')!.guide!
     expect(langsOf(germany)).toEqual(['en', 'de'])
     for (const chapter of CHAPTERS) expect(langsOf(chapter.guide)).toEqual(['en', 'de'])
+    for (const entry of MAKING) expect(langsOf(entry.guide)).toEqual(['en', 'de'])
     expect(langsOf(STARTER)).toEqual(['en', 'de'])
+    expect(langsOf(DEPLOY)).toEqual(['en', 'de'])
   })
 
   test('every bilingual document keeps the same section skeleton in both halves', () => {
     // Same ids in the same order: the anchors a shared link carries must land
     // in both languages. Prose may differ; the skeleton may not.
-    const all: [string, Text<import('./guide').Guide>][] = [...everyText(), ['starter', STARTER]]
+    const all: [string, Text<import('./guide').Guide>][] = [...everyText(), ['starter', STARTER], ['deploy', DEPLOY]]
     for (const [name, text] of all) {
       if (langsOf(text).length < 2) continue
       const en = pick(text, 'en').doc.sections.map((s) => `${s.kind}:${s.id}`)
       const de = pick(text, 'de').doc.sections.map((s) => `${s.kind}:${s.id}`)
       expect(de, name).toEqual(en)
     }
+  })
+})
+
+describe('seo slugs', () => {
+  test('every written country earns a clean, unique url segment from its title', async () => {
+    const { guideSlug } = await import('./seo')
+    const slugs = COUNTRIES.filter((c) => c.guide).map((c) => guideSlug(c.guide!))
+    for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+    expect(new Set(slugs).size).toBe(slugs.length)
+    // The one everybody will link to, pinned: renaming a title renames a URL.
+    const germany = COUNTRIES.find((c) => c.slug === 'de')!.guide!
+    expect(guideSlug(germany)).toBe('starting-a-business-in-germany')
   })
 })

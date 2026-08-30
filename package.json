@@ -30,7 +30,6 @@
     "boxing:publish": "bun run scripts/boxing-assets.ts --publish",
     "maumau:assets": "bun run scripts/maumau-assets.ts",
     "maumau:cards": "bun run scripts/maumau-cards.ts",
-    "community": "bun run scripts/community-sync.ts",
     "maumau:publish": "bun run scripts/maumau-assets.ts --publish",
     "xp:shapes": "bun run scripts/xp-shapes.ts",
     "xp:catalogue": "bun run scripts/xp-catalogue.ts",

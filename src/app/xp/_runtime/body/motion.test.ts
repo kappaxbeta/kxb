@@ -192,10 +192,25 @@ describe('the clips, and how fast they play', () => {
     expect(rateFor('walk', WALK_PACE / 2)).toBeLessThan(1)
   })
 
+  /**
+   * The touch stick's whole range, not just the keyboard's one speed.
+   *
+   * The stick is analog and squared - the first half of the throw is for
+   * aiming - so on a phone nearly all walking happens well under `WALK_PACE`.
+   * The floor used to sit at 0.55, which pinned every one of those speeds to
+   * the same stride and slid the feet: the walking speed and the animation
+   * were not in sync, and only on phones, because keys never produce a speed
+   * the floor could catch.
+   */
+  test('a half-pace touch walk plays exactly in step', () => {
+    expect(rateFor('walk', WALK_PACE / 2)).toBeCloseTo(0.5, 6)
+    expect(rateFor('walk', WALK_PACE * 0.3)).toBeCloseTo(0.3, 6)
+  })
+
   test('but not so slowly that the body looks broken', () => {
-    // The fix has a limit: a body at a tenth of walking pace wants a slow walk
+    // The fix has a limit: a body barely off the dead zone wants a slow walk
     // and a little skating, not legs moving so slowly it reads as a stall.
-    expect(rateFor('walk', 0.2)).toBeGreaterThan(0.5)
+    expect(rateFor('walk', 0.2)).toBeGreaterThanOrEqual(0.3)
     expect(rateFor('run', SPRINT_PACE * 4)).toBeLessThan(2)
   })
 

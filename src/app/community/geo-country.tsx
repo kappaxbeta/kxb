@@ -46,13 +46,10 @@ function regionSnapshot(): string | null {
 export function GeoCountry({
   countries,
   labels,
-  base,
 }: {
   /** The written countries only - slug, display name, flag, one-liner. */
-  countries: { slug: string; name: string; flag: string; standfirst: string }[]
+  countries: { slug: string; href: string; name: string; flag: string; standfirst: string }[]
   labels: { lead: string; open: string }
-  /** The handbook root in the page's language. */
-  base: string
 }) {
   const region = useSyncExternalStore(subscribeNever, regionSnapshot, () => null)
   const match = region ? countries.find((country) => country.slug === region) : undefined
@@ -60,7 +57,7 @@ export function GeoCountry({
   if (!match) return null
   return (
     <Link
-      href={`${base}/${match.slug}`}
+      href={match.href}
       className="group flex items-center gap-4 transition hover:translate-x-1"
     >
       <span aria-hidden className="text-4xl leading-none">

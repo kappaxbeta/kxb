@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
@@ -10,6 +10,7 @@ import {
   type XpProblem,
 } from '@kxb/xp'
 import { SpaceEditor, type OpeningClaim } from '@/app/t/[slug]/studio/xp/[xpId]/editor-client'
+import { FixedSurface } from '@/app/xp/fixed'
 import { mayDo } from '@/domain/xps/access'
 import { RENEW_SECONDS, takeClaim } from '@/domain/xps/claims'
 import { displayNameFrom, readUsernames } from '@/domain/profile/username-queries'
@@ -25,6 +26,27 @@ import { readLocale } from '@/app/i18n/preference'
 import { workspaceDict, type WorkspaceDict } from '@/app/i18n/workspace'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * The page held still, same as `/xp/<id>/edit`.
+ *
+ * The editor mounted here is the one from `src/app/xp/_editor`, but this route
+ * lives under `/t/[slug]` and so gets none of what `src/app/xp/layout.tsx`
+ * declares - which is exactly how "the editor doesn't scroll any more" stayed
+ * true on one of its two doors and not the other: on a phone a pinch over the
+ * stage zoomed the page, and once zoomed every drag panned it. Next resolves
+ * `viewport` per segment, so this export covers the editor and leaves the rest
+ * of the workspace - pages made of text, where zoom is an affordance - alone.
+ * See the notes on the `/xp` layout for why both fields, and `FixedSurface`
+ * below for the Safari half a meta tag cannot express.
+ */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+}
 
 /**
  * The tab, and the one instruction a crawler gets.
@@ -167,15 +189,18 @@ export default async function SpaceEditorPage({
       }
 
   return (
-    <SpaceEditor
-      xpId={xpId}
-      slug={slug}
-      name={project.name}
-      document={document}
-      base={project.currentVersion}
-      backHref={`/t/${slug}/browse/${xpId}`}
-      opening={opening}
-    />
+    <>
+      <FixedSurface />
+      <SpaceEditor
+        xpId={xpId}
+        slug={slug}
+        name={project.name}
+        document={document}
+        base={project.currentVersion}
+        backHref={`/t/${slug}/browse/${xpId}`}
+        opening={opening}
+      />
+    </>
   )
 }
 

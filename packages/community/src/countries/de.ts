@@ -334,7 +334,7 @@ export const GERMANY: Text<Guide> = {
           { term: 'Gewerbesteuer', means: 'Trade tax, charged by your municipality. Sole traders have a €24,500 allowance and most of the rest is credited against income tax.' },
           { term: 'IHK', means: 'The chamber of commerce. Membership is compulsory for trades.' },
           { term: 'Berufsgenossenschaft', means: 'The statutory accident insurer for your sector. Registration is compulsory within a week.' },
-          { term: 'KÃ¼nstlersozialkasse (KSK)', means: 'The social insurance fund for artists and publicists. It pays the employer’s half of your contributions if you qualify.' },
+          { term: 'Künstlersozialkasse (KSK)', means: 'The social insurance fund for artists and publicists. It pays the employer’s half of your contributions if you qualify.' },
           { term: 'Handelsregister', means: 'The commercial register. Required for a UG or GmbH, optional for a sole trader.' },
           { term: 'Impressum', means: 'The legal disclosure every commercial website must carry. See the shared chapter.' },
         ],
@@ -361,7 +361,7 @@ export const GERMANY: Text<Guide> = {
         heading: 'Where to check this yourself',
         sources: [
           { label: 'ELSTER - the tax portal', href: 'https://www.elster.de', note: 'Where the questionnaire and every later filing is filed. Register first; the certificate comes by post.' },
-          { label: 'ExistenzgrÃ¼ndungsportal (Federal Ministry for Economic Affairs)', href: 'https://www.existenzgruender.de', note: 'The government’s own founding portal. Dry, and correct.' },
+          { label: 'Existenzgründungsportal (Federal Ministry for Economic Affairs)', href: 'https://www.existenzgruender.de', note: 'The government’s own founding portal. Dry, and correct.' },
           { label: 'Your local IHK', href: 'https://www.ihk.de', note: 'Free founding advice, including a first appointment, which your compulsory membership pays for anyway.' },
           { label: 'DPMA - German trade mark register', href: 'https://register.dpma.de', note: 'Check the name before you print it.' },
           { label: 'EUIPO - EU trade mark register', href: 'https://www.euipo.europa.eu', note: 'The same check, EU-wide.' },

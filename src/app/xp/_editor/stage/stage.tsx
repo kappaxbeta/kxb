@@ -1,7 +1,7 @@
 'use client'
 
 import { Grid, OrbitControls, TransformControls } from '@react-three/drei'
-import { dragButtons } from '@/app/xp/_editor/stage/camera-drag'
+import { dragButtons, dragTouches } from '@/app/xp/_editor/stage/camera-drag'
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -582,6 +582,14 @@ export function Stage({
          * knows keeps working.
          */
         mouseButtons={dragButtons(tool)}
+        /**
+         * And the same for fingers, which the mapping above never reached: on
+         * drei's defaults one finger orbits whatever tool is chosen, so on a
+         * phone the hand tool moved nothing and the camera circled a point it
+         * could not leave. One finger follows the tool; two pinch and pan
+         * everywhere. See ./camera-drag.
+         */
+        touches={dragTouches(tool)}
       />
     </Canvas>
   )

@@ -1255,6 +1255,40 @@ export function Landing({
           <DoorCard key={slot.id} slot={slot} dict={dict} index={i} />
         ))}
 
+        {/*
+          The community edition, as its own box rather than only a nav link -
+          because on a phone there is no header pill, and the one fact this
+          section carries (the code is public) deserves better than a footer
+          link. It stands directly behind the three doors: the fourth door,
+          for the reader whose first question is the source. The beaver builds the thing; naturally it fronts this card.
+        */}
+        <section
+          className="box rise col-span-6"
+          style={{ '--box-hue': 265, '--i': 6 } as React.CSSProperties}
+        >
+          <h2 className="font-pixel text-xl uppercase leading-[1.3] sm:text-2xl">
+            {dict.community.title}
+          </h2>
+          <p className="band-prose mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
+            {dict.community.body}
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:gap-4">
+            <Link
+              href={locale === 'de' ? '/de/community' : '/community'}
+              className="w-full max-w-xs rounded-full bg-accent px-7 py-3 text-center font-semibold transition sm:w-auto sm:max-w-none"
+            >
+              {dict.community.ctaHandbook}
+            </Link>
+            <a
+              href="https://github.com/kappaxbeta/kxb"
+              className="w-full max-w-xs rounded-full border border-line bg-surface-raised/70 px-7 py-3 text-center backdrop-blur-sm transition hover:bg-surface-raised sm:w-auto sm:max-w-none"
+            >
+              {dict.community.ctaGithub}
+            </a>
+          </div>
+          <BoxPeep avatar="beaver" angle="three" />
+        </section>
+
         {/* Not a box, on purpose - see `.usecases`. */}
         <section className="usecases col-span-6">
           {ROWS.map((row, i) => {

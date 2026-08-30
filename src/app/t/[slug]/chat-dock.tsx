@@ -7,6 +7,7 @@ import { clearChat, publishChat, publishChatFeed } from '@/app/world/_stores/cha
 import type { ChatMessage } from '@/app/world/_presence/presence-core'
 import { sceneWorldNow, subscribe as subscribeHere } from '@/app/world/_stores/here-store'
 import { announceSaid } from '@/app/world/_stores/said-store'
+import { callSummon } from '@/app/t/[slug]/summon-store'
 import { countReceived, countSent } from '@/app/world/perf/store'
 import { postChatMessage, readRoomChat } from '@/domain/chat/actions'
 import { CHAT_HISTORY_LIMIT } from '@/domain/chat/events'
@@ -237,6 +238,20 @@ export function ChatDock({
    */
   const say = useCallback(
     (body: string) => {
+      /**
+       * `/battle` is a verb, not a sentence.
+       *
+       * Caught here rather than in the panel, because both rails share this one
+       * `say` and a command that worked in one composer and posted as text from
+       * the other would look like the feature flickering. Exact match only: a
+       * message that merely starts with it - "/battle later?" - is somebody
+       * talking about the command, and swallowing it would eat a sentence.
+       */
+      if (body.trim().toLowerCase() === '/battle') {
+        callSummon()
+        return
+      }
+
       // Local only, and never sent: the broadcast carries the server's id, and
       // this just keeps the optimistic row identifiable until that arrives.
       const key = `local:${Date.now()}:${Math.random().toString(36).slice(2)}`

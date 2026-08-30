@@ -1,5 +1,6 @@
 import type { Guide } from '../guide'
 import type { Text } from '../text'
+import { GROWTH } from './growth'
 import { LEGAL } from './legal'
 import { PROMOTION } from './promotion'
 import { STRIPE } from './stripe'
@@ -27,6 +28,7 @@ export const CHAPTERS: Chapter[] = [
   { slug: 'promotion', guide: PROMOTION },
   { slug: 'legal-shell', guide: LEGAL },
   { slug: 'stripe', guide: STRIPE },
+  { slug: 'growth', guide: GROWTH },
 ]
 
 export function chapterBySlug(slug: string): Chapter | undefined {

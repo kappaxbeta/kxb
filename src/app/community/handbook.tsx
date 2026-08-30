@@ -12,8 +12,14 @@ import {
   countryBySlug,
   countryLangs,
   type Country,
+  DEPLOY,
+  DEPLOY_SLUG,
   type Guide,
+  guideSlug,
+  helpersFor,
   type Lang,
+  MAKING,
+  makingBySlug,
   pick,
   type Section,
   STARTER,
@@ -251,6 +257,20 @@ function CommunityShell({
             {pick(chapter.guide, lang).doc.title}
           </NavLink>
         ))}
+        {/* The hosting half of the starter journey, promoted to a full row -
+            the small arrow hint under the CTA was too easy to miss. */}
+        <NavLink href={`${root}/${DEPLOY_SLUG}`} current={active === DEPLOY_SLUG}>
+          {pick(DEPLOY, lang).doc.title}
+        </NavLink>
+      </div>
+
+      <div>
+        <NavHeading>{t.nav.making}</NavHeading>
+        {MAKING.map((entry) => (
+          <NavLink key={entry.slug} href={`${root}/${entry.slug}`} current={active === entry.slug}>
+            {pick(entry.guide, lang).doc.title}
+          </NavLink>
+        ))}
       </div>
 
       <div>
@@ -323,7 +343,11 @@ function CommunityShell({
   )
 
   return (
-    <div className="min-h-screen text-ink">
+    /* overflow-x-clip: the light pools reach past the viewport on purpose,
+       and on a phone that reach was a horizontal scrollbar. `clip` (not
+       `hidden`) cuts the overflow without creating a scroll container, so
+       the sticky header and sidebar keep working. */
+    <div className="min-h-screen overflow-x-clip text-ink">
       <ShootingStars />
       <header className="sticky top-0 z-20 border-b border-line/30 bg-surface/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
@@ -417,6 +441,7 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
     .flatMap((shelf) => shelf.countries.filter((country) => country.guide))
     .map((country) => ({
       slug: country.slug,
+      href: `${root}/${country.slug}/${guideSlug(country.guide!)}`,
       name: countryName(country, t),
       flag: country.flag,
       standfirst: pick(country.guide!, lang).doc.standfirst,
@@ -442,7 +467,7 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
           </p>
         </div>
 
-        <GeoCountry countries={writtenForGeo} labels={t.geo} base={root} />
+        <GeoCountry countries={writtenForGeo} labels={t.geo} />
 
         <section id="chapters" className="relative">
           <Glow hue={195} className="-top-12 -left-28 h-[22rem] w-[30rem]" />
@@ -455,6 +480,24 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
                 <MenuRow
                   key={chapter.slug}
                   href={`${root}/${chapter.slug}`}
+                  title={doc.doc.title}
+                  sub={doc.doc.standfirst}
+                />
+              )
+            })}
+          </div>
+        </section>
+
+        <section id="making" className="relative">
+          <Glow hue={165} className="-top-12 -right-24 left-auto h-[20rem] w-[28rem]" />
+          <h2 className="font-pixel text-xl uppercase text-accent-2">{t.nav.making}</h2>
+          <div className="mt-2">
+            {MAKING.map((entry) => {
+              const doc = pick(entry.guide, lang)
+              return (
+                <MenuRow
+                  key={entry.slug}
+                  href={`${root}/${entry.slug}`}
                   title={doc.doc.title}
                   sub={doc.doc.standfirst}
                 />
@@ -515,6 +558,26 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
           </div>
         </section>
 
+        {/* The closing word: how to hold yourself while building. The chick
+            delivers it, because the smallest peep giving the pep talk is the
+            right joke for the sentiment. */}
+        <section className="relative max-w-2xl">
+          <Glow hue={322} className="-top-10 -left-24 h-[18rem] w-[26rem]" />
+          <div className="flex items-start gap-4">
+            <Peep name="chick" angle="three" hue={322} size="3.5rem" className="mt-1 shrink-0" />
+            <div>
+              <h2 className="font-pixel text-xl uppercase text-accent-2">{t.motto.title}</h2>
+              <div className="mt-3 space-y-2">
+                {t.motto.lines.map((line) => (
+                  <p key={line.slice(0, 24)} className="text-ink-muted">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <p className="max-w-2xl text-sm text-ink-muted">{t.disclaimer}</p>
       </div>
     </CommunityShell>
@@ -525,10 +588,11 @@ export function CommunityIndex({ lang }: { lang: Lang }) {
 /* A document                                                                */
 /* ------------------------------------------------------------------------- */
 
-/** Resolve a slug to a document: the starter guide, a chapter, or a country. */
+/** Resolve a slug: starter, the deploy guide, a chapter, a making-of, or a country. */
 export function resolveDoc(slug: string): Text<Guide> | undefined {
   if (slug === STARTER_SLUG) return STARTER
-  return chapterBySlug(slug)?.guide ?? countryBySlug(slug)?.guide
+  if (slug === DEPLOY_SLUG) return DEPLOY
+  return chapterBySlug(slug)?.guide ?? makingBySlug(slug)?.guide ?? countryBySlug(slug)?.guide
 }
 
 /**
@@ -618,6 +682,137 @@ export function CommunityDoc({ lang, slug }: { lang: Lang; slug: string }) {
           <p className="text-sm text-ink-muted/70">{t.disclaimer}</p>
         </div>
       </article>
+    </CommunityShell>
+  )
+}
+
+/* ------------------------------------------------------------------------- */
+/* A country hub                                                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * /community/<cc>: the country's node in the web.
+ *
+ * The address that used to serve the founding guide directly now serves the
+ * country - its guides under readable URLs, the official addresses lifted
+ * straight out of the guide's own sources section, and the chapters that
+ * apply everywhere. One page per country that everything else can link to,
+ * which is the whole SEO idea: the hub collects, the documents rank.
+ */
+export function CommunityCountryHub({ lang, slug }: { lang: Lang; slug: string }) {
+  const country = countryBySlug(slug)
+  if (!country?.guide) notFound()
+  const t = communityDict(lang)
+  const root = base(lang)
+  const { doc } = pick(country.guide, lang)
+  const docSlug = guideSlug(country.guide)
+  const sources = doc.sections.find((section) => section.kind === 'sources')
+  const helpers = helpersFor(slug)
+  return (
+    <CommunityShell lang={lang} active={slug}>
+      <div className="max-w-3xl space-y-12">
+        <div className="relative">
+          <Glow hue={322} className="-top-24 -left-32 h-[28rem] w-[38rem]" />
+          <Peep
+            name={castFor(slug)}
+            angle="three"
+            hue={322}
+            size="6.5rem"
+            className="absolute -top-6 right-0 hidden lg:block"
+          />
+          <p aria-hidden className="text-5xl leading-none">
+            {country.flag}
+          </p>
+          <h1 className="page-hero-title enter mt-3">{countryName(country, t)}</h1>
+          <p className="enter mt-4 text-lg text-ink-muted" style={{ '--i': 2 } as React.CSSProperties}>
+            {t.hub.lead}
+          </p>
+        </div>
+
+        <section>
+          <h2 className="font-pixel text-xl uppercase text-accent-2">{t.hub.guides}</h2>
+          <div className="mt-2">
+            <MenuRow href={`${root}/${slug}/${docSlug}`} title={doc.title} sub={doc.standfirst} />
+          </div>
+        </section>
+
+        {sources?.kind === 'sources' && (
+          <section className="relative">
+            <Glow hue={165} className="-top-12 -left-28 h-[20rem] w-[28rem]" />
+            <h2 className="font-pixel text-xl uppercase text-accent-2">{t.hub.resources}</h2>
+            <ul className="mt-4 space-y-3">
+              {sources.sources.map((source) => (
+                <li key={source.href}>
+                  <a href={source.href} className="text-accent hover:underline" rel="noopener">
+                    {source.label}
+                  </a>
+                  {source.note && (
+                    <span className="block text-sm text-ink-muted">{source.note}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* The registry: people who founded here and take questions. Empty
+            almost everywhere today, and the empty state is the sign-up sheet -
+            the section exists so being listed is a data entry, not a feature. */}
+        <section className="relative">
+          <Glow hue={195} className="-top-12 -right-20 left-auto h-[18rem] w-[26rem]" />
+          <h2 className="font-pixel text-xl uppercase text-accent-2">{t.hub.people}</h2>
+          {helpers.length > 0 ? (
+            <>
+              <p className="mt-1 max-w-2xl text-sm text-ink-muted">{t.hub.peopleIntro}</p>
+              <ul className="mt-4 space-y-3">
+                {helpers.map((helper) => (
+                  <li key={helper.name}>
+                    {helper.href ? (
+                      <a href={helper.href} className="text-accent hover:underline" rel="noopener">
+                        {helper.name}
+                      </a>
+                    ) : (
+                      <span className="font-semibold text-ink">{helper.name}</span>
+                    )}
+                    <span className="block text-sm text-ink-muted">{helper.note}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-4 flex max-w-2xl items-end gap-4 text-sm text-ink-muted">
+              {/* The koala waits with the list. */}
+              <Peep name="koala" angle="front" hue={195} size="2.6rem" className="shrink-0" />
+              <span>
+                {t.hub.peopleEmpty}{' '}
+                <Link href="/contact" className="text-accent hover:underline">
+                  {t.hub.peopleGetListed}
+                </Link>
+                .
+              </span>
+            </p>
+          )}
+        </section>
+
+        <section>
+          <h2 className="font-pixel text-xl uppercase text-accent-2">{t.index.chaptersHeading}</h2>
+          <div className="mt-2">
+            {CHAPTERS.map((chapter) => {
+              const chapterDoc = pick(chapter.guide, lang)
+              return (
+                <MenuRow
+                  key={chapter.slug}
+                  href={`${root}/${chapter.slug}`}
+                  title={chapterDoc.doc.title}
+                  sub={chapterDoc.doc.standfirst}
+                />
+              )
+            })}
+          </div>
+        </section>
+
+        <p className="text-sm text-ink-muted/70">{t.disclaimer}</p>
+      </div>
     </CommunityShell>
   )
 }

@@ -92,6 +92,7 @@ export const STARTER: Text<Guide> = {
         id: 'sources',
         heading: 'Where to go from here',
         sources: [
+          { label: 'Deploy it: the poor man’s stack', href: '/community/poor-mans-stack', note: 'The hosting half this guide stops short of - one cheap box, under €10 a month.' },
           { label: 'The repository', href: 'https://github.com/kappaxbeta/kxb', note: 'Code, README, and the docs folder.' },
           { label: 'docs/assets.md', href: 'https://github.com/kappaxbeta/kxb/blob/main/docs/assets.md', note: 'Every art pack, credited and linked.' },
           { label: 'The XP editor guide', href: '/create/xp/docs', note: 'How games are made once the world is running.' },
@@ -175,6 +176,7 @@ export const STARTER: Text<Guide> = {
         id: 'sources',
         heading: 'Wie es weitergeht',
         sources: [
+          { label: 'Deploy es: der Poor-Man’s-Stack', href: '/de/community/poor-mans-stack', note: 'Die Hosting-Hälfte, vor der dieser Guide haltmacht - eine billige Kiste, unter 10 € im Monat.' },
           { label: 'Das Repository', href: 'https://github.com/kappaxbeta/kxb', note: 'Code, README und der docs-Ordner.' },
           { label: 'docs/assets.md', href: 'https://github.com/kappaxbeta/kxb/blob/main/docs/assets.md', note: 'Jedes Grafikpaket, mit Credit und Link.' },
           { label: 'Der XP-Editor-Guide', href: '/create/xp/docs', note: 'Wie Spiele entstehen, sobald die Welt läuft.' },

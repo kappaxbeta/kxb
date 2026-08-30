@@ -19,7 +19,8 @@ import type {
   Team,
   XpMatchRules,
 } from '@/domain/battle/events'
-import { matchRulesProblems } from '@/domain/battle/xp-rules'
+import { fightable, matchRulesProblems } from '@/domain/battle/xp-rules'
+import { readShelf } from '@/domain/magazine/shelf'
 import { battlesProjection } from '@/domain/battle/projection'
 import {
   countRunningBattles,
@@ -1056,4 +1057,52 @@ export async function cancelBattle(
     actorId: user.id,
     ...(hasRole(context, ['owner', 'admin']) ? { asStaff: true } : {}),
   }, slug)
+}
+
+/** A level `/battle` can offer: enough to list, and the ref `createBattle` takes. */
+export interface SummonableXp {
+  ref: string
+  name: string
+  blurb: string | null
+}
+
+export type SummonablesResult =
+  | { ok: true; xps: SummonableXp[] }
+  | { ok: false; error: string }
+
+/**
+ * The levels a summons from the chat can put a match on.
+ *
+ * The same three-source shelf the battle page hands its wizard, filtered by the
+ * same `fightable` question, so `/battle` and the wizard cannot disagree about
+ * what is playable - a level the chat offered and `createBattle` then refused
+ * would be a menu that lies. Stripped to three fields because the chat's menu
+ * is a list of names, not a shelf of cartridges: no covers, no finishes, and
+ * nothing a broadcast payload would bloat on.
+ *
+ * An action rather than data threaded through the layout, because the menu is
+ * opened rarely and from a component that is mounted always - loading every
+ * space's shelf into every session for a command most never type would be
+ * paying the wizard's bill at the door of every page.
+ */
+export async function listSummonableXps(slug: string): Promise<SummonablesResult> {
+  const context = await requireTenant(slug, { guests: true })
+  requireFeature(context, 'battle')
+  if (!battleOpen(context)) {
+    return { ok: false, error: 'Matches are switched off for this space' }
+  }
+
+  const { supabase, tenant } = context
+  const shelf = await readShelf(supabase, tenant.id, xpOpen(context))
+
+  return {
+    ok: true,
+    xps: [...shelf.inMagazine, ...shelf.catalogue]
+      .filter((row) => row.xp !== null && fightable(row.xp))
+      .map((row) => ({
+        ref: row.xp!.ref,
+        name: row.xp!.name,
+        blurb: row.xp!.blurb,
+      })),
+  }
 }

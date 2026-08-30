@@ -440,13 +440,32 @@ function peepPose(motion: Motion): Pose {
  * not want a tenth-speed walk, it wants a slow walk and the small amount of
  * skating that comes with it. Beyond the clamp the alternative is a body moving
  * its legs so slowly it looks broken.
+ *
+ * ---------------------------------------------------------------------------
+ * The floor is set by the touch stick, not by network wobble
+ * ---------------------------------------------------------------------------
+ * It was 0.55, chosen when the only *sustained* speeds were the keyboard's -
+ * exactly `WALK_PACE` or exactly `SPRINT_PACE` - so the floor only ever caught
+ * a moment of easing and nobody stood on it. The touch stick is analog and
+ * squared (see `input/touch.ts`: the first half of the throw is for aiming), so
+ * on a phone almost all walking happens at 1-4 cells a second - *below* where a
+ * 0.55 floor lets the legs match. Every mobile walk was pinned at the floor,
+ * legs striding at 3.85 cells a second over a body doing half that, which is
+ * the report: the walking speed and the animation are not in sync.
+ *
+ * 0.3 is where the trade balances now. Speeds from 2.1 cells a second up play
+ * exactly in step, which covers the stick from about half deflection; below
+ * that the clamp is back to doing what it always did, preferring a slow walk
+ * with a little skate over legs that look stopped mid-stride. The run's floor
+ * never bites either way - hysteresis drops a run back to a walk long before
+ * `speed / SPRINT_PACE` gets down to any floor.
  */
 export function rateFor(motion: Motion, speed: number): number {
   if (motion !== 'walk' && motion !== 'run') return 1
 
   const authored = motion === 'run' ? SPRINT_PACE : WALK_PACE
   const wanted = speed / authored
-  return Math.min(1.6, Math.max(0.55, wanted))
+  return Math.min(1.6, Math.max(0.3, wanted))
 }
 
 
