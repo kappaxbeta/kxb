@@ -72,9 +72,16 @@ export function capturePng(parts: CaptureParts, width: number, height: number): 
   return dataUrl
 }
 
-/** What to run on the file afterwards to turn it into an mp4. */
+/**
+ * What to run on the file afterwards to turn it into an mp4.
+ *
+ * `fps=30` is not optional - see the studio's copy of this hint for the full
+ * note: a MediaRecorder WebM carries only millisecond timestamps, and ffmpeg
+ * without a rate conforms to that tick and writes a 1000fps mp4 every upload
+ * form refuses.
+ */
 export const FFMPEG_HINT =
-  'ffmpeg -i shot.webm -c:v libx264 -pix_fmt yuv420p -crf 18 -movflags +faststart shot.mp4'
+  'ffmpeg -i shot.webm -vf fps=30 -c:v libx264 -pix_fmt yuv420p -crf 18 -movflags +faststart shot.mp4'
 
 export interface Capture {
   blob: Blob

@@ -32,9 +32,17 @@
  * download rather than leaving to be discovered.
  */
 
-/** What to run on the file afterwards to turn it into an mp4. */
+/**
+ * What to run on the file afterwards to turn it into an mp4.
+ *
+ * `fps=30` is not optional. A MediaRecorder WebM has no frame rate, only
+ * per-frame timestamps on Matroska's millisecond clock - and ffmpeg, asked to
+ * make an mp4 from that without being told a rate, conforms to the tick and
+ * writes a **1000fps** file, one duplicate frame per millisecond. Every social
+ * platform refuses it ("maximum frame rate: 60"), which is how it was found.
+ */
 export const FFMPEG_HINT =
-  'ffmpeg -i shot.webm -c:v libx264 -pix_fmt yuv420p -crf 18 -c:a aac -b:a 128k -movflags +faststart shot.mp4'
+  'ffmpeg -i shot.webm -vf fps=30 -c:v libx264 -pix_fmt yuv420p -crf 18 -c:a aac -b:a 128k -movflags +faststart shot.mp4'
 
 export interface Capture {
   blob: Blob
