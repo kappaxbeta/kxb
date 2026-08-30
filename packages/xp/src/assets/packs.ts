@@ -494,6 +494,51 @@ export const PACKS: Record<string, Pack> = {
     skeleton: 'peepz',
     ...KENNEY,
   },
+  /**
+   * The adventurers - nine dressed characters, and *not* a third skeleton.
+   *
+   * Their joint list is the dummy's, name for name: the same 23 bones
+   * (`root, hips, spine, chest … handslot.l/r … toes.l/r`) in a different
+   * export order, which the mixer does not care about. So `skeleton: 'dummy'`
+   * is a fact rather than a shortcut - a Knight binds the same `Rig_Medium`
+   * clips, offers the same grip sockets, and takes the same `SkinnedBody`
+   * path the dummy always has. Only the mesh hanging off those bones changes.
+   *
+   * Unlike a peep, an adventurer carries no clips of its own - like the
+   * dummy, it is nothing until the rig's clip pack animates it. That is the
+   * right shape for a character that is *sold* as a skin: the look is the
+   * product, the moves stay the platform's.
+   */
+  adventurers: {
+    label: 'Adventurers',
+    path: '/xp/packs/adventurers',
+    ext: '.glb',
+    // The dummy's grid: the same author drawing the same figure at a metre a
+    // unit, so the player blueprint's scale needs no third opinion.
+    scale: 1,
+    lift: 0,
+    skeleton: 'dummy',
+    ...KAY,
+  },
+  /**
+   * The monsters - two more characters on the dummy's rig, same argument as
+   * the adventurers': the joint list is the dummy's 23 bones name for name,
+   * textures embedded, no clips of their own.
+   *
+   * `.glb` is doing quiet work here: the folder also holds a stray `.gltf`
+   * prop that rode along with the drop, and the extension filter is what
+   * keeps the picker offering two monsters rather than two monsters and a
+   * broken building.
+   */
+  kappa: {
+    label: 'Monsters',
+    path: '/xp/packs/kappa',
+    ext: '.glb',
+    scale: 1,
+    lift: 0,
+    skeleton: 'dummy',
+    ...KAY,
+  },
   ...PLATFORMER,
   /**
    * The eleven flat kits, all at scale 1.
@@ -816,10 +861,13 @@ export const PACK_ORDER = [
   // Kay's kit first and Kenney's second, in the order you would reach for them:
   // one is a place, the other is the marks you put on it.
   'proto-kenny',
-  // Then the two skeletons, together, because "what do the people look like" is
-  // one question with two answers rather than two unrelated packs.
+  // Then the skeletons, together, because "what do the people look like" is
+  // one question with three answers rather than three unrelated packs. The
+  // adventurers ride the dummy's rig; see their entry in `PACKS`.
   'dummy',
   'peepz',
+  'adventurers',
+  'kappa',
   // Neutral first of the five: it holds the pieces a platformer is *about* -
   // the spikes, the chains, the cannon, the bomb - where the four colourways
   // are the same 118 blocks in different paint.

@@ -985,13 +985,18 @@ export const BUILT_IN_BODY_SCALE = 0.75
 export function bodiesFor(
   document: XpDocument,
   /**
-   * The animal this player has chosen, if they have chosen one.
+   * The look this player has chosen, if they have chosen one.
    *
-   * A bare name - `fox`, `penguin` - because that is what the profile stores
-   * and what the lounge has always stored. The `peepz` pack holds the same
-   * twenty-four animals under the same names, so the mapping is the pack
-   * prefix and nothing else; a name the pack does not have falls back to the
-   * dummy rather than to a missing model.
+   * Two shapes, told apart by the slash. A bare name - `fox`, `penguin` - is
+   * an animal, because that is what the profile stores and what the lounge has
+   * always stored; the `peepz` pack holds the same twenty-four under the same
+   * names, so the mapping is the pack prefix and nothing else. A qualified id -
+   * `adventurers/Knight` - is a bought skin, already a full catalogue address,
+   * and is worn as-is. The skin wins when both could apply, because the mount
+   * that resolves the profile only sends one of them.
+   *
+   * A name neither shape recognises falls back to a random animal rather than
+   * to a missing model, same as it always has.
    *
    * **Only when the document has not said.** A level that declares its own
    * `player.blueprint` has decided what its players look like - a kart game,
@@ -1019,13 +1024,33 @@ export function bodiesFor(
    * and one mannequin among them reads as broken rather than as unset.
    */
   const wears = document.player.wears ?? 'dummy'
+  /**
+   * A bought skin is already a full address, so it skips the peepz mapping.
+   * The shape test is deliberately local, like `PEEPZ` below: reaching into
+   * the catalogue from the document's module is the dependency this file
+   * refuses, and a skin id that stopped resolving degrades in the renderer
+   * exactly the way any unknown model always has.
+   *
+   * Worn under `dummy` as well as under `profile`, and that is the whole of
+   * why a bought skin shows up in a level at all. `wears: 'dummy'` is not a
+   * creator saying "everybody is the mannequin" - the parser stores the
+   * default *as* absence, so it is what every level that never thought about
+   * the question says. The dummy is what a player is before they are anybody,
+   * and a skin is exactly the thing that replaces it.
+   *
+   * `random` is left out on purpose: a level that asked for a room full of
+   * animals is a level that decided, and one Knight among the foxes is the
+   * personal choice overriding the creator's that the note below refuses.
+   */
+  const skin =
+    wears !== 'random' && avatar && QUALIFIED_MODEL.test(avatar) ? avatar : null
   const chosen =
-    wears === 'profile' && avatar && PEEPZ.has(avatar)
+    !skin && wears === 'profile' && avatar && PEEPZ.has(avatar)
       ? avatar
-      : wears === 'profile' || wears === 'random'
+      : !skin && (wears === 'profile' || wears === 'random')
         ? animalFor(who ?? '')
         : null
-  const peep = chosen ? `peepz/${chosen}` : null
+  const peep = skin ?? (chosen ? `peepz/${chosen}` : null)
 
   /**
    * A named body keeps everything except its face.
@@ -1106,6 +1131,15 @@ const PEEPZ: ReadonlySet<string> = new Set([
   'deer', 'dog', 'elephant', 'fish', 'fox', 'giraffe', 'hog', 'koala',
   'lion', 'monkey', 'panda', 'parrot', 'penguin', 'pig', 'polar', 'tiger',
 ])
+
+/**
+ * The shape of a qualified model id: one pack, one slash, one name.
+ *
+ * The same characters `splitModel` accepts and the same refusal of an id that
+ * escapes its directory - restated here rather than imported, for the reason
+ * `PEEPZ` gives: this module is the document's, not the renderer's.
+ */
+const QUALIFIED_MODEL = /^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/
 
 /**
  * Put the local player into the world.

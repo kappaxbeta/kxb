@@ -178,6 +178,8 @@ import { saveWorldAsArena } from '@/domain/battlefields/actions'
 import { removeLoungeImage } from '@/domain/lounge/image-actions'
 import type { LoungeImageView } from '@/domain/lounge/image-queries'
 import { DEFAULT_AVATAR } from '@/domain/lounge/avatars'
+import { chooseAvatar } from '@/domain/profile/avatar-actions'
+import { wearLoungeSkin } from '@/domain/skins/actions'
 import { blockKey } from '@/domain/lounge/events'
 import {
   DEFAULT_MODEL,
@@ -231,6 +233,9 @@ export function LoungeScene({
   worldsHref,
   spawnAt,
   avatar = DEFAULT_AVATAR,
+  animal,
+  skins,
+  wearingSkin = null,
   presence,
   perf,
   perfReadout,
@@ -380,11 +385,27 @@ export function LoungeScene({
    */
   spawnAt?: WorldSpawn
   /**
-   * Which animal you are here. Defaults rather than being required, because the
-   * public showcase renders this scene for visitors who have no membership and
-   * so have no avatar of their own.
+   * What you are standing in here - an animal, or a bought skin's catalogue id.
+   *
+   * Defaults rather than being required, because the public showcase renders
+   * this scene for visitors who have no membership and so have no look of
+   * their own. Which of the two it is, the renderer decides by the slash; see
+   * `BodyModel`.
    */
   avatar?: string
+  /**
+   * The animal underneath, when a skin is over the top of it.
+   *
+   * Kept apart from `avatar` because the wardrobe needs both: the body draws
+   * the skin, and the picker still has to show which peep is selected and
+   * which still-image to put on its button - and a skin id handed to
+   * `avatarShotUrl` is a broken picture.
+   */
+  animal?: string
+  /** The skins this account owns, for the wardrobe. Empty for a guest. */
+  skins?: { id: string; name: string }[]
+  /** Which of them is worn in here, or null for the animal. */
+  wearingSkin?: string | null
   /**
    * Who you are on the presence channel. Absent for the public showcase, which
    * is deliberately a one-way window: a visitor with no membership cannot pass
@@ -679,6 +700,42 @@ export function LoungeScene({
    * were rather than in some canonical default.
    */
   const [mirror, setMirror] = useState(false)
+
+  /**
+   * What we are wearing right now, in three parts.
+   *
+   * Seeded from the props and then owned here, because changing your look from
+   * inside the room has to show on the body in the mirror immediately - the
+   * save is a round trip, and the whole reason the switcher sits beside the
+   * mirror is to look at the result.
+   *
+   * `worn` is what the renderer draws and can be either kind - an animal or a
+   * skin's catalogue id, told apart by the slash. `animal` and `skin` are what
+   * the wardrobe highlights, kept apart from it so that taking a skin off puts
+   * back the peep you already had rather than asking for it again.
+   *
+   * Re-synced by comparing against the last props we saw, *during render*
+   * rather than in an effect. Three effects calling setState would render the
+   * room a second time for every change, on a page whose render mounts a
+   * canvas - and this is React's own answer for state that follows a prop.
+   */
+  const [look, setLook] = useState({
+    worn: avatar,
+    animal: animal ?? avatar,
+    skin: wearingSkin,
+  })
+  const [seenProps, setSeenProps] = useState({ avatar, animal, wearingSkin })
+
+  if (
+    seenProps.avatar !== avatar ||
+    seenProps.animal !== animal ||
+    seenProps.wearingSkin !== wearingSkin
+  ) {
+    setSeenProps({ avatar, animal, wearingSkin })
+    setLook({ worn: avatar, animal: animal ?? avatar, skin: wearingSkin })
+  }
+
+  const wearing = look.worn
 
   /**
    * Looking at the whole room from above, on purpose.
@@ -2316,7 +2373,7 @@ export function LoungeScene({
 
             <CosmicGround />
             <SelfAvatar
-              model={avatar}
+              model={wearing}
               // Our own side. Always 'ally' when there is one - the ring says
               // which colour you are, and you are on your own side by definition.
               tone={teams ? 'ally' : undefined}
@@ -2338,7 +2395,7 @@ export function LoungeScene({
                 }
                 userId={presence.userId}
                 name={presence.name}
-                avatar={avatar}
+                avatar={wearing}
                 dancing={dancing}
                 health={health}
                 roomRef={roomRef}
@@ -2536,6 +2593,37 @@ export function LoungeScene({
              * The keyboard still has R; this is the touch route to the same flag.
              */
             mirror={{ on: mirror, onToggle: setMirror }}
+            /**
+             * And the wardrobe, beside the mirror.
+             *
+             * `setWearing` is the optimistic half: the body changes on the
+             * click, the save follows it, and a refused save is corrected by
+             * the effect above when the server's answer arrives. Nobody waits
+             * on a round trip to find out what they look like.
+             */
+            peep={{
+              current: look.animal,
+              onChange: (pick) => {
+                setLook({ worn: pick, animal: pick, skin: null })
+                void chooseAvatar(pick)
+              },
+              ...(skins && skins.length > 0
+                ? {
+                    skins,
+                    wearing: look.skin,
+                    /**
+                     * The same optimism the animal gets: the body changes on
+                     * the click and the save follows it. Taking a skin off
+                     * falls back to the animal already in hand, so the room
+                     * never shows an empty body while a round trip lands.
+                     */
+                    onWearSkin: (id: string | null) => {
+                      setLook((was) => ({ ...was, worn: id ?? was.animal, skin: id }))
+                      void wearLoungeSkin(id)
+                    },
+                  }
+                : {}),
+            }}
             className={emoteAnchor(hand)}
           />
         )}

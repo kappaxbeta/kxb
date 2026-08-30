@@ -7274,3 +7274,52 @@ body:has([data-look='dusk']) {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * The lobby
+ * ---------------------------------------------------------------------------
+ * The space picker as a locker screen: your xo peep and your xp body stand on
+ * the landing page's podium, the spaces are a rail of destinations. The
+ * podium itself is drawn in the canvas rather than here - see `Stage` in
+ * lobby.tsx, which rebuilds `scripts/render-stage.ts` in live geometry. What
+ * is left for CSS is the rail, where the selected destination takes the hot
+ * neon because it is the thing Play will act on.
+ * ------------------------------------------------------------------------- */
+
+/* A destination. The resting card is quiet glass; the selected one is the lit
+ * control — ring and bloom in the actionable neon, with a real drop shadow
+ * underneath so the lift is depth rather than decoration. */
+.lobby-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.75rem;
+  background: var(--color-surface-raised);
+  padding: 0.625rem 0.75rem;
+  transition:
+    border-color var(--dur-fast) var(--ease-out-soft),
+    box-shadow var(--dur-base) var(--ease-out-soft),
+    translate var(--dur-fast) var(--ease-out-soft);
+}
+
+.lobby-card:hover {
+  border-color: oklch(0.7 0.27 322 / 0.6);
+}
+
+.lobby-card-selected,
+.lobby-card-selected:hover {
+  border-color: var(--color-accent);
+  background: oklch(0.2 0.06 315 / 0.9);
+  box-shadow:
+    0 0 0 1px oklch(0.7 0.27 322 / 0.35),
+    0 0.25rem 1.5rem oklch(0.7 0.27 322 / 0.35),
+    0 0.5rem 1.25rem oklch(0.05 0.02 285 / 0.5);
+  translate: 0 -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-card {
+    transition: none;
+  }
+}

@@ -1,8 +1,9 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { signOut } from '@/app/(auth)/actions'
 import { CreateTenantForm } from '@/app/tenants/create-tenant-form'
 import { GuestPicker } from '@/app/tenants/guest-picker'
+import { Lobby } from '@/app/tenants/lobby'
 import { SubscribePrompt } from '@/app/tenants/subscribe-prompt'
 import {
   readEntitlementRefreshingIfInactive,
@@ -17,9 +18,13 @@ import { readGrant } from '@/domain/promo/queries'
 import { mayRedeem } from '@/domain/promo/redeem'
 import { mayClaimFreeMonth } from '@/domain/promo/winback'
 import { landingPath } from '@/domain/tenants/last-space'
+import { readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { shopFor } from '@/domain/skins/queries'
+import { readDisplayName } from '@/domain/profile/username-queries'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { listMyInvitations, listMyTenants } from '@/domain/tenants/queries'
 import { requireUser } from '@/lib/auth'
+import { LAST_SPACE_COOKIE } from '@/lib/last-space'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,21 +95,36 @@ export default async function TenantsPage({
     }
   }
 
-  const [tenants, invitations, entitlement, features, canRedeem, canClaim, grant] =
-    await Promise.all([
-      listMyTenants(supabase, user.id),
-      listMyInvitations(supabase),
-      readEntitlementRefreshingIfInactive(
-        supabase,
-        createAdminClient() as unknown as typeof supabase,
-        user.id,
-        user.email,
-      ),
-      resolveFeatures(supabase),
-      mayRedeem(supabase, user.id),
-      mayClaimFreeMonth(supabase, user.id),
-      readGrant(supabase, user.id),
-    ])
+  const [
+    tenants,
+    invitations,
+    entitlement,
+    features,
+    canRedeem,
+    canClaim,
+    grant,
+    avatar,
+    username,
+    wardrobe,
+  ] = await Promise.all([
+    listMyTenants(supabase, user.id),
+    listMyInvitations(supabase),
+    readEntitlementRefreshingIfInactive(
+      supabase,
+      createAdminClient() as unknown as typeof supabase,
+      user.id,
+      user.email,
+    ),
+    resolveFeatures(supabase),
+    mayRedeem(supabase, user.id),
+    mayClaimFreeMonth(supabase, user.id),
+    readGrant(supabase, user.id),
+    readProfileAvatar(supabase, user.id),
+    readDisplayName(supabase, user.id),
+    // The wardrobe, for the locker on the stage: what is owned, what is worn,
+    // and whether the shelf is even open. The same read the shop page runs.
+    shopFor(supabase, user.id),
+  ])
 
   // Has to agree with the gate in createTenant, which skips its Stripe check on
   // exactly this condition. If the two disagree the failure is silent in the
@@ -117,132 +137,36 @@ export default async function TenantsPage({
   const active = tenants.filter((tenant) => !tenant.archived)
   const archived = tenants.filter((tenant) => tenant.archived)
 
-  return (
-    <div className="mx-auto min-h-screen w-full max-w-2xl px-6 py-10">
-      <header className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            {fill(t.signedInAs, { email: user.email ?? '' })}
-          </p>
-          {/*
-            A free month has to be visible while it is running, not only on the
-            day it ends. It is the one thing holding these spaces open, and
-            somebody who redeemed a code three weeks ago has no other way to
-            find out how long is left - the subscription copy elsewhere is all
-            about a payment that was never made.
-          */}
-          {grant?.live && (
-            <p className="mt-1 text-sm text-accent">
-              {/* A grant with no end has no days to count down, so the sentence
-                  changes rather than printing "0 days left" or a date a century
-                  out. `describeGrantEnd` is where all three readings live. */}
-              {grant.until === null
-                ? t.grantForever
-                : fill(t.grantRunning, {
-                    when: describeGrantEnd(grant.until, new Date(), locale),
-                  })}
-            </p>
-          )}
-        </div>
-        <form action={signOut}>
-          <button
-            type="submit"
-            className="rounded-lg border border-line px-3 py-1.5 text-sm transition hover:bg-surface-raised"
-          >
-            {t.signOut}
-          </button>
-        </form>
-      </header>
+  /**
+   * Where the ✕ goes back to, and which card the rail lights up first: the
+   * space this session last stood in, if it is still one of yours. The proxy
+   * rewrites the cookie on every request, so this is simply the most recent
+   * room — no extra query, and no re-proving membership beyond the list
+   * already fetched.
+   */
+  const lastSlug = (await cookies()).get(LAST_SPACE_COOKIE)?.value ?? null
+  const backSlug = active.find((tenant) => tenant.slug === lastSlug)?.slug ?? null
 
-      {invitations.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold">{t.invitations}</h2>
-          <ul className="mt-2 space-y-1.5">
-            {invitations.map((invitation) => (
-              <li
-                key={invitation.tenantId}
-                className="flex items-center gap-3 rounded-lg border border-accent/40 bg-surface-raised px-3 py-2.5"
-              >
-                <span className="flex-1 text-sm">
-                  {invitation.tenantName}
-                  <span className="ml-2 text-xs text-ink-muted">
-                    {fill(t.asRole, { role: invitation.role })}
-                  </span>
-                </span>
-                <Link
-                  href="/invitations"
-                  className="text-sm font-medium text-accent hover:underline"
-                >
-                  {t.respond}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+  /**
+   * Everything below the list is server-rendered and handed to the lobby as
+   * slots, so the client component decides layout and nothing else. The
+   * banner copy, the guard order on `isRedeemOutcome`, and the create-form
+   * gate are unchanged from the list-page days — see the histories in
+   * `application.ts` and `createTenant`.
+   */
+  const notices = (
+    <>
+      {grant?.live && (
+        <p className="mb-3 rounded-lg border border-accent/50 bg-surface-raised px-3 py-2.5 text-sm text-accent">
+          {grant.until === null
+            ? t.grantForever
+            : fill(t.grantRunning, {
+                when: describeGrantEnd(grant.until, new Date(), locale),
+              })}
+        </p>
       )}
-
-      <section>
-        <ul className="space-y-1.5">
-          {active.map((tenant) => (
-            <li key={tenant.id}>
-              <Link
-                href={`/t/${tenant.slug}`}
-                className="flex items-center gap-3 rounded-lg border border-line bg-surface-raised px-3 py-2.5 transition hover:border-accent"
-              >
-                <span className="flex-1 text-sm font-medium">{tenant.name}</span>
-                <span className="font-mono text-xs text-ink-muted">/t/{tenant.slug}</span>
-                <span className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-ink-muted">
-                  {/* Role then plan, matching the account block in the rail:
-                      what you are here, then what the space is on. */}
-                  {tenant.role} <span className="opacity-60">· {tenant.tier}</span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-
-        {active.length === 0 && (
-          <p className="text-sm text-ink-muted">{t.noSpaces}</p>
-        )}
-
-        {archived.length > 0 && (
-          <>
-            <h2 className="mt-8 text-sm font-semibold">{t.archived}</h2>
-            <ul className="mt-2 space-y-1.5">
-              {archived.map((tenant) => (
-                <li key={tenant.id}>
-                  <Link
-                    // The space itself. `/tasks` is a 404 wherever the flag is
-                    // off, which is everywhere by default - see the note in
-                    // `createTenant`.
-                    href={`/t/${tenant.slug}`}
-                    className="flex items-center gap-3 rounded-lg border border-dashed border-line px-3 py-2.5 text-ink-muted transition hover:border-accent"
-                  >
-                    <span className="flex-1 text-sm">{tenant.name}</span>
-                    <span className="font-mono text-xs">/t/{tenant.slug}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </section>
-
-      {/*
-        The answer /code/[code] redirected with.
-
-        It has to render on a cold load, which is why it travels as a query
-        parameter rather than as anything held in memory - the route handler
-        that decided it has already finished, and this page may be the first
-        thing rendered in a browser that has never seen the app.
-
-        The refusal wording is the domain's, not this page's. Somebody who
-        followed the same poster link twice gets told they have already had
-        their month, in exactly the words the redeem box would have used.
-      */}
       {promo === 'ok' && grant && (
-        <p className="mt-8 rounded-lg border border-accent/50 bg-surface-raised px-4 py-3 text-sm">
+        <p className="mb-3 rounded-lg border border-accent/50 bg-surface-raised px-3 py-2.5 text-sm">
           {grant.until === null ? (
             t.promoForever
           ) : (
@@ -256,41 +180,78 @@ export default async function TenantsPage({
           )}
         </p>
       )}
-      {/* The guard order matters: `isRedeemOutcome` is what narrows the string
-          to an outcome, and only then can `!== 'ok'` narrow it to a refusal. */}
       {isRedeemOutcome(promo) && promo !== 'ok' && (
-        <p className="mt-8 rounded-lg border border-line px-4 py-3 text-sm text-ink-muted">
+        <p className="mb-3 rounded-lg border border-line px-3 py-2.5 text-sm text-ink-muted">
           {refusalForLocale(promo, locale)}
         </p>
       )}
-
       {checkout === 'success' && (
-        <p className="mt-8 rounded-lg border border-accent/50 bg-surface-raised px-4 py-3 text-sm">
+        <p className="mb-3 rounded-lg border border-accent/50 bg-surface-raised px-3 py-2.5 text-sm">
           {t.checkoutDone}
         </p>
       )}
       {checkout === 'canceled' && (
-        <p className="mt-8 rounded-lg border border-line px-4 py-3 text-sm text-ink-muted">
+        <p className="mb-3 rounded-lg border border-line px-3 py-2.5 text-sm text-ink-muted">
           {t.checkoutCancelled}
         </p>
       )}
+    </>
+  )
 
-      {/*
-        The create form only appears with a seat to spend. Showing it otherwise
-        means the only way to discover the subscription requirement is to fill
-        it in and be refused - the gate in createTenant still enforces this, but
-        a form you cannot submit is not a gate, it is a trap.
-      */}
-      {canCreate ? (
-        <CreateTenantForm locale={locale} />
-      ) : (
-        <SubscribePrompt
-          entitlement={entitlement}
-          locale={locale}
-          canRedeem={canRedeem}
-          canClaim={canClaim}
-        />
-      )}
-    </div>
+  return (
+    <Lobby
+      spaces={active.map(({ id, slug, name, role, tier }) => ({
+        id,
+        slug,
+        name,
+        role,
+        tier,
+      }))}
+      archived={archived.map(({ id, slug, name, role, tier }) => ({
+        id,
+        slug,
+        name,
+        role,
+        tier,
+      }))}
+      invitations={invitations.map(({ tenantId, tenantName, role }) => ({
+        tenantId,
+        tenantName,
+        role,
+      }))}
+      avatar={avatar}
+      username={username}
+      wardrobe={wardrobe}
+      email={user.email ?? ''}
+      defaultSlug={backSlug ?? active[0]?.slug ?? null}
+      backHref={backSlug ? `/t/${backSlug}` : null}
+      locale={locale}
+      notices={notices}
+      footer={
+        canCreate ? (
+          // Bare once spaces exist: the lobby folds the form behind its own
+          // "New space" summary, and the boxed version there would be a
+          // heading inside a heading — the tour learned this first.
+          <CreateTenantForm locale={locale} bare={active.length > 0} />
+        ) : (
+          <SubscribePrompt
+            entitlement={entitlement}
+            locale={locale}
+            canRedeem={canRedeem}
+            canClaim={canClaim}
+          />
+        )
+      }
+      signOutForm={
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="rounded-full border border-line px-3 py-1.5 text-sm text-ink-muted transition hover:border-accent hover:text-ink"
+          >
+            {t.signOut}
+          </button>
+        </form>
+      }
+    />
   )
 }

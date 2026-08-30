@@ -458,6 +458,9 @@ export interface RailDict {
     justHere: string
     onlyHere: string
     everywhere: string
+    /** The door to the skin shop. No prices here - the shop quotes its own. */
+    skinsLink: string
+    skinsHint: string
   }
 
   /** The tools at the foot of the rail, and the door above them. */
@@ -655,6 +658,8 @@ export const RAIL_EN: RailDict = {
     onlyHere: 'Only here. Everywhere else you are whatever your profile says.',
     everywhere:
       'Follows your account everywhere — the lounge, the café, and any level that asks for your own animal.',
+    skinsLink: 'Skins',
+    skinsHint: 'Character skins for levels and matches — bound to your account.',
   },
 
   roomTab: {
@@ -1080,6 +1085,8 @@ export const RAIL_DE: RailDict = {
     onlyHere: 'Nur hier. Überall sonst sind Sie das, was Ihr Profil sagt.',
     everywhere:
       'Gilt überall in Ihrem Konto — in der Lounge, im Café und in jedem Level, das nach Ihrem eigenen Tier fragt.',
+    skinsLink: 'Skins',
+    skinsHint: 'Charakter-Skins für Level und Matches — an Ihr Konto gebunden.',
   },
 
   roomTab: {
@@ -1529,6 +1536,8 @@ export const RAIL_BG: RailDict = {
     onlyHere: 'Само тук. Навсякъде другаде сте това, което казва профилът ви.',
     everywhere:
       'Следва акаунта ви навсякъде — лоунджа, кафенето и всяко ниво, което иска вашето собствено животно.',
+    skinsLink: 'Скинове',
+    skinsHint: 'Скинове за героя в нивата и мачовете — вързани към акаунта ви.',
   },
 
   roomTab: {

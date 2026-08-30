@@ -6,7 +6,7 @@ import { requireXpAccess } from '@/app/xp/gate'
 import { roomId } from '@/lib/xp-rooms'
 import { XpScene } from '@/app/xp/_runtime/scene'
 import { SceneDebug } from '@/app/xp/_runtime/hud/scene-debug'
-import { readAvatarHere } from '@/domain/profile/avatar-queries'
+import { readWornLook } from '@/domain/skins/queries'
 import { createClient } from '@/lib/supabase/server'
 import { describeProblems, parseXp, type XpProblem } from '@kxb/xp'
 import {
@@ -225,12 +225,14 @@ async function whoAmI(): Promise<{ id: string; name: string } | null> {
 }
 
 /**
- * Which animal this account wears, or null.
+ * What this account wears, or null.
  *
- * The *profile's*, which is the same row the lounge draws from - so somebody
- * who picked a penguin in their settings is a penguin here without having
- * chosen twice. Silent on failure rather than throwing: a body is the last
- * thing that should be able to stop a level loading.
+ * The *profile's*, which is the same rows the lounge and the shop write - so
+ * somebody who picked a penguin in their settings is a penguin here without
+ * having chosen twice, and somebody who equipped a bought skin arrives in it.
+ * `readWornLook` is where the precedence lives: skin over animal, animal over
+ * dummy. Silent on failure rather than throwing: a body is the last thing
+ * that should be able to stop a level loading.
  */
 async function myAvatar(tenantId: string | null): Promise<string | null> {
   try {
@@ -241,13 +243,10 @@ async function myAvatar(tenantId: string | null): Promise<string | null> {
     if (!user) return null
     /**
      * The space's answer if this level is being played in one, otherwise the
-     * account's. `readAvatarHere` is where that precedence is written down, so
-     * the body drawn here and the picture in the rail cannot disagree.
-     *
-     * A level reached at `/xp/<id>` with no room is nobody's space, and the
-     * profile is the only answer there is.
+     * account's - a level reached at `/xp/<id>` with no room is nobody's
+     * space, and the profile is the only answer there is.
      */
-    return await readAvatarHere(supabase, user.id, tenantId)
+    return await readWornLook(supabase, user.id, tenantId)
   } catch {
     return null
   }

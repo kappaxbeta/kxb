@@ -28,6 +28,7 @@ export interface WorkspaceDict {
     room: string
     welcome: string
     builder: string
+    skins: string
   }
 
   /** The space's front page: a masthead, a wire of notices, and two shelves. */
@@ -405,6 +406,7 @@ export const WORKSPACE_EN: WorkspaceDict = {
     room: 'Room',
     welcome: 'Welcome',
     builder: 'World builder',
+    skins: 'Skins',
   },
 
   board: {
@@ -812,6 +814,7 @@ export const WORKSPACE_DE: WorkspaceDict = {
     room: 'Raum',
     welcome: 'Willkommen',
     builder: 'Weltenbaukasten',
+    skins: 'Skins',
   },
 
   board: {
@@ -1240,6 +1243,7 @@ export const WORKSPACE_BG: WorkspaceDict = {
     room: 'Стая',
     welcome: 'Добре дошли',
     builder: 'Строител на светове',
+    skins: 'Скинове',
   },
 
   board: {

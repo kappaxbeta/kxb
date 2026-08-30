@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { AvatarModel } from '@/app/world/lounge/_canvas/avatar-model'
+import { BodyModel } from '@/app/world/lounge/_canvas/body-model'
 import {
   type DashRuntime,
   dashConnects,
@@ -2852,8 +2852,8 @@ function RemoteAvatar({
           {/* Other people are not obstacles to the crosshair. Being unable to
               build because a colleague is standing where you were aiming would be
               a worse problem than clipping through each other. */}
-          <AvatarModel
-            model={peer.avatar}
+          <BodyModel
+            look={peer.avatar}
             clip={clip}
             ignoreRay
             rim={party ? partyColour : null}

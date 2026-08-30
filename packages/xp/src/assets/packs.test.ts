@@ -22,18 +22,25 @@ describe('models with bones', () => {
     expect(isRigged('platformer-neutral/floor_spikes_2x2x1')).toBe(false)
   })
 
-  test('exactly two packs claim it, so a third is a decision rather than a drift', () => {
+  test('exactly four packs claim it, so a fifth is a decision rather than a drift', () => {
     /**
-     * Not a rule that there may only ever be two. It is a rule that adding the
-     * next one is a thing somebody did on purpose, with this test in front of
-     * them, rather than a field that appeared because a pack was copied - and
-     * every rig costs a clip table, a handle table and a part vocabulary, none
-     * of which a copied line would bring with it.
+     * Not a rule that there may only ever be four. It is a rule that adding
+     * the next one is a thing somebody did on purpose, with this test in front
+     * of them, rather than a field that appeared because a pack was copied -
+     * and every rig costs a clip table, a handle table and a part vocabulary,
+     * none of which a copied line would bring with it.
+     *
+     * The adventurers and the monsters were exactly that decision, made
+     * cheaply twice: both claim the *dummy's* skeleton rather than a rig of
+     * their own, because their joint lists are the dummy's 23 bones name for
+     * name. New meshes, no new vocabulary.
      */
     const rigged = Object.entries(PACKS)
       .filter(([, pack]) => pack.skeleton)
       .map(([id]) => id)
-    expect(rigged).toEqual(['dummy', 'peepz'])
+    expect(rigged).toEqual(['dummy', 'peepz', 'adventurers', 'kappa'])
+    expect(PACKS.adventurers.skeleton).toBe('dummy')
+    expect(PACKS.kappa.skeleton).toBe('dummy')
   })
 
   test('and the default player body is one of them', () => {

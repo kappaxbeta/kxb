@@ -400,6 +400,7 @@ export default async function TenantLayout({
                       worlds: features.worlds,
                       scenes: features.scenes,
                       xp: hasTier(context, 'xp'),
+                      skinShop: features.skin_shop,
                   }}
                   username={username}
                   email={user.email ?? railDict(locale).account.signedIn}

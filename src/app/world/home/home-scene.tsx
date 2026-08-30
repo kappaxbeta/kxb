@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import { HomeHud } from '@/app/world/home/home-hud'
 import { HomePropModel, TinyModel } from '@/app/world/home/tiny-model'
 import { AvatarModel } from '@/app/world/lounge/_canvas/avatar-model'
+import { BodyModel } from '@/app/world/lounge/_canvas/body-model'
 import {
   EYE_HEIGHT,
   PLAYER_RADIUS,
@@ -1332,8 +1333,9 @@ function Resident({
           the whole body along the bed rather than spinning it in mid-air. */}
       <group rotation={[rest?.pose === 'lie' ? -Math.PI / 2 : 0, 0, 0]}>
         <Suspense fallback={null}>
-          <AvatarModel
-            model={avatar}
+          {/* Whichever half of you this account wears - see `BodyModel`. */}
+          <BodyModel
+            look={avatar}
             clip={rest ? 'idle' : walking ? 'walk' : 'idle'}
             ignoreRay
           />

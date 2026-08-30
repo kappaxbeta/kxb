@@ -70,6 +70,23 @@ export const env = {
   stripePriceXo: () => required('STRIPE_PRICE_XO', process.env.STRIPE_PRICE_XO),
   stripePriceXp: () => required('STRIPE_PRICE_XP', process.env.STRIPE_PRICE_XP),
   /**
+   * The products the one-off purchases are charged against, if you made them.
+   *
+   * Unlike the two prices above, the shop's amounts are decided by us at
+   * checkout - a buck bundle's cents, a skin's price - so what Stripe needs is
+   * a *product* to hang each ad-hoc price on, not a price id. Without one it
+   * invents a product per session from the name we pass, which charges the
+   * right amount and reports as a hundred one-off products nobody can total.
+   *
+   * Optional, and read directly rather than through `required`, for the same
+   * reason as the legacy price: a deployment that has not made them still
+   * takes money correctly, it just gets the ad-hoc products. Naming one is
+   * also how you set a tax code on it, which is what Managed Payments wants -
+   * see the note on `managed_payments` at the tier checkout.
+   */
+  stripeProductBucks: () => process.env.STRIPE_PRODUCT_BUCKS || null,
+  stripeProductSkin: () => process.env.STRIPE_PRODUCT_SKIN || null,
+  /**
    * The old single EUR 20/month price.
    *
    * No longer sold. Kept because subscriptions on it are still being collected

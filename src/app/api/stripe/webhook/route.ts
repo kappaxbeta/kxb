@@ -5,6 +5,8 @@ import type { BillingCommand } from '@/domain/billing/commands'
 import { subscriptionStreamId } from '@/domain/billing/events'
 import { billingProjection } from '@/domain/billing/projection'
 import { tierForPrice, tierForPriceOrDefault } from '@/domain/billing/prices'
+import { grantPurchasedSkin, grantSubscriptionVoucher } from '@/domain/skins/grants'
+import { grantPurchasedBucks } from '@/domain/skins/bucks'
 import { executeCommand } from '@/es/command'
 import { runProjection } from '@/es/projection'
 import type { Client } from '@/es/store'
@@ -104,6 +106,20 @@ async function handle(supabase: Client, event: Stripe.Event): Promise<boolean> {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object
+
+      // A skin purchase, not a subscription: our metadata says so, and there
+      // is no tenant and no subscription to expand - the grant is the whole
+      // of what the event means.
+      if (session.metadata?.kind === 'skin') {
+        return grantPurchasedSkin(supabase, session)
+      }
+
+      // Bucks, the same shape: a one-off payment with no tenant and no
+      // subscription, whose whole meaning is the grant.
+      if (session.metadata?.kind === 'bucks') {
+        return grantPurchasedBucks(supabase, session)
+      }
+
       const tenantId = tenantIdFrom(session.metadata)
       if (!tenantId) return false
 
@@ -138,12 +154,26 @@ async function handle(supabase: Client, event: Stripe.Event): Promise<boolean> {
       })
     }
 
+    // The delayed half of a skin purchase: a SEPA checkout completes with the
+    // money still in flight, and this is the event that says it landed.
+    // grantPurchasedSkin checks payment_status either way, so both events can
+    // share it.
+    case 'checkout.session.async_payment_succeeded': {
+      const session = event.data.object
+      if (session.metadata?.kind !== 'skin') return false
+      return grantPurchasedSkin(supabase, session)
+    }
+
     case 'invoice.paid': {
       const invoice = event.data.object
       const tenantId = tenantIdFrom(invoice.metadata) ?? (await tenantForInvoice(invoice))
       if (!tenantId) return false
 
-      return dispatch(supabase, tenantId, {
+      // The paying subscriber's monthly skin voucher rides on the same event,
+      // after the payment is recorded. Its own idempotency (the invoice id is
+      // unique on the voucher row) makes it safe under redelivery, and its own
+      // error handling keeps a perk from failing a payment.
+      const handled = await dispatch(supabase, tenantId, {
         type: 'RecordPaymentSucceeded',
         invoiceId: invoice.id ?? '',
         amountCents: invoice.amount_paid,
@@ -151,6 +181,9 @@ async function handle(supabase: Client, event: Stripe.Event): Promise<boolean> {
           ? new Date(invoice.period_end * 1000).toISOString()
           : null,
       })
+
+      await grantSubscriptionVoucher(supabase, invoice)
+      return handled
     }
 
     case 'invoice.payment_failed': {

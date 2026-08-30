@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { AVATARS, avatarShotUrl } from '@/domain/lounge/avatars'
 import { chooseAvatar, chooseSpaceAvatar } from '@/domain/profile/avatar-actions'
@@ -40,11 +41,14 @@ export function AvatarRail({
   initial,
   hereOnly,
   slug,
+  hasSkinShop,
 }: {
   initial: string
   /** Whether the animal shown is an override for this space rather than yours. */
   hereOnly: boolean
   slug: string
+  /** Whether the skin shop is open - decides if the door to it is drawn. */
+  hasSkinShop: boolean
 }) {
   const refusal = useRefusal()
   const t = railDict(useLocale()).avatar
@@ -151,6 +155,21 @@ export function AvatarRail({
       <p className="mt-1 px-1 font-mono text-[10px] leading-tight text-ink-muted">
         {error ?? (here ? t.onlyHere : t.everywhere)}
       </p>
+
+      {/*
+        The door to the skin shop, only while the shop is open - see
+        `SidebarFeatures.skinShop`. Offered to guests too, like the animals
+        above: the shop lets anybody browse, and refuses buying on its own
+        terms rather than being hidden from the people it would refuse.
+      */}
+      {hasSkinShop && (
+        <p className="mt-2 px-1 font-mono text-[10px] leading-tight text-ink-muted">
+          <Link href="/skins" className="text-ink underline underline-offset-2">
+            {t.skinsLink}
+          </Link>{' '}
+          — {t.skinsHint}
+        </p>
+      )}
     </section>
   )
 }

@@ -34,7 +34,23 @@ export interface Image {
  * cheaper than a rule.
  */
 export function decodePng(file: string): Image {
-  const buf = readFileSync(file)
+  return decodePngBytes(readFileSync(file), file)
+}
+
+/**
+ * The same decoder, for a PNG that is not a file.
+ *
+ * A `.glb` may carry its atlas *inside* it, as a bufferView rather than a URI
+ * beside the model - which is what every character pack exported as a single
+ * binary does, and what drew the adventurers and the monsters as white
+ * silhouettes until this existed. The bytes are identical either way; only
+ * where they were found differs, so the decoder takes bytes and the two
+ * callers differ by one line.
+ *
+ * `label` is only ever used to name the file in an error.
+ */
+export function decodePngBytes(buf: Buffer, label = '<embedded>'): Image {
+  const file = label
   const width = buf.readUInt32BE(16)
   const height = buf.readUInt32BE(20)
   const depth = buf[24]

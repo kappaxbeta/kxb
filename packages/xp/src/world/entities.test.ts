@@ -714,4 +714,48 @@ describe('the body a document did not bring', () => {
       expect(findModel(`peepz/${animal}`)).toBeTruthy()
     }
   })
+
+  test('a bought skin arrives as a full address and is worn as-is', () => {
+    // The slash is the tell: a qualified id skips the peepz mapping entirely.
+    const model = bodiesFor(wearing('profile'), 'adventurers/Knight')[BUILT_IN_BODY]?.model
+    expect(model).toBe('adventurers/Knight')
+    // Dummy-height, so it shrinks the way the dummy does - not the peep way.
+    expect(bodyScaleFor(wearing('profile'), 'adventurers/Knight')).toBe(BUILT_IN_BODY_SCALE)
+    // And the pack really ships it, same honesty check as the animals above.
+    expect(findModel('adventurers/Knight')).toBeTruthy()
+  })
+
+  test('a skin replaces the dummy in a level that never asked a question', () => {
+    /**
+     * Not the same rule as the animals, and the difference is what `dummy`
+     * means. The parser stores the default as absence, so `wears: 'dummy'` is
+     * every level that never thought about bodies - and the dummy is what a
+     * player is before they are anybody. A bought skin is what replaces it.
+     *
+     * An animal still needs asking for, because a room full of foxes is a
+     * decision somebody made about their level.
+     */
+    expect(bodiesFor(bare(), 'adventurers/Knight')[BUILT_IN_BODY]?.model).toBe(
+      'adventurers/Knight',
+    )
+    expect(bodiesFor(bare(), 'fox')[BUILT_IN_BODY]?.model).toBe('dummy/Dummy')
+  })
+
+  test('but a level that asked for animals gets animals', () => {
+    // `random` is a creator saying "a room full of animals", and one Knight
+    // among the foxes is the wardrobe overriding the level.
+    const model = bodiesFor(wearing('random'), 'adventurers/Knight', 'who')[BUILT_IN_BODY]
+      ?.model
+    expect(model?.startsWith('peepz/')).toBe(true)
+  })
+
+  test('an id shaped like an escape is not a skin', () => {
+    // The same refusal splitModel makes: one pack, one slash, one name. A
+    // string that fails the shape falls through to a random animal, because
+    // the level asked for animals and broken input does not change that.
+    for (const bad of ['adventurers/../secrets', '/etc/passwd', 'a/b/c', 'adventurers/']) {
+      const model = bodiesFor(wearing('profile'), bad, 'who')[BUILT_IN_BODY]?.model
+      expect(model?.startsWith('peepz/')).toBe(true)
+    }
+  })
 })

@@ -16,6 +16,7 @@ import { loungeGoalsProjection } from '@/domain/lounge/goal-projection'
 import { listGoals } from '@/domain/lounge/goal-queries'
 import { listLoungeBlocks } from '@/domain/lounge/queries'
 import { readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { readProfileSkin } from '@/domain/skins/queries'
 import { readSceneIdentity } from '@/domain/guests/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
 import { roomsProjection } from '@/domain/rooms/projection'
@@ -171,9 +172,13 @@ export default async function RoomPage({
       )
     }
 
-    const [avatar, name] = await Promise.all([
+    const [avatar, name, skin] = await Promise.all([
       readProfileAvatar(supabase, user.id),
       readDisplayName(supabase, user.id),
+      // The equipped skin, for the XP body only. Deliberately not folded into
+      // the identity: nameplates, rails and the guest roster draw animals and
+      // their pre-rendered shots, and a qualified skin id has no shot to draw.
+      readProfileSkin(supabase, user.id),
     ])
     const identity = await readSceneIdentity(supabase, tenant.id, user.id, { name, avatar })
 
@@ -199,8 +204,10 @@ export default async function RoomPage({
           {...(ref?.kind === 'project' ? { xpId: ref.xpId } : {})}
           me={{ id: user.id, name: identity.name }}
           // The same identity the lounge below is drawn from, so somebody does
-          // not change animal by walking through a door.
-          avatar={identity.avatar}
+          // not change animal by walking through a door - unless they bought a
+          // skin, which outranks the animal in an XP and nowhere else. A guest
+          // cannot own one, so the door's choice still stands for them.
+          avatar={skin ?? identity.avatar}
         />
       </>
     )

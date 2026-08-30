@@ -310,8 +310,10 @@ describe('tiles', () => {
     // kit has. Collapsing it means widening that list, which changes what a
     // swatch row is and what `prefer` can mean, for eleven shapes. Not worth
     // it yet; worth it the moment a third family lands.
-    expect(CATALOGUE.length).toBe(4451)
-    expect(tiles()).toHaveLength(4081)
+    // The adventurers moved both numbers by their nine and the monsters by
+    // their two: no colourways, so no collapse, same as Kenney's kits.
+    expect(CATALOGUE.length).toBe(4462)
+    expect(tiles()).toHaveLength(4092)
   })
 
   test('the grid is only the packs the document declares', () => {

@@ -1950,6 +1950,35 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_skins: {
+        Row: {
+          in_lounge: boolean
+          model: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          in_lounge?: boolean
+          model: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          in_lounge?: boolean
+          model?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_skins_model_fkey"
+            columns: ["model"]
+            isOneToOne: false
+            referencedRelation: "skins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projection_checkpoints: {
         Row: {
           last_seq: number
@@ -2610,6 +2639,165 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      skin_gifts: {
+        Row: {
+          bought_by: string
+          claimed_at: string | null
+          claimed_by: string | null
+          code: string
+          created_at: string
+          id: string
+          message: string
+          skin_id: string
+        }
+        Insert: {
+          bought_by: string
+          claimed_at?: string | null
+          claimed_by?: string | null
+          code: string
+          created_at?: string
+          id?: string
+          message?: string
+          skin_id: string
+        }
+        Update: {
+          bought_by?: string
+          claimed_at?: string | null
+          claimed_by?: string | null
+          code?: string
+          created_at?: string
+          id?: string
+          message?: string
+          skin_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skin_gifts_skin_id_fkey"
+            columns: ["skin_id"]
+            isOneToOne: false
+            referencedRelation: "skins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skin_ownership: {
+        Row: {
+          created_at: string
+          skin_id: string
+          user_id: string
+          via: string
+        }
+        Insert: {
+          created_at?: string
+          skin_id: string
+          user_id: string
+          via: string
+        }
+        Update: {
+          created_at?: string
+          skin_id?: string
+          user_id?: string
+          via?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skin_ownership_skin_id_fkey"
+            columns: ["skin_id"]
+            isOneToOne: false
+            referencedRelation: "skins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skin_vouchers: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          owner_id: string | null
+          redeemed_at: string | null
+          source: string
+          spent_at: string | null
+          spent_on: string | null
+          stripe_invoice_id: string | null
+          stripe_session_id: string | null
+          stripe_session_seq: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          owner_id?: string | null
+          redeemed_at?: string | null
+          source: string
+          spent_at?: string | null
+          spent_on?: string | null
+          stripe_invoice_id?: string | null
+          stripe_session_id?: string | null
+          stripe_session_seq?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          owner_id?: string | null
+          redeemed_at?: string | null
+          source?: string
+          spent_at?: string | null
+          spent_on?: string | null
+          stripe_invoice_id?: string | null
+          stripe_session_id?: string | null
+          stripe_session_seq?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skin_vouchers_spent_on_fkey"
+            columns: ["spent_on"]
+            isOneToOne: false
+            referencedRelation: "skins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skins: {
+        Row: {
+          active: boolean
+          backstory: string
+          created_at: string
+          id: string
+          name: string
+          price_cents: number
+          tier: string
+          updated_at: string
+          voucher_cost: number
+        }
+        Insert: {
+          active?: boolean
+          backstory?: string
+          created_at?: string
+          id: string
+          name: string
+          price_cents?: number
+          tier?: string
+          updated_at?: string
+          voucher_cost?: number
+        }
+        Update: {
+          active?: boolean
+          backstory?: string
+          created_at?: string
+          id?: string
+          name?: string
+          price_cents?: number
+          tier?: string
+          updated_at?: string
+          voucher_cost?: number
+        }
+        Relationships: []
       }
       space_avatars: {
         Row: {
@@ -4119,6 +4307,10 @@ export type Database = {
           outcome: string
         }[]
       }
+      claim_free_skin: {
+        Args: { p_skin_id: string; p_user_id: string }
+        Returns: string
+      }
       claim_render_job: {
         Args: { p_max_attempts?: number }
         Returns: {
@@ -4145,6 +4337,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      claim_skin_gift: {
+        Args: { p_code: string; p_user_id: string }
+        Returns: string
       }
       claim_username: {
         Args: { p_seed: string; p_user_id: string }
@@ -4219,6 +4415,19 @@ export type Database = {
       funnel_report_admin: {
         Args: { days?: number; steps: Json }
         Returns: Json
+      }
+      gift_skin: {
+        Args: {
+          p_code: string
+          p_message?: string
+          p_skin_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      gift_skin_voucher: {
+        Args: { p_code: string; p_user_id: string; p_voucher_id: string }
+        Returns: string
       }
       grant_covers_tenant: {
         Args: { p_spaces: number; p_tenant_id: string; p_user_id: string }
@@ -4479,6 +4688,10 @@ export type Database = {
           outcome: string
         }[]
       }
+      redeem_skin_voucher: {
+        Args: { p_code: string; p_user_id: string }
+        Returns: string
+      }
       repair_tenant_event_sequence_heads: {
         Args: never
         Returns: {
@@ -4540,6 +4753,10 @@ export type Database = {
         Args: { p_capability: string; p_tenant_id: string }
         Returns: boolean
       }
+      spend_skin_vouchers: {
+        Args: { p_skin_id: string; p_user_id: string }
+        Returns: string
+      }
       stray_guest_ids: {
         Args: { p_limit?: number; p_older_than: string }
         Returns: string[]
@@ -4547,6 +4764,7 @@ export type Database = {
       stream_capability: { Args: { p_stream_type: string }; Returns: string }
       stream_tenant: { Args: { p_stream_id: string }; Returns: string }
       suggest_username: { Args: { p_seed: string }; Returns: string }
+      summon_topic_tenant: { Args: { p_topic: string }; Returns: string }
       tenant_created_by: { Args: { p_tenant_id: string }; Returns: string }
       tenant_event_permitted: {
         Args: { p_data: Json; p_tenant_id: string; p_type: string }
@@ -4616,6 +4834,15 @@ export type Database = {
       xp_arbitrate: {
         Args: { p_action: string; p_instance: string; p_payload?: Json }
         Returns: Json
+      }
+      xp_event_permitted: {
+        Args: {
+          p_data: Json
+          p_stream_id: string
+          p_tenant_id: string
+          p_type: string
+        }
+        Returns: boolean
       }
       xp_in_my_space: { Args: { p_xp_id: string }; Returns: boolean }
       xp_in_my_space_as_member: { Args: { p_xp_id: string }; Returns: boolean }

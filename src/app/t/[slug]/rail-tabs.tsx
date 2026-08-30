@@ -58,6 +58,7 @@ export function RailTabs({
   canManageRooms,
   avatar,
   hereOnly,
+  hasSkinShop,
   /**
    * Whether to take the panel's remaining height, or stand at a fixed one.
    *
@@ -88,6 +89,8 @@ export function RailTabs({
   avatar: string
   /** Whether that animal is an override for this space only. */
   hereOnly: boolean
+  /** Whether the skin shop is open, and so worth a door. See `SidebarFeatures`. */
+  hasSkinShop: boolean
   fill: boolean
 }) {
   /**
@@ -310,7 +313,12 @@ export function RailTabs({
               switches because it is a fact about *you* rather than about the
               room, and the room's own controls should come first.
             */}
-            <AvatarRail initial={avatar} hereOnly={hereOnly} slug={slug} />
+            <AvatarRail
+              initial={avatar}
+              hereOnly={hereOnly}
+              slug={slug}
+              hasSkinShop={hasSkinShop}
+            />
             {/* Under the party, because the two are the same kind of thing -
                 a switch you throw on a room you are standing in - and the
                 party is the one people come looking for. */}

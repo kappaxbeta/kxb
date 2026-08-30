@@ -199,6 +199,19 @@ export const FEATURES = {
    */
   xp_sales: { label: 'xp tier on sale', fallback: false },
   /**
+   * The skin shop: the shelf of character skins for the XP body.
+   *
+   * `false`, like every flag guarding unfinished surface. The same shape as
+   * `xp_sales` in what it gates: *selling*, not the feature. A skin somebody
+   * already owns keeps working and stays wearable when this is off, because
+   * withdrawing a bought look is a different decision from pausing sales.
+   * What closes is the shelf - browsing, Checkout, voucher redemption - and
+   * the subscription's monthly voucher keeps arriving, because that is part
+   * of what the subscriber is paying for, not part of what we are selling
+   * today.
+   */
+  skin_shop: { label: 'Skin shop', fallback: false },
+  /**
    * Scenes from the motion studio, on a space's board.
    *
    * `false`, like the other flags guarding new surface. What it gates is the

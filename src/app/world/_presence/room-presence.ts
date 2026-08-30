@@ -53,7 +53,7 @@ import { useReportConnection } from '@/app/components/connection'
 import { leaveHere, publishHere } from '@/app/world/_stores/here-store'
 import { type DoorMode } from '@/domain/homestead/events'
 import { type EmoteId, isEmote } from '@/domain/world/emotes'
-import { DEFAULT_AVATAR, isKnownAvatar } from '@/domain/lounge/avatars'
+import { DEFAULT_AVATAR, isKnownLook } from '@/domain/lounge/avatars'
 import type { OwnedPlace } from '@kxb/peepz-world/places'
 import { createClient } from '@/lib/supabase/client'
 
@@ -287,8 +287,11 @@ export function useRoom({
           next.push({
             userId: entry.userId,
             name: entry.name || 'Someone',
-            // An avatar we no longer ship must not become a 404 mid-scene.
-            avatar: isKnownAvatar(entry.avatar) ? entry.avatar : DEFAULT_AVATAR,
+            // A look we no longer ship must not become a 404 mid-scene. Both
+            // kinds pass: an animal off the roster, or a bought skin, which
+            // `isKnownAvatar` alone answered "no" for - quietly turning every
+            // dressed player into a penguin in everybody else's lounge.
+            avatar: isKnownLook(entry.avatar) ? entry.avatar : DEFAULT_AVATAR,
           })
         }
 

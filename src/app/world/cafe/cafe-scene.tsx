@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { AvatarModel } from '@/app/world/lounge/_canvas/avatar-model'
+import { BodyModel } from '@/app/world/lounge/_canvas/body-model'
 import { EYE_HEIGHT, step as stepPhysics } from '@/app/world/lounge/_sim/physics'
 import {
   actionsAnchor,
@@ -1401,7 +1402,9 @@ function Chef({
   return (
     <group ref={group}>
       <Suspense fallback={null}>
-        <AvatarModel model={avatar} clip={moving ? 'walk' : 'idle'} ignoreRay />
+        {/* The player, who may be wearing a bought skin rather than an animal -
+            the customers below are always animals and keep AvatarModel. */}
+        <BodyModel look={avatar} clip={moving ? 'walk' : 'idle'} ignoreRay />
       </Suspense>
       {state.carried && (
         <Suspense fallback={null}>

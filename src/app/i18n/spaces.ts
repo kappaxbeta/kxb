@@ -102,6 +102,30 @@ export interface SpacesDict {
     back: string
   }
 
+  /**
+   * The lobby chrome around the space rail: the one big button, the locker,
+   * and the ways out. Everything else the lobby prints is reused from the
+   * sections above — `join.*` labels the code field, `guest.back` labels the
+   * ✕, `welcome.*` narrates the locker — so these four are only what no other
+   * surface says.
+   */
+  lobby: {
+    play: string
+    /** The button under the peep that opens the picker. Names the action. */
+    locker: string
+    lockerTitle: string
+    close: string
+    /** Filters the list of other spaces. */
+    search: string
+    /** Summary label the collapsed create form hides behind. */
+    newSpace: string
+    /** The XP half of the locker. */
+    skins: string
+    shop: string
+    shopClosed: string
+    noSkins: string
+  }
+
   /** Arriving on a six-character code somebody read out. */
   join: {
     title: string
@@ -189,6 +213,19 @@ export const SPACES_EN: SpacesDict = {
     pickPlan: 'Or pick a plan',
     requestInvite: 'Request an invite',
     back: 'Back to the space',
+  },
+
+  lobby: {
+    play: 'Play',
+    locker: 'Change peep',
+    lockerTitle: 'Your peep',
+    close: 'Close',
+    search: 'Search spaces…',
+    newSpace: 'New space',
+    skins: 'Your skin',
+    shop: 'Shop →',
+    shopClosed: 'See the shelf →',
+    noSkins: 'No skins yet — the shop is where they live.',
   },
 
   welcome: {
@@ -288,6 +325,19 @@ export const SPACES_DE: SpacesDict = {
     back: 'Zurück in den Space',
   },
 
+  lobby: {
+    play: 'Spielen',
+    locker: 'Peep wechseln',
+    lockerTitle: 'Ihr Peep',
+    close: 'Schließen',
+    search: 'Spaces durchsuchen …',
+    newSpace: 'Neuer Space',
+    skins: 'Ihr Skin',
+    shop: 'Shop →',
+    shopClosed: 'Zum Regal →',
+    noSkins: 'Noch keine Skins — im Shop wohnen sie.',
+  },
+
   welcome: {
     step: 'Schritt {n} von 2',
     takeInstead: 'Stattdessen {name} nehmen',
@@ -381,6 +431,19 @@ export const SPACES_BG: SpacesDict = {
     pickPlan: 'Или изберете план',
     requestInvite: 'Поискайте покана',
     back: 'Обратно в спейса',
+  },
+
+  lobby: {
+    play: 'Играй',
+    locker: 'Смяна на пийпа',
+    lockerTitle: 'Вашият пийп',
+    close: 'Затвори',
+    search: 'Търсене на спейсове…',
+    newSpace: 'Нов спейс',
+    skins: 'Вашият скин',
+    shop: 'Магазин →',
+    shopClosed: 'Към рафта →',
+    noSkins: 'Още няма скинове — живеят в магазина.',
   },
 
   welcome: {

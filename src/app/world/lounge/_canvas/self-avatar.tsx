@@ -3,7 +3,7 @@
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { AvatarModel } from '@/app/world/lounge/_canvas/avatar-model'
+import { BodyModel } from '@/app/world/lounge/_canvas/body-model'
 import { KICK_LUNGE_DURATION, kickLunge } from '@/app/world/lounge/_sim/combat'
 import { EYE_HEIGHT } from '@/app/world/lounge/_sim/physics'
 import { useSceneRefs } from '@/app/world/lounge/_scene/scene-refs'
@@ -158,7 +158,7 @@ export function SelfAvatar({
           mirror have something standing where you are from the first frame -
           an empty mirror reads as a broken camera, not as a pending download. */}
       <Suspense fallback={<AvatarPlaceholder />}>
-        <AvatarModel model={model} clip={clip} ignoreRay rim={party ? partyColour : null} />
+        <BodyModel look={model} clip={clip} ignoreRay rim={party ? partyColour : null} />
       </Suspense>
 
       {/* Inside the visibility gate with the body, because it is drawn at our

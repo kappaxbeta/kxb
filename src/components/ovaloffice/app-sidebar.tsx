@@ -28,6 +28,7 @@ import {
   Images,
   Megaphone,
   PersonStanding,
+  Shirt,
   Ticket,
   Euro,
   Joystick,
@@ -159,6 +160,14 @@ const data = {
           title: 'Codes',
           url: '/ovaloffice/promos',
           icon: Ticket,
+        },
+        {
+          // Beside the codes, because half the job is minting another kind of
+          // one. A voucher and a promo code are the same act from here: hand
+          // somebody a string that is worth something.
+          title: 'Skins',
+          url: '/ovaloffice/skins',
+          icon: Shirt,
         },
         {
           // Operations rather than Analytics, even though it is all numbers.

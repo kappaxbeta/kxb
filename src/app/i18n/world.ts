@@ -163,6 +163,11 @@ export interface WorldDict {
     chat: string
     mirror: string
     mirrorOn: string
+    /** The peep switcher beside the mirror. */
+    peep: string
+    /** The wardrobe's other half: your bought skin, worn here instead of the animal. */
+    skin: string
+    peepLabel: string
     /** Emotes have no names - see `emotes.ts` - so the number is the label. */
     emoteNumber: string
     say: string
@@ -693,6 +698,9 @@ export const WORLD_EN: WorldDict = {
     chat: 'Chat',
     mirror: 'Look at yourself',
     mirrorOn: 'on',
+    peep: 'Change peep',
+    skin: 'Skins',
+    peepLabel: 'Peeps',
     emoteNumber: 'Emote {n}',
     say: 'Say something',
     message: 'Message',
@@ -1087,6 +1095,9 @@ export const WORLD_DE: WorldDict = {
     chat: 'Chat',
     mirror: 'Sich selbst ansehen',
     mirrorOn: 'an',
+    peep: 'Peep wechseln',
+    skin: 'Skins',
+    peepLabel: 'Peeps',
     emoteNumber: 'Emote {n}',
     say: 'Sagen Sie etwas',
     message: 'Nachricht',
@@ -1473,6 +1484,9 @@ export const WORLD_BG: WorldDict = {
     chat: 'Чат',
     mirror: 'Погледнете себе си',
     mirrorOn: 'вкл.',
+    peep: 'Смяна на пийпа',
+    skin: 'Скинове',
+    peepLabel: 'Пийпове',
     emoteNumber: 'Жест {n}',
     say: 'Кажете нещо',
     message: 'Съобщение',

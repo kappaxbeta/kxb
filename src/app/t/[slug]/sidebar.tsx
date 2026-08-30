@@ -80,6 +80,15 @@ export interface SidebarFeatures {
    * library that has it as a section.
    */
   xp: boolean
+  /**
+   * Is the skin shop open?
+   *
+   * The platform flag, resolved in the layout like the rest. It decides one
+   * thing here: whether the avatar rail offers the door to `/skins` at all -
+   * a link to a closed shop is the "notice pointing at a picture nobody can
+   * see" the scenes flag warns about.
+   */
+  skinShop: boolean
 }
 
 /**
@@ -544,6 +553,7 @@ export function Sidebar(props: {
                 canManageRooms={props.canManageRooms}
                 avatar={props.avatar}
                 hereOnly={props.hereOnly}
+                hasSkinShop={props.features.skinShop}
                 fill={false}
               />
             </div>
@@ -613,6 +623,7 @@ export function Sidebar(props: {
             canManageRooms={props.canManageRooms}
             avatar={props.avatar}
             hereOnly={props.hereOnly}
+            hasSkinShop={props.features.skinShop}
             fill
           />
         </div>

@@ -1,6 +1,9 @@
 'use client'
 
+import Image from 'next/image'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { AVATARS, avatarShotUrl } from '@/domain/lounge/avatars'
+import { skinThumbUrl } from '@/domain/skins/application'
 import { chatActions, useChatStatus, type ChatStatus } from '@/app/world/_stores/chat-store'
 import { EmoteGrid } from '@/app/world/_hud/emote-grid'
 import { MAX_MESSAGE_LENGTH } from '@/domain/chat/events'
@@ -31,6 +34,7 @@ export function EmotePicker({
   onOpenChange,
   onPick,
   mirror,
+  peep,
   /** Nudged aside where a HUD panel already owns the corner. */
   className = '',
 }: {
@@ -53,11 +57,43 @@ export function EmotePicker({
     on: boolean
     onToggle: (next: boolean) => void
   }
+  /**
+   * Changing which animal you are, without leaving the room.
+   *
+   * Beside the mirror for the reason the mirror is here at all: the sequence
+   * is "look at yourself, decide you would rather be a fox, look again", and
+   * sending somebody to Settings to do the middle step breaks it. Optional,
+   * because a scene that does not know who you are cannot offer it.
+   *
+   * Stills rather than a live canvas, exactly as the rail does: this opens
+   * over a running world, and a second WebGL context beside the one drawing
+   * the room is the one thing the picker must not be.
+   */
+  peep?: {
+    current: string
+    onChange: (avatar: string) => void
+    /**
+     * The skins this account owns, offered in the same grid as the animals.
+     *
+     * One wardrobe rather than two, because the question somebody opens this
+     * to answer is "what am I standing in", and a peep and a skin are two
+     * answers to it rather than two questions. Empty or absent for anybody who
+     * owns none, which is most people and every guest - and then this is
+     * exactly the animal picker it has always been.
+     */
+    skins?: { id: string; name: string }[]
+    /** The skin worn here, or null when the animal is. */
+    wearing?: string | null
+    /** Wear a skin in this world, or `null` to go back to the animal. */
+    onWearSkin?: (id: string | null) => void
+  }
   className?: string
 }) {
   const t = worldDict(useLocale()).dock
   const panel = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<'emotes' | 'chat'>('emotes')
+  /** Not a tab: the faces stay one press away while you are choosing. */
+  const [peeping, setPeeping] = useState(false)
 
   /**
    * Null wherever there is no chat to fire text into - most scenes, and every
@@ -141,30 +177,171 @@ export function EmotePicker({
                   face", and a switch that shut the grid would make you reopen it
                   to do the second half.
                 */}
-                {mirror && (
-                  <button
-                    type="button"
-                    onClick={() => mirror.onToggle(!mirror.on)}
-                    aria-pressed={mirror.on}
-                    className={`mb-2 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
-                      mirror.on
-                        ? 'border-amber-300/40 bg-amber-400/25 text-amber-100'
-                        : 'border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <span>{t.mirror}</span>
-                    <span className="text-[10px] text-white/40">
-                      {mirror.on ? t.mirrorOn : 'R'}
-                    </span>
-                  </button>
+                {(mirror || peep) && (
+                  <div className="mb-2 flex gap-2">
+                    {mirror && (
+                      <button
+                        type="button"
+                        onClick={() => mirror.onToggle(!mirror.on)}
+                        aria-pressed={mirror.on}
+                        className={`flex flex-1 items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
+                          mirror.on
+                            ? 'border-amber-300/40 bg-amber-400/25 text-amber-100'
+                            : 'border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <span>{t.mirror}</span>
+                        <span className="text-[10px] text-white/40">
+                          {mirror.on ? t.mirrorOn : 'R'}
+                        </span>
+                      </button>
+                    )}
+
+                    {peep && (
+                      <button
+                        type="button"
+                        onClick={() => setPeeping((was) => !was)}
+                        aria-pressed={peeping}
+                        aria-label={t.peep}
+                        title={t.peep}
+                        className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
+                          peeping
+                            ? 'border-amber-300/40 bg-amber-400/25 text-amber-100'
+                            : 'border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        {/* The animal you are now, which is also the label: a
+                            word for it would be a word in three languages
+                            saying what the picture already says. */}
+                        <Image
+                          src={avatarShotUrl(peep.current)}
+                          alt=""
+                          width={128}
+                          height={128}
+                          className="h-5 w-5 object-contain"
+                        />
+                        <span aria-hidden>{peeping ? '×' : '⌄'}</span>
+                      </button>
+                    )}
+                  </div>
                 )}
 
-                <EmoteGrid
-                  onPick={(id) => {
-                    onPick(id)
-                    onOpenChange(false)
-                  }}
-                />
+                {peep && peeping ? (
+                  <>
+                    {/*
+                      The skins first, and only for somebody who owns any.
+
+                      Above the animals rather than below because this is the
+                      half that changes: the twenty-four have been in the same
+                      place since the lounge shipped, and a row that appears
+                      under a grid people already scroll past is a row nobody
+                      finds. Selecting one is "wear this here"; selecting an
+                      animal takes it off again, which is why the animal
+                      buttons clear the skin as well as setting the peep - two
+                      controls that can both be on would let you be two bodies.
+                    */}
+                    {peep.skins && peep.skins.length > 0 && (
+                      <div className="mb-2">
+                        <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-white/40">
+                          {t.skin}
+                        </p>
+                        <div
+                          role="radiogroup"
+                          aria-label={t.skin}
+                          className="grid grid-cols-6 gap-1"
+                        >
+                          {peep.skins.map((skin) => {
+                            const current = peep.wearing === skin.id
+                            return (
+                              <button
+                                key={skin.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={current}
+                                aria-label={skin.name}
+                                title={skin.name}
+                                onClick={() => {
+                                  peep.onWearSkin?.(current ? null : skin.id)
+                                  setPeeping(false)
+                                }}
+                                className={`rounded-lg border p-1 transition-colors ${
+                                  current
+                                    ? 'border-amber-300/40 bg-amber-400/25'
+                                    : 'border-white/10 hover:bg-white/5'
+                                }`}
+                              >
+                                <Image
+                                  src={skinThumbUrl(skin.id)}
+                                  alt=""
+                                  width={192}
+                                  height={192}
+                                  loading={current ? 'eager' : 'lazy'}
+                                  className="h-8 w-8 object-contain"
+                                />
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <p className="mb-1 mt-2 text-[10px] uppercase tracking-[0.14em] text-white/40">
+                          {t.peepLabel}
+                        </p>
+                      </div>
+                    )}
+
+                    <div
+                      role="radiogroup"
+                      aria-label={t.peep}
+                      className="grid grid-cols-6 gap-1"
+                    >
+                      {AVATARS.map((animal) => {
+                        // Worn only when no skin is over the top of it.
+                        const current = animal === peep.current && !peep.wearing
+                        return (
+                          <button
+                            key={animal}
+                            type="button"
+                            role="radio"
+                            aria-checked={current}
+                            aria-label={animal}
+                            title={animal}
+                            onClick={() => {
+                              peep.onChange(animal)
+                              // Picking an animal is also taking the skin off,
+                              // or the choice would land on a body nobody can
+                              // see underneath the one they are wearing.
+                              if (peep.wearing) peep.onWearSkin?.(null)
+                              // Straight back to the faces: you came here to
+                              // change, and staying in the grid after the change
+                              // has landed is one press somebody has to undo.
+                              setPeeping(false)
+                            }}
+                            className={`rounded-lg border p-1 transition-colors ${
+                              current
+                                ? 'border-amber-300/40 bg-amber-400/25'
+                                : 'border-white/10 hover:bg-white/5'
+                            }`}
+                          >
+                            <Image
+                              src={avatarShotUrl(animal)}
+                              alt=""
+                              width={128}
+                              height={128}
+                              loading={current ? 'eager' : 'lazy'}
+                              className="h-8 w-8 object-contain"
+                            />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <EmoteGrid
+                    onPick={(id) => {
+                      onPick(id)
+                      onOpenChange(false)
+                    }}
+                  />
+                )}
               </>
             )}
           </div>

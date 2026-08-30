@@ -10,6 +10,7 @@ import { loungeImagesProjection } from '@/domain/lounge/image-projection'
 import { listLoungeImages } from '@/domain/lounge/image-queries'
 import { listLoungeBlocks } from '@/domain/lounge/queries'
 import { readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { readLookFor, shopFor } from '@/domain/skins/queries'
 import { readSceneIdentity } from '@/domain/guests/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
 import { findWorldSpawn } from '@/domain/worlds/queries'
@@ -92,6 +93,29 @@ export default async function LoungePage({
    */
   const identity = await readSceneIdentity(supabase, tenant.id, user.id, { name, avatar })
 
+  /**
+   * The body, which is a question about the account rather than about this
+   * space - see `readLookFor`. An anonymous visitor is the dummy; anybody with
+   * an account is whatever they chose, member here or not.
+   *
+   * The nameplate still comes from `identity`, so a guest keeps the name they
+   * gave at the door. What changes is only what is standing under it.
+   */
+  const look = await readLookFor(supabase, user, tenant.id)
+
+  /**
+   * The wardrobe's other half, for anybody who has one.
+   *
+   * Read here rather than inside the scene because the scene is a client
+   * component over a running world - one more fetch on mount is one more thing
+   * happening while the canvas is trying to start. A guest owns nothing, so
+   * this is an empty list and the picker is the animal grid it always was.
+   */
+  const wardrobe = user.is_anonymous ? null : await shopFor(supabase, user.id)
+  const ownedSkins = (wardrobe?.skins ?? [])
+    .filter((skin) => wardrobe?.owned[skin.id])
+    .map((skin) => ({ id: skin.id, name: skin.name }))
+
   // The lounge's world id is the tenant's own. A space that has never set a
   // door gets null and everybody keeps arriving in the middle.
   const spawnAt = await findWorldSpawn(supabase, tenant.id)
@@ -142,7 +166,10 @@ export default async function LoungePage({
        */
       worldsHref={context.features.worlds ? `/t/${slug}/worlds` : undefined}
       spawnAt={spawnAt ?? undefined}
-      avatar={identity.avatar}
+      avatar={look}
+      animal={identity.avatar}
+      skins={ownedSkins}
+      wearingSkin={wardrobe?.chosen && look === wardrobe.chosen ? wardrobe.chosen : null}
       /*
         Measuring, when an operator has turned it on for this space. Off for
         everybody by default, and invisible in the room either way - see the

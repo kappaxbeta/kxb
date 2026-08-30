@@ -15,7 +15,7 @@
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { decodePng, type Image } from './png'
+import { decodePng, decodePngBytes, type Image } from './png'
 
 export type Vec3 = [number, number, number]
 type Mat4 = number[]
@@ -207,9 +207,10 @@ interface Gltf {
     emissiveFactor?: number[]
   }[]
   textures?: { source: number }[]
-  images?: { uri: string }[]
+  /** A URI beside the model, or a slice of the model's own buffer. */
+  images?: { uri?: string; bufferView?: number }[]
   accessors: { bufferView: number; byteOffset?: number; componentType: number; count: number; type: string }[]
-  bufferViews: { byteOffset?: number; byteStride?: number }[]
+  bufferViews: { byteOffset?: number; byteLength?: number; byteStride?: number }[]
   buffers: { uri: string }[]
 }
 
@@ -225,6 +226,29 @@ function loadTexture(file: string): Image {
   const image = decodePng(file)
   textureCache.set(file, image)
   return image
+}
+
+/**
+ * An atlas carried inside the model rather than beside it.
+ *
+ * Keyed by the model's path and the image index, because the bytes have no
+ * name of their own - two packs' embedded atlases are different textures even
+ * when they are byte-identical, and nothing here would tell them apart.
+ */
+function loadEmbeddedTexture(file: string, index: number, bytes: Buffer): Image {
+  const key = `${file}#${index}`
+  const cached = textureCache.get(key)
+  if (cached) return cached
+  const image = decodePngBytes(bytes, `${file} (image ${index})`)
+  textureCache.set(key, image)
+  return image
+}
+
+/** One bufferView's bytes, whole - what an embedded image is stored as. */
+function sliceView(gltf: Gltf, bin: Buffer, index: number): Buffer {
+  const view = gltf.bufferViews[index]
+  const from = view.byteOffset ?? 0
+  return bin.subarray(from, from + (view.byteLength ?? bin.length - from))
 }
 
 /** Reads one accessor into a flat array, honouring the bufferView's stride. */
@@ -369,11 +393,27 @@ export function loadTriangles(file: string, placement: Placement = {}): Triangle
     const entry = material === undefined ? undefined : gltf.materials?.[material]
     const pbr = entry?.pbrMetallicRoughness
     const source = pbr?.baseColorTexture ? gltf.textures?.[pbr.baseColorTexture.index]?.source : undefined
-    const uri = source === undefined ? undefined : gltf.images?.[source]?.uri
+    const image = source === undefined ? undefined : gltf.images?.[source]
     const factor = (pbr?.baseColorFactor ?? [1, 1, 1, 1]) as [number, number, number, number]
     const emissive = entry?.emissiveFactor as [number, number, number] | undefined
+
+    /**
+     * Beside the model, or inside it.
+     *
+     * The kits write `uri` and the single-binary character packs write
+     * `bufferView`; both are ordinary glTF and the spec allows either. Reading
+     * only the first is what drew every embedded model as a white silhouette -
+     * a texture that resolved to `BLANK` and a picture that looked like a
+     * lighting bug rather than a missing atlas.
+     */
+    const texture = image?.uri
+      ? loadTexture(path.join(dir, decodeURIComponent(image.uri)))
+      : image?.bufferView !== undefined
+        ? loadEmbeddedTexture(file, source!, sliceView(gltf, bin, image.bufferView))
+        : BLANK
+
     return {
-      texture: uri ? loadTexture(path.join(dir, decodeURIComponent(uri))) : BLANK,
+      texture,
       factor,
       ...(emissive && emissive.some((c) => c > 0) ? { emissive } : {}),
     }

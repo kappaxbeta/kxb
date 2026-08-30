@@ -48,6 +48,9 @@ export const BACKOFFICE_SECTIONS: readonly BackofficeSection[] = [
   // Operations
   { key: 'contact', label: 'Contact messages', path: '/ovaloffice/contact', group: 'Operations' },
   { key: 'promos', label: 'Codes', path: '/ovaloffice/promos', group: 'Operations' },
+  // Beside the codes, because half the job is minting another kind: the shelf
+  // of character skins, their words and prices, and the vouchers that buy them.
+  { key: 'skins', label: 'Skins', path: '/ovaloffice/skins', group: 'Operations' },
   { key: 'experiments', label: 'Experiments', path: '/ovaloffice/experiments', group: 'Operations' },
   { key: 'reports', label: 'Reports', path: '/ovaloffice/reports', group: 'Operations' },
   { key: 'events', label: 'Events', path: '/ovaloffice/events', group: 'Operations' },

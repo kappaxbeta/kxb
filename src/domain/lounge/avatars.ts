@@ -50,6 +50,40 @@ export function isKnownAvatar(avatar: string): boolean {
 }
 
 /**
+ * The shape of a bought skin's id: one pack, one slash, one name.
+ *
+ * What somebody wears in the lounge is now one of two things, and this is the
+ * whole of the difference between them - `fox` is an animal off the roster
+ * above, `adventurers/Knight` is a skin out of the games' catalogue. The slash
+ * is the discriminator the XP engine already uses for the same question, so
+ * the two halves of the product agree about what a look is.
+ *
+ * A *shape* test rather than a membership one, deliberately. The roster above
+ * is this module's to know; the skin catalogue is the shop's, and a lounge
+ * that imported it would load the games' model table to draw an animal. An id
+ * that passes this and names nothing degrades in the renderer exactly as a
+ * retired animal always has.
+ *
+ * The character class is what keeps an id inside its own directory - the same
+ * refusal `splitModel` makes - so a look can never address a file above the
+ * pack it claims to come from.
+ */
+export function isSkinLook(look: string): boolean {
+  return /^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/.test(look)
+}
+
+/**
+ * Is this a look anything can draw - either roster animal or skin?
+ *
+ * The presence channel's guard. It used to be `isKnownAvatar`, which answered
+ * "no" for every skin and quietly replaced it with the default penguin, so a
+ * dressed player arrived in everybody else's lounge as somebody else entirely.
+ */
+export function isKnownLook(look: string): boolean {
+  return isKnownAvatar(look) || isSkinLook(look)
+}
+
+/**
  * The 3D model, for the renderer.
  *
  * A `.glb`, and therefore only ever an argument to `useGLTF`. It is not an
