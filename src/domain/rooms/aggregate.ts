@@ -19,6 +19,21 @@ export interface RoomState {
   cap: number | null
   /** May a guest build in here? Only ever narrows the event's answer. */
   guestBuild: boolean
+  /**
+   * Is the space keeping this one at the top of the list?
+   *
+   * A boolean here and a timestamp on the read model, which is not a
+   * disagreement: the decider only ever has to answer "is this a change", and
+   * *when* it was pinned is the read model's business - it comes off the
+   * event's own `createdAt`, which a decider does not see.
+   */
+  pinned: boolean
+  /** The caption it is listed under, or null for ungrouped. */
+  group: string | null
+  /** The glyph it is drawn with, or null for the default. */
+  icon: string | null
+  /** The colour that glyph is drawn in, or null for the rail's own. */
+  tint: string | null
   /** Who opened it. For the read model, not for permission. */
   createdBy: string
   /** The level this room is, or null for an ordinary one. */
@@ -36,6 +51,10 @@ export const initialRoomState: RoomState = {
   roundStartedAt: null,
   cap: null,
   guestBuild: true,
+  pinned: false,
+  group: null,
+  icon: null,
+  tint: null,
   createdBy: '',
 }
 
@@ -76,6 +95,18 @@ export function evolve(state: RoomState, event: RoomEvent): RoomState {
 
     case 'RoomGuestBuildSet':
       return { ...state, guestBuild: event.data.allowed }
+
+    case 'RoomPinSet':
+      return { ...state, pinned: event.data.pinned }
+
+    case 'RoomGroupSet':
+      return { ...state, group: event.data.group }
+
+    case 'RoomIconSet':
+      return { ...state, icon: event.data.icon }
+
+    case 'RoomTintSet':
+      return { ...state, tint: event.data.tint }
 
     case 'RoomRenamed':
       return { ...state, name: event.data.name }
@@ -244,6 +275,59 @@ export function decide(state: RoomState, command: RoomCommand): RoomEvent[] {
       assertOpen(state)
       if (state.guestBuild === command.allowed) return []
       return [{ type: 'RoomGuestBuildSet', data: { allowed: command.allowed } }]
+    }
+
+    /**
+     * Keep it at the top for everybody, or stop.
+     *
+     * Idempotent like every other setter here: pinning a pinned room is what a
+     * double click is, and a second event for it would move the room to the
+     * back of the pinned ones - the read model orders them by when the pin
+     * landed, so a no-op that logged would visibly reorder the list.
+     */
+    case 'SetRoomPinned': {
+      assertOpen(state)
+      if (state.pinned === command.pinned) return []
+      return [{ type: 'RoomPinSet', data: { pinned: command.pinned } }]
+    }
+
+    /**
+     * Put it under a caption, or take it out of one.
+     *
+     * The name is not checked against a list of groups, because there is no
+     * list: a group exists exactly as long as a room names it. Typing a caption
+     * that no other room uses is how a group is made, and taking it off the
+     * last room in it is how one goes away.
+     */
+    case 'SetRoomGroup': {
+      assertOpen(state)
+      if (state.group === command.group) return []
+      return [{ type: 'RoomGroupSet', data: { group: command.group } }]
+    }
+
+    /**
+     * The glyph, and the colour it is drawn in.
+     *
+     * Two arms rather than one taking a pair, because they are two settings -
+     * see the note on `RoomTintSet`. Both idempotent, which matters more for a
+     * picker than for a text field: a picker is a grid of sixteen buttons and
+     * the commonest thing anybody does with one is click the option that is
+     * already chosen.
+     *
+     * The name is not checked against the vocabulary here. A decider validates
+     * *state transitions*, not spellings; `setRoomIconSchema` is what refuses a
+     * name nothing can draw, on the way in, where the person who typed it is.
+     */
+    case 'SetRoomIcon': {
+      assertOpen(state)
+      if (state.icon === command.icon) return []
+      return [{ type: 'RoomIconSet', data: { icon: command.icon } }]
+    }
+
+    case 'SetRoomTint': {
+      assertOpen(state)
+      if (state.tint === command.tint) return []
+      return [{ type: 'RoomTintSet', data: { tint: command.tint } }]
     }
 
     case 'CloseRoom': {

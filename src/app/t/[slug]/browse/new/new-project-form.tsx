@@ -15,6 +15,9 @@ export interface TemplateChoice {
   id: string
   name: string
   blurb: string
+  /** Set when the project is code rather than a world - the card wears it as
+   * a badge, so the kind being chosen is visible at a glance. */
+  engine?: 'p5'
 }
 
 /**
@@ -84,9 +87,13 @@ const SWATCHES = Array.from({ length: 12 }, (_, index) => index * 30)
 export function NewProjectForm({
   slug,
   templates,
+  engine: engineAtOpen = 'xp',
 }: {
   slug: string
   templates: TemplateChoice[]
+  /** Which engine's starters open selected - the studio's p5 door passes
+   * `p5` so its one question arrives already answered. */
+  engine?: 'xp' | 'p5'
 }) {
   const refusal = useRefusal()
   const t = browseDict(useLocale()).create
@@ -111,6 +118,23 @@ export function NewProjectForm({
   const [finish, setFinish] = useState<Finish | null>(null)
   const [hue, setHue] = useState<number | null>(null)
   const [name, setName] = useState('')
+
+  /**
+   * Which engine's starters are on the table: XP worlds, or p5.js sketches.
+   *
+   * A filter over the same radio group rather than a second question posted
+   * to the server - the template already says everything, so the action
+   * needs no new field. The grid is keyed by this so switching remounts the
+   * radios and the first card of the new set is checked; without that the
+   * checked radio could unmount and the form would post no template at all.
+   * The labels are the engines' own names, which is why they skip the
+   * dictionary.
+   */
+  const [engine, setEngine] = useState<'xp' | 'p5'>(engineAtOpen)
+  const choices =
+    engine === 'p5'
+      ? templates.filter((one) => one.engine === 'p5')
+      : [EMPTY, ...templates.filter((one) => !one.engine)]
 
   /** What the cartridge is called. Behind the input on purpose - see above. */
   const shown = useDeferredValue(name)
@@ -162,8 +186,26 @@ export function NewProjectForm({
           {t.startAsNote}
         </p>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {[EMPTY, ...templates].map((choice, index) => (
+        <div className="mt-4 flex gap-2">
+          {(['xp', 'p5'] as const).map((one) => (
+            <button
+              key={one}
+              type="button"
+              onClick={() => setEngine(one)}
+              aria-pressed={engine === one}
+              className={`rounded-full border px-4 py-1.5 font-mono text-xs uppercase tracking-wide transition ${
+                engine === one
+                  ? 'border-accent bg-accent/10 text-ink'
+                  : 'border-line text-ink-muted hover:border-ink-muted'
+              }`}
+            >
+              {one === 'xp' ? 'XP' : 'p5.js'}
+            </button>
+          ))}
+        </div>
+
+        <div key={engine} className="mt-4 grid gap-2 sm:grid-cols-2">
+          {choices.map((choice, index) => (
             <label
               key={choice.id || 'empty'}
               className="group flex cursor-pointer flex-col gap-1 rounded-lg border border-line bg-surface px-3 py-3 transition hover:border-ink-muted has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/30"
@@ -192,6 +234,11 @@ export function NewProjectForm({
                   className="size-3 shrink-0 rounded-full border border-line transition group-has-[:checked]:border-accent group-has-[:checked]:bg-accent"
                 />
                 <span className="text-sm">{choice.name}</span>
+                {choice.engine && (
+                  <span className="ml-auto shrink-0 rounded-full border border-accent/40 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent">
+                    {choice.engine}.js
+                  </span>
+                )}
               </span>
               <span
                 id={`${blurbs}-${choice.id || 'empty'}`}

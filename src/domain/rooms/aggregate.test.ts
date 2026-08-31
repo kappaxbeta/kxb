@@ -317,6 +317,137 @@ describe('whether guests may build in a room', () => {
 })
 
 /**
+ * How a room sits in the Places list: the space's pin, and its group.
+ *
+ * Both are decisions somebody made on behalf of everybody, which is why they
+ * are here rather than in `room_marks` - a member's own pin is not in the log
+ * at all. See the notes on `RoomPinSet` and `RoomGroupSet`.
+ */
+describe('where a room sits in the list', () => {
+  test('a room opens unpinned and ungrouped', () => {
+    expect(stateAfter(opened).pinned).toBe(false)
+    expect(stateAfter(opened).group).toBeNull()
+  })
+
+  test('pinning is remembered', () => {
+    const events = decide(stateAfter(opened), {
+      type: 'SetRoomPinned',
+      actorId: ACTOR,
+      pinned: true,
+    })
+
+    expect(events).toEqual([{ type: 'RoomPinSet', data: { pinned: true } }])
+    expect(stateAfter([...opened, ...events]).pinned).toBe(true)
+  })
+
+  /**
+   * The read model orders the pinned band by *when* the pin landed, so a second
+   * event saying nothing new would visibly move the room to the back of it.
+   * That is the failure this idempotence is protecting against, rather than a
+   * tidy log for its own sake.
+   */
+  test('pinning a pinned room is not a second event', () => {
+    const pinned = [...opened, { type: 'RoomPinSet' as const, data: { pinned: true } }]
+
+    expect(
+      decide(stateAfter(pinned), { type: 'SetRoomPinned', actorId: ACTOR, pinned: true }),
+    ).toEqual([])
+  })
+
+  test('a caption is remembered, and the last one wins', () => {
+    const first = decide(stateAfter(opened), {
+      type: 'SetRoomGroup',
+      actorId: ACTOR,
+      group: 'Design',
+    })
+    const second = decide(stateAfter([...opened, ...first]), {
+      type: 'SetRoomGroup',
+      actorId: ACTOR,
+      group: 'Product',
+    })
+
+    expect(stateAfter([...opened, ...first, ...second]).group).toBe('Product')
+  })
+
+  test('taking a room out of its group is a change', () => {
+    const grouped = [
+      ...opened,
+      { type: 'RoomGroupSet' as const, data: { group: 'Design' } },
+    ]
+
+    expect(
+      decide(stateAfter(grouped), { type: 'SetRoomGroup', actorId: ACTOR, group: null }),
+    ).toEqual([{ type: 'RoomGroupSet', data: { group: null } }])
+  })
+
+  test('a closed room takes neither', () => {
+    const closed = stateAfter([...opened, { type: 'RoomClosed', data: {} }])
+
+    expect(() =>
+      decide(closed, { type: 'SetRoomPinned', actorId: ACTOR, pinned: true }),
+    ).toThrow()
+    expect(() =>
+      decide(closed, { type: 'SetRoomGroup', actorId: ACTOR, group: 'Design' }),
+    ).toThrow()
+  })
+})
+
+/**
+ * The face a room wears: a glyph, and the colour it is drawn in.
+ *
+ * Two settings and two events, which is the shape every setting in this
+ * aggregate has - they are picked in one panel, and that is a fact about a
+ * panel. Recolouring a room must not append an event claiming its icon was set
+ * to what it already was.
+ */
+describe('what a room looks like', () => {
+  test('a room opens with neither', () => {
+    expect(stateAfter(opened).icon).toBeNull()
+    expect(stateAfter(opened).tint).toBeNull()
+  })
+
+  test('an icon and a colour are two changes', () => {
+    const icon = decide(stateAfter(opened), {
+      type: 'SetRoomIcon',
+      actorId: ACTOR,
+      icon: 'ball',
+    })
+    const tint = decide(stateAfter([...opened, ...icon]), {
+      type: 'SetRoomTint',
+      actorId: ACTOR,
+      tint: 'lime',
+    })
+
+    expect(icon).toEqual([{ type: 'RoomIconSet', data: { icon: 'ball' } }])
+    expect(tint).toEqual([{ type: 'RoomTintSet', data: { tint: 'lime' } }])
+
+    const state = stateAfter([...opened, ...icon, ...tint])
+    expect(state.icon).toBe('ball')
+    expect(state.tint).toBe('lime')
+  })
+
+  /**
+   * The commonest thing anybody does with a grid of twenty-five buttons is
+   * click the one that is already chosen.
+   */
+  test('picking the icon it already wears is not an event', () => {
+    const worn = [...opened, { type: 'RoomIconSet' as const, data: { icon: 'ball' } }]
+
+    expect(
+      decide(stateAfter(worn), { type: 'SetRoomIcon', actorId: ACTOR, icon: 'ball' }),
+    ).toEqual([])
+  })
+
+  test('taking the colour off again is a change', () => {
+    const worn = [...opened, { type: 'RoomTintSet' as const, data: { tint: 'lime' } }]
+
+    expect(
+      decide(stateAfter(worn), { type: 'SetRoomTint', actorId: ACTOR, tint: null }),
+    ).toEqual([{ type: 'RoomTintSet', data: { tint: null } }])
+  })
+})
+
+/**
  * A round, in a room that is a level.
  *
  * A board game is not a lounge: people gather, somebody deals, and the table is

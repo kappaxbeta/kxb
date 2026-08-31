@@ -26,6 +26,7 @@ const level = (over: Partial<PlayableXp> & { ref: string }): PlayableXp => ({
   players: { min: 1, max: 8 },
   capabilities: [],
   framed: false,
+  sketch: false,
   ...over,
 })
 

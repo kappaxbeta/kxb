@@ -55,6 +55,14 @@ export const roomsProjection: Projection<RoomEvent> = {
             // Null for an ordinary room, which is every room opened before
             // levels could be rooms. See 20261012000000_rooms_xp.sql.
             xp_ref: event.data.xpRef ?? null,
+            // Written rather than left to the column default, for the reason
+            // `mode` above is: a room opens unpinned and ungrouped, and a
+            // replay into a fresh table should produce the row a live create
+            // does rather than one that depends on the default.
+            pinned_at: null,
+            room_group: null,
+            room_icon: null,
+            room_tint: null,
             created_by: event.actorId,
             created_at: event.createdAt,
             updated_at: event.createdAt,
@@ -110,6 +118,33 @@ export const roomsProjection: Projection<RoomEvent> = {
         await patch(supabase, event, { guest_build: event.data.allowed })
         return
 
+      /*
+       * The pin, stamped with the event's own time.
+       *
+       * `event.createdAt` rather than `now()`, which is the rule every arm in
+       * here keeps and matters more than usual for this one: the column is what
+       * the list is *ordered by*, so a replay stamping today would reshuffle
+       * every pinned room in the product into the order the projector happened
+       * to catch up in.
+       */
+      case 'RoomPinSet':
+        await patch(supabase, event, {
+          pinned_at: event.data.pinned ? event.createdAt : null,
+        })
+        return
+
+      case 'RoomGroupSet':
+        await patch(supabase, event, { room_group: event.data.group })
+        return
+
+      case 'RoomIconSet':
+        await patch(supabase, event, { room_icon: event.data.icon })
+        return
+
+      case 'RoomTintSet':
+        await patch(supabase, event, { room_tint: event.data.tint })
+        return
+
       case 'RoomClosed':
         await patch(supabase, event, { closed: true })
         return
@@ -130,6 +165,10 @@ type RoomPatch = {
   guest_build?: boolean
   closed?: boolean
   round_started_at?: string | null
+  pinned_at?: string | null
+  room_group?: string | null
+  room_icon?: string | null
+  room_tint?: string | null
 }
 
 async function patch(

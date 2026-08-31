@@ -87,10 +87,20 @@ Replace it whenever you like — fetch KayKit's characters into
 | `public/xp/thumbs/` | `bun run xp:thumbs` — model thumbnails, rendered from the packs |
 | `public/thumbs/` | `bun run models:thumbs` — the builder's thumbnails |
 | `packages/xp/src/assets/catalogue.generated.ts` | `bun run xp:catalogue` — the model index the editor reads |
+| `public/xp/vendor/p5.min.js` | `bun run xp:vendor` — the p5.js runtime, copied out of the `p5` package `bun install` already fetched |
 
 Run those **after** the packs are in place. `bun run xp:pack` walks a directory
 and reports what it found, which is the quickest way to check an unpack landed
 where the tables expect it.
+
+`xp:vendor` is the one that is not about art, and the one whose absence is
+quietest. A p5.js XP — see [the sketch cartridge](xp/sketch.md) — runs inside a
+sandboxed iframe that loads the runtime from `/xp/vendor/p5.min.js`. Without
+that file the container comes up, the page looks right, and the sketch simply
+never draws: there is no error worth reading, because nothing threw. It is not
+committed here for the same reason the packs are not — it is somebody else's
+work, LGPL and minified without its licence header, and the `p5` entry in
+`package.json` is a better place to fetch it from than a git mirror.
 
 ## Running without the art
 

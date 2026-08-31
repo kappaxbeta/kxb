@@ -19,6 +19,7 @@ and a separate engine from it on purpose, not a layer over it (§1.2, §16.2).
 | backend.md | Where a project lives: the folder, storage, the store, the review queue |
 | [round.md](round.md) | A round of the board game, end to end, as flow charts — and which of the four places it runs through decides what |
 | scenes.md | **Proposal.** One document holding more than one place — scenes, timelines, saves. Changes `format.ts`, which is shared ground |
+| [sketch.md](sketch.md) | The p5.js cartridge: code the document carries, run in an opaque-origin container, and the `window.xp` SDK it wakes up inside |
 | two-sessions.md | Working in here alongside somebody else. The file-level split and the git rules. **Read before starting, not after** |
 
 ## What is not built yet

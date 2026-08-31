@@ -2,6 +2,7 @@
 
 import { Canvas } from '@react-three/fiber'
 import { Framed, isFramed } from '@/app/xp/_runtime/framed'
+import { Sketch, isSketch } from '@/app/xp/_runtime/sketch'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Placements } from '@/app/xp/_runtime/world/instances'
 import { sideOf } from '@/app/xp/_runtime/match/teams'
@@ -162,6 +163,20 @@ export function XpScene(props: Parameters<typeof XpLevelScene>[0]) {
         {...(props.room ? { room: props.room } : {})}
         {...(props.me ? { me: props.me } : {})}
         {...(props.match ? { match: props.match } : {})}
+      />
+    )
+  }
+  // The other kind of cartridge: code the document carries, run in a
+  // container. Same bargain as `Framed` - every caller gets it for free.
+  if (isSketch(props.xp)) {
+    return (
+      <Sketch
+        xp={props.xp}
+        {...(props.room ? { room: props.room } : {})}
+        {...(props.me ? { me: props.me } : {})}
+        {...(props.touch !== undefined ? { touch: props.touch } : {})}
+        {...(props.match ? { match: props.match } : {})}
+        {...(props.startedAt !== undefined ? { startedAt: props.startedAt } : {})}
       />
     )
   }

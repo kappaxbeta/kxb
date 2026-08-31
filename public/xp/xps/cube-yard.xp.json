@@ -1,0 +1,46 @@
+{
+  "format": "xp/1",
+  "id": "cube-yard",
+  "name": "Cube Yard",
+  "blurb": "A lit 3D yard: your own peep, real pack props, a golden ball to chase.",
+  "finish": "metal",
+  "hue": 260,
+  "packs": [],
+  "capabilities": [
+    "freeplay",
+    "match"
+  ],
+  "sketch": {
+    "engine": "p5",
+    "entry": "main.js",
+    "files": {
+      "yard.js": "// The yard itself: a lit floor, a box per player, real props.\n// The barrels are actual pack models - xp.load.model reads the glTF and\n// .draw() feeds it to p5 with its own texture. The avatar's x/y are the\n// ground plane.\nvar SPAN = 900\n\nfunction drawFloor() {\n  push()\n  translate(0, 60, 0)\n  rotateX(HALF_PI)\n  noStroke()\n  fill(24, 18, 52)\n  plane(SPAN, SPAN)\n  pop()\n}\n\n// A steady colour from an id, so everybody agrees who is which.\nfunction hueOf(id) {\n  var n = 0\n  for (var i = 0; i < id.length; i += 1) n = (n * 31 + id.charCodeAt(i)) % 360\n  return n\n}\n\nfunction drawPlayer(p) {\n  var a = p.avatar\n  // The player's real peep, drawn from the pack - their own skin when they\n  // picked one. Standing in bind pose; the waddle below is procedural, and\n  // real clip playback is the engine's next trick, not this sketch's.\n  var look = xp.load.model(p.skin || 'peepz/bunny')\n  var input = p.input\n  var moving = abs(input.x) + abs(input.y) > 0.05\n  push()\n  translate(a.x, 60, a.y)\n  rotateY(-a.angle + HALF_PI)\n  if (look.ready) {\n    // The waddle: a hop and a little roll while walking, a slow breath at rest.\n    translate(0, moving ? -abs(sin(millis() / 90)) * 14 : sin(millis() / 600) * 2, 0)\n    if (moving) rotateZ(sin(millis() / 90) * 0.08)\n    scale(60)\n    noStroke()\n    fill(235)\n    look.draw()\n  } else {\n    translate(0, -60, 0)\n    noStroke()\n    colorMode(HSB, 360, 100, 100)\n    fill(p.you ? 190 : hueOf(p.id), 70, 95)\n    colorMode(RGB, 255)\n    box(60, 120, 60)\n  }\n  pop()\n}\n\nfunction drawProp(prop, x, z, size) {\n  if (!prop.ready) return\n  push()\n  translate(x, 60, z)\n  scale(size, size, size)\n  noStroke()\n  fill(220)\n  prop.draw()\n  pop()\n}\n",
+      "main.js": "// A 3D yard in p5's WEBGL mode. Same xp.input, same synced avatar,\n// same ball - plus real pack models standing in the corners. Boost with\n// E or the button.\nvar ball\nvar barrel\nvar crate\n\nfunction setup() {\n  createCanvas(windowWidth, windowHeight, WEBGL)\n  ball = xp.object('ball', { x: 0, y: 0 })\n  barrel = xp.load.model('proto/Barrel_A')\n  crate = xp.load.model('proto/Box_A')\n  xp.avatar.x = random(-240, 240)\n  xp.avatar.y = random(-240, 240)\n}\n\nfunction windowResized() { resizeCanvas(windowWidth, windowHeight) }\n\nfunction draw() {\n  background(4, 2, 16)\n  ambientLight(90)\n  directionalLight(255, 230, 200, -0.5, 1, -0.3)\n  camera(0, -430, 640, 0, 0, 0, 0, 1, 0)\n  walk()\n  chase()\n  drawFloor()\n  var edge = SPAN / 2 - 80\n  drawProp(barrel, -edge, -edge, 60)\n  drawProp(barrel, edge, -edge, 60)\n  drawProp(barrel, -edge, edge, 60)\n  drawProp(barrel, edge, edge, 60)\n  drawProp(crate, 0, -edge, 70)\n  xp.players.forEach(drawPlayer)\n  push()\n  translate(ball.x, 20, ball.y)\n  noStroke()\n  fill(255, 214, 90)\n  sphere(32)\n  pop()\n}\n\nfunction walk() {\n  var pace = xp.pressed('boost') ? 9 : 4.5\n  xp.avatar.x = constrain(xp.avatar.x + xp.input.x * pace, -SPAN / 2, SPAN / 2)\n  xp.avatar.y = constrain(xp.avatar.y + xp.input.y * pace, -SPAN / 2, SPAN / 2)\n  if (xp.input.x !== 0 || xp.input.y !== 0) xp.avatar.angle = atan2(xp.input.y, xp.input.x)\n}\n\nfunction chase() {\n  if (dist(xp.avatar.x, xp.avatar.y, ball.x, ball.y) < 80) ball.claim()\n  if (ball.mine) {\n    var away = atan2(ball.y - xp.avatar.y, ball.x - xp.avatar.x)\n    ball.x = constrain(ball.x + cos(away) * 6, -SPAN / 2, SPAN / 2)\n    ball.y = constrain(ball.y + sin(away) * 6, -SPAN / 2, SPAN / 2)\n  }\n}\n"
+    },
+    "stick": true
+  },
+  "blueprints": {},
+  "player": {
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "boost"
+      }
+    ]
+  },
+  "entities": [],
+  "world": {
+    "floorY": 0,
+    "ground": false,
+    "restart": false,
+    "fatal": false,
+    "placements": [],
+    "marks": []
+  },
+  "spawn": {
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "facing": 0
+  }
+}

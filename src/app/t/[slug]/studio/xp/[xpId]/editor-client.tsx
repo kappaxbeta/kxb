@@ -29,6 +29,23 @@ const Editor = dynamic(() => import('@/app/xp/_editor/editor').then((m) => m.Edi
 })
 
 /**
+ * And the project view, for a document whose content is code rather than a
+ * world. Same claim, same save, same rename - the fork is only which editor
+ * the document opens in, decided by the document itself below.
+ */
+const SketchEditor = dynamic(
+  () => import('@/app/xp/_sketch/editor/editor').then((m) => m.SketchEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="dark flex h-viewport-inset w-full items-center justify-center bg-neutral-950">
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-600">opening</p>
+      </div>
+    ),
+  },
+)
+
+/**
  * Who holds the editor, as the *server* found it when the page rendered.
  *
  * Decided there rather than here on mount, and that is worth stating: it means
@@ -195,6 +212,22 @@ export function SpaceEditor({
     for `wide`, because the hero maker and the shot studio are `wide` too and
     neither has a rail to collide with.
   */
+  if (document.sketch) {
+    return (
+      <div data-surface="wide" data-rail="icons">
+        <SketchEditor
+          id={xpId}
+          name={name}
+          document={document}
+          onSave={onSave}
+          onRename={onRename}
+          backHref={backHref}
+          version={openedAt}
+        />
+      </div>
+    )
+  }
+
   return (
     <div data-surface="wide" data-rail="icons">
       <Editor

@@ -1,0 +1,71 @@
+{
+  "format": "xp/1",
+  "id": "neon-pond",
+  "name": "Neon Pond",
+  "blurb": "A pond of glowing dots. Swim, boost, steal the ball - three rounds of it.",
+  "finish": "shiny",
+  "hue": 190,
+  "packs": [],
+  "capabilities": [
+    "freeplay",
+    "match"
+  ],
+  "flow": {
+    "start": "swim",
+    "phases": {
+      "swim": {
+        "says": "Hold the ball when the clock runs out.",
+        "next": [
+          {
+            "go": "breathe",
+            "after": 45
+          }
+        ]
+      },
+      "breathe": {
+        "allow": [],
+        "says": "Shake it off.",
+        "next": [
+          {
+            "go": "@next-round",
+            "after": 6
+          }
+        ]
+      }
+    },
+    "rounds": 3
+  },
+  "sketch": {
+    "engine": "p5",
+    "entry": "main.js",
+    "files": {
+      "pond.js": "// Drawing, kept out of main.js so the project has a second file to find.\n\nfunction drawPeep(p) {\n  var a = p.avatar\n  // Boosting glows - and because controls are synced per player, everybody\n  // sees everybody's glow, not just their own.\n  var glowing = xp.pressed('boost', p)\n  noStroke()\n  fill(p.you ? color(120, 220, 255, glowing ? 120 : 60) : color(255, 160, 220, glowing ? 100 : 45))\n  circle(a.x, a.y, glowing ? 74 : 52)\n  fill(p.you ? color(160, 235, 255) : color(255, 190, 230))\n  circle(a.x, a.y, 26)\n  fill(255, 255, 255, 180)\n  textAlign(CENTER)\n  textSize(12)\n  text(p.name, a.x, a.y - 24)\n}\n\nfunction drawRipple(r) {\n  noFill()\n  stroke(255, 255, 255, 160 * (1 - r.age))\n  strokeWeight(2)\n  circle(r.x, r.y, 30 + r.age * 120)\n  noStroke()\n}\n\nfunction drawBall(ball) {\n  noStroke()\n  fill(255, 214, 90, 70)\n  circle(ball.x, ball.y, 44)\n  fill(255, 214, 90)\n  circle(ball.x, ball.y, 22)\n}\n",
+      "main.js": "// Arrows, WASD or the stick to swim - xp.input folds them into one\n// axis. E (or the button) to boost. Bump the ball and it is yours.\nvar ball\nvar ripples = []\n\nfunction setup() {\n  createCanvas(windowWidth, windowHeight)\n  ball = xp.object('ball', { x: 240, y: 200, dx: 0, dy: 0 })\n  xp.avatar.x = 80 + random(240)\n  xp.avatar.y = 80 + random(240)\n\n  xp.on('join', function (p) { console.log(p.name + ' swam in') })\n\n  // A press is a trigger, and it fires for every player's press - so a\n  // boost anywhere in the pond ripples on every screen.\n  xp.on('press', function (name, p) {\n    if (name === 'boost') ripples.push({ x: p.avatar.x, y: p.avatar.y, age: 0 })\n  })\n}\n\nfunction windowResized() { resizeCanvas(windowWidth, windowHeight) }\n\nfunction draw() {\n  background(6, 2, 20)\n  swim()\n  roll()\n  drawBall(ball)\n  ripples.forEach(function (r) { r.age += deltaTime / 900 })\n  ripples = ripples.filter(function (r) { return r.age < 1 })\n  ripples.forEach(drawRipple)\n  xp.players.forEach(drawPeep)\n}\n\nfunction swim() {\n  var pace = xp.pressed('boost') ? 7 : 3.5\n  xp.avatar.x = constrain(xp.avatar.x + xp.input.x * pace, 0, width)\n  xp.avatar.y = constrain(xp.avatar.y + xp.input.y * pace, 0, height)\n}\n\nfunction roll() {\n  var span = dist(xp.avatar.x, xp.avatar.y, ball.x, ball.y)\n  if (span < 36) {\n    ball.claim()\n    ball.dx = (ball.x - xp.avatar.x) * 0.4\n    ball.dy = (ball.y - xp.avatar.y) * 0.4\n  }\n  if (ball.mine) {\n    ball.x += ball.dx\n    ball.y += ball.dy\n    ball.dx *= 0.98\n    ball.dy *= 0.98\n    if (ball.x < 20 || ball.x > width - 20) ball.dx = -ball.dx\n    if (ball.y < 20 || ball.y > height - 20) ball.dy = -ball.dy\n  }\n}\n"
+    },
+    "stick": true
+  },
+  "blueprints": {},
+  "player": {
+    "keys": [
+      {
+        "key": "KeyE",
+        "does": "boost"
+      }
+    ]
+  },
+  "entities": [],
+  "world": {
+    "floorY": 0,
+    "ground": false,
+    "restart": false,
+    "fatal": false,
+    "placements": [],
+    "marks": []
+  },
+  "spawn": {
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "facing": 0
+  }
+}

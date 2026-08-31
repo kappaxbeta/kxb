@@ -17,6 +17,12 @@ function room(id: string, cap: number | null = null): RoomView {
     // whole RoomView rather than a cast.
     xpRef: null,
     roundStartedAt: null,
+    // How a room is listed and drawn - none of which capacity has an opinion
+    // about, and all of which a whole `RoomView` carries.
+    adminPinnedAt: null,
+    group: null,
+    icon: null,
+    tint: null,
     createdAt: '2026-08-04T00:00:00.000Z',
   }
 }

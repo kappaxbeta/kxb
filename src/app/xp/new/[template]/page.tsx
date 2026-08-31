@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { EditorClient } from '@/app/xp/_editor/shell/client'
+import { SketchEditorClient } from '@/app/xp/_sketch/editor/client'
 import { requireXpAccess } from '@/app/xp/gate'
 import { forOnePlayer, readAudience } from '@/app/xp/new/audience'
 import { templateById } from '@kxb/xp'
@@ -73,6 +74,11 @@ export default async function NewFromTemplatePage({
    * the same trade `isDefaultRules` makes on every other rules field.
    */
   const document = audience === 'one' ? forOnePlayer(built) : built
+
+  // A sketch template opens in the project view, same fork as `[id]/edit`.
+  if (document.sketch) {
+    return <SketchEditorClient id={`new-${template.id}`} document={document} />
+  }
 
   return <EditorClient id={`new-${template.id}`} document={document} />
 }

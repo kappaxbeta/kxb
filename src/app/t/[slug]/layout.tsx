@@ -28,6 +28,7 @@ import {
   readGuestDestination,
 } from '@/domain/guests/queries'
 import { roomsProjection } from '@/domain/rooms/projection'
+import { readRoomMarks } from '@/domain/rooms/marks'
 import { listRooms } from '@/domain/rooms/queries'
 import { emailVerified } from '@/domain/profile/email-verification'
 import { readProfileAvatar, readSpaceAvatar } from '@/domain/profile/avatar-queries'
@@ -244,6 +245,19 @@ export default async function TenantLayout({
   // paying would freeze them holding twenty rooms they cannot tidy.
   const canManageRooms = isOwnerOrAdmin && !tenant.deactivated
 
+  /**
+   * This person's own pins and last visits, for the Places band's ordering.
+   *
+   * Here rather than in the band for the reason the rooms above are: both
+   * copies of the rail draw the same list, and a client component fetching its
+   * own ordering would be a second round trip to sort five rows.
+   *
+   * Skipped entirely when there are no rooms, which is most spaces - the marks
+   * are only ever *about* rooms, so with none there is nothing for them to
+   * order and the query would be a round trip to build an empty object.
+   */
+  const marks = rooms.length > 0 ? await readRoomMarks(supabase, tenant.id) : {}
+
   const guestAccess = isOwnerOrAdmin
     ? await (async () => {
         const admin = createAdminClient()
@@ -379,10 +393,12 @@ export default async function TenantLayout({
           match alike. See the component for why the server cannot do this. */}
           {tenant.role === 'guest' && <GuestPulse tenantId={tenant.id} slug={slug} />}
 
-          {/* `useSearchParams` in the rail - it carries `?of=` from link to link so
-          a visit to somebody's café survives a walk into their garden. That
-          makes the rail dynamic, and the boundary is what keeps it from
-          holding up the rest of the shell. */}
+          {/* The rail is the heaviest client component on every page in a space
+          and nothing above it depends on what it renders, so it streams in
+          behind its own boundary rather than holding up the shell. It used to
+          be *required* to have one - it read `?of=` to carry a visit from link
+          to link - and the boundary is worth keeping now that it is only an
+          optimisation. */}
           <Suspense fallback={null}>
               <Sidebar
                   slug={slug}
@@ -409,6 +425,7 @@ export default async function TenantLayout({
                   guestSurfaces={guestSurfaces}
                   guestAccess={guestAccess}
                   rooms={rooms}
+                  marks={marks}
                   canManageRooms={canManageRooms}
                   canPlayXp={xpOpen(context) && battleOpen(context)}
                   avatar={avatar}

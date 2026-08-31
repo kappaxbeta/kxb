@@ -1240,19 +1240,92 @@ body::after {
   width: 1.25rem;
   height: 1.25rem;
   flex-shrink: 0;
-  color: oklch(0.82 0.07 285);
+  color: var(--room-tint, oklch(0.82 0.07 285));
   transition: color var(--dur-fast) var(--ease-out-soft);
 }
 
 .rail-link:hover .rail-link-icon {
-  color: var(--color-ink);
+  color: var(--room-tint, var(--color-ink));
 }
 
 /* The current row's icon is the one saturated thing in the column - so the eye
- * finds where it is by colour, before it reads a single word. */
+ * finds where it is by colour, before it reads a single word.
+ *
+ * Unless the room has picked one, which is what `--room-tint` is doing in all
+ * three of these rules. A room that chose amber must be amber in every state or
+ * the colour is not an identity - it is a decoration that goes away exactly
+ * when you are looking at it. What the current row keeps is the *glow*, which
+ * is the part that says "here" rather than the part that says "which". */
 .rail-link[aria-current='page'] .rail-link-icon {
-  color: var(--color-accent-2);
-  filter: drop-shadow(0 0 0.4rem oklch(0.85 0.15 195 / 0.55));
+  color: var(--room-tint, var(--color-accent-2));
+  filter: drop-shadow(0 0 0.4rem var(--room-glow, oklch(0.85 0.15 195 / 0.55)));
+}
+
+/* ---------------------------------------------------------------------------
+ * The colours a room can wear
+ * ---------------------------------------------------------------------------
+ * `ROOM_TINTS` in src/domain/rooms/look.ts is the list; this is what each name
+ * means. A pair per name - the ink and the glow behind it - so a tinted row
+ * lights the same way an untinted one does rather than going flat the moment
+ * somebody picks a colour.
+ *
+ * Every one is around L 0.80 / C 0.15, which is not a coincidence: they are
+ * read at 16px on dark glass, and a palette that varied in lightness would be
+ * a palette where three of the eight are the ones nobody picks because they
+ * cannot be seen. What varies between them is hue, and only hue.
+ *
+ * A room picks a colour, never a meaning. There is no `danger` here and there
+ * must not be - see the note on ROOM_TINTS.
+ * ------------------------------------------------------------------------- */
+/* A colour, as a thing to click rather than a thing to read. Fed by the same
+ * `--room-tint` the icons use, so the swatch and the row it produces can never
+ * be two different colours. */
+/* A room's glyph outside the rail's own rows - in the Room tab's list, where
+ * `.rail-link-icon` is not the element doing the drawing. Same variable, so the
+ * two lists cannot show one room in two colours. */
+.room-face {
+  color: var(--room-tint, currentColor);
+}
+
+.room-swatch {
+  display: block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--room-tint, transparent);
+}
+
+.room-tint-violet {
+  --room-tint: oklch(0.8 0.15 300);
+  --room-glow: oklch(0.8 0.15 300 / 0.5);
+}
+.room-tint-cyan {
+  --room-tint: oklch(0.82 0.14 195);
+  --room-glow: oklch(0.82 0.14 195 / 0.5);
+}
+.room-tint-emerald {
+  --room-tint: oklch(0.8 0.15 160);
+  --room-glow: oklch(0.8 0.15 160 / 0.5);
+}
+.room-tint-lime {
+  --room-tint: oklch(0.85 0.16 130);
+  --room-glow: oklch(0.85 0.16 130 / 0.5);
+}
+.room-tint-amber {
+  --room-tint: oklch(0.83 0.15 80);
+  --room-glow: oklch(0.83 0.15 80 / 0.5);
+}
+.room-tint-rose {
+  --room-tint: oklch(0.78 0.15 20);
+  --room-glow: oklch(0.78 0.15 20 / 0.5);
+}
+.room-tint-fuchsia {
+  --room-tint: oklch(0.78 0.17 340);
+  --room-glow: oklch(0.78 0.17 340 / 0.5);
+}
+.room-tint-sky {
+  --room-tint: oklch(0.8 0.13 240);
+  --room-glow: oklch(0.8 0.13 240 / 0.5);
 }
 
 /* How many people are in a place. Cyan rather than fuchsia: it is information,
@@ -1497,6 +1570,32 @@ h1 {
 * {
   scrollbar-color: oklch(0.58 0.18 350 / 0.6) transparent;
   scrollbar-width: thin;
+}
+
+/*
+ * The sketch project view is a tool, not the landing: a bright pink thumb
+ * riding the code column reads as a stray outline around the pane rather
+ * than as chrome. Same thin thumbs, in the surface's own neutrals. A
+ * descendant rule rather than a variable because the `*` rule above sets the
+ * colour on every element directly, so inheritance from the root would lose.
+ */
+.sketch-project * {
+  scrollbar-color: oklch(0.4 0.01 322 / 0.7) transparent;
+}
+
+/*
+ * And the one field the shared focus treatment misleads on. The code pane is
+ * a transparent-text textarea over a painted layer, and the accent outline -
+ * unlayered above, so `focus:outline-none` cannot touch it - draws a pink box
+ * over the middle of the code that reads as a rendering bug, not as focus.
+ * Focus is shown by the pane's own frame (`focus-within:border`) instead.
+ * Element + class beats the `:where()`'s zero specificity.
+ */
+.sketch-project textarea.code-sheet:focus-visible {
+  outline: none;
+}
+.sketch-project textarea.code-sheet:focus {
+  box-shadow: none;
 }
 
 /* ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { EditorClient } from '@/app/xp/_editor/shell/client'
+import { SketchEditorClient } from '@/app/xp/_sketch/editor/client'
 import { requireXpAccess } from '@/app/xp/gate'
 import { describeProblems, parseXp } from '@kxb/xp'
 import { builtinOverride, readBuiltinOverlays } from '@/domain/xps/builtins'
@@ -71,6 +72,12 @@ export default async function EditXpPage({ params }: { params: Promise<{ id: str
         </div>
       </main>
     )
+  }
+
+  // A sketch opens in the project view - a 3D editor pointed at a document
+  // with no world would be a stage with nothing on it and Save disabled.
+  if (parsed.document.sketch) {
+    return <SketchEditorClient id={safe} document={parsed.document} />
   }
 
   return <EditorClient id={safe} document={parsed.document} />

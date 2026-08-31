@@ -110,6 +110,73 @@ export type RoomCreated = DomainEvent<
  */
 export type RoomXpSet = DomainEvent<'RoomXpSet', { xpRef: string }>
 
+/**
+ * The longest a group caption may be.
+ *
+ * Shorter than a room name, and for a reason a name does not have: this is
+ * drawn as a caption over a column that is 15rem wide, so a group called
+ * something long is a group nobody can read the name of. Sixty characters would
+ * be three lines of it.
+ */
+export const ROOM_GROUP_MAX = 24
+
+/**
+ * Kept at the top of the list, for everybody.
+ *
+ * The space's pin, not yours - which is the whole distinction worth drawing
+ * here. A member's own pin is in `room_marks`, is private to them, and is not
+ * a decision about the room; this one is an owner or admin saying "this is the
+ * room this space runs on", and it is the same shape of decision as opening the
+ * room in the first place. So it is in the log, and it answers to the same pair.
+ *
+ * `pinned: false` is the unpin rather than a second event type, for the reason
+ * `RoomGuestBuildSet` carries one boolean rather than two events: they are one
+ * setting, and two types would mean two arms in every fold that reads it.
+ */
+export type RoomPinSet = DomainEvent<'RoomPinSet', { pinned: boolean }>
+
+/**
+ * Which caption this room is listed under.
+ *
+ * A group is not a container. Nothing moves *into* it and nothing is true of it
+ * while it holds no rooms - it is a string several rooms happen to name, and it
+ * exists in the rail exactly as long as a room names it. That is why this is a
+ * field on the room rather than a membership event pointing at a group
+ * aggregate: there is no group aggregate, and inventing one would buy a create
+ * screen, a delete screen and a second projection to hold a caption.
+ *
+ * `null` is "ungrouped", which is where every room standing today is and where
+ * a room goes when its group is taken off it. Renaming a group is this event on
+ * each of its rooms - see `setRoomGroup`.
+ */
+export type RoomGroupSet = DomainEvent<'RoomGroupSet', { group: string | null }>
+
+/**
+ * The glyph this room is drawn with in the list.
+ *
+ * A name out of `ROOM_ICONS`, or null for the default. The vocabulary is in
+ * `src/domain/rooms/look.ts` and the drawings are in the app layer; this event
+ * carries neither, only the name they agree on.
+ *
+ * The space's choice rather than yours, like the pin and the group above it: a
+ * room's icon is how everybody finds it in the column, and a per-person one
+ * would be a rail nobody could describe to a colleague over a desk.
+ */
+export type RoomIconSet = DomainEvent<'RoomIconSet', { icon: string | null }>
+
+/**
+ * And the colour that glyph is drawn in.
+ *
+ * A palette token out of `ROOM_TINTS`, or null for the rail's own colour.
+ *
+ * Its own event rather than a second field on `RoomIconSet`, which is the shape
+ * every setting in this file already has - one decision, one event. They are
+ * picked in the same panel and that is a fact about a panel; somebody who
+ * recolours a room without touching its icon should not append an event
+ * claiming they set the icon to what it already was.
+ */
+export type RoomTintSet = DomainEvent<'RoomTintSet', { tint: string | null }>
+
 export type RoomVisibilitySet = DomainEvent<
   'RoomVisibilitySet',
   { visibility: RoomVisibility }
@@ -183,6 +250,10 @@ export type RoomEvent =
   | RoomXpSet
   | RoomVisibilitySet
   | RoomModeSet
+  | RoomPinSet
+  | RoomGroupSet
+  | RoomIconSet
+  | RoomTintSet
   | RoomCapSet
   | RoomGuestBuildSet
   | RoomClosed
@@ -192,6 +263,10 @@ export const ROOM_EVENT_LABELS: Record<RoomEvent['type'], string> = {
   RoomRenamed: 'room renamed',
   RoomXpSet: 'room level changed',
   RoomVisibilitySet: 'room visibility changed',
+  RoomPinSet: 'room pin changed',
+  RoomGroupSet: 'room group changed',
+  RoomIconSet: 'room icon changed',
+  RoomTintSet: 'room colour changed',
   RoomModeSet: 'room mode changed',
   RoomCapSet: 'room capacity changed',
   RoomGuestBuildSet: 'room guest building changed',

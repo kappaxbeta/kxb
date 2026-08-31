@@ -68,7 +68,9 @@ const all = readdirSync(XPS).filter((f) => f.endsWith('.xp.json'))
  */
 const cartridges = all.filter((file) => {
   const parsed = parseXp(JSON.parse(readFileSync(path.join(XPS, file), 'utf8')))
-  return parsed.ok && parsed.document.frame !== undefined
+  // A sketch is the other worldless kind - its floor is inside code these
+  // walks cannot reach, the same excusal parseXp itself makes.
+  return parsed.ok && (parsed.document.frame !== undefined || parsed.document.sketch !== undefined)
 })
 
 const files = all.filter((file) => !cartridges.includes(file))
@@ -159,10 +161,15 @@ test('there is at least one XP to load', () => {
  * the game that it names.
  */
 describe.each(cartridges)('%s (a cartridge)', (file) => {
-  test('parses, and names a game', () => {
+  test('parses, and names a game or carries a sketch', () => {
     const parsed = parseXp(JSON.parse(readFileSync(path.join(XPS, file), 'utf8')))
     if (!parsed.ok) throw new Error(describeProblems(parsed.problems))
-    expect(parsed.document.frame?.game.length).toBeGreaterThan(0)
+    if (parsed.document.sketch) {
+      // The other worldless kind: its content is source, not a name.
+      expect(Object.keys(parsed.document.sketch.files).length).toBeGreaterThan(0)
+      return
+    }
+    expect(parsed.document.frame?.game.length ?? 0).toBeGreaterThan(0)
   })
 })
 

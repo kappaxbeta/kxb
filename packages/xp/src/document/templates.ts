@@ -42,6 +42,12 @@ export interface XpTemplate {
   name: string
   /** One line, in the same voice the shipped documents use. */
   blurb: string
+  /**
+   * Which engine the project this starts is written against, when it is not
+   * a world at all. Pickers badge it, so somebody choosing between "a room"
+   * and "a sketch" can see which one opens a stage and which opens code.
+   */
+  engine?: 'p5'
   /** The document, built fresh each time so a caller cannot mutate the source. */
   build: (id: string, name: string) => XpDocument
 }
@@ -196,6 +202,107 @@ function onTick(dt) {
   // Back to its own colours once it has stopped. \`self.speed\` is the body's
   // own reading - the script keeps no velocity of its own any more.
   if (self.speed < 1) self.material = 'own'
+}
+`
+
+/**
+ * The p5 starter's two files, as source.
+ *
+ * Held here as constants rather than inline so the template entry below reads
+ * like the others - and so the code is plain enough to be the first sketch
+ * anybody reads. It leans on `window.xp` (see `src/app/xp/_sketch/sdk.ts`
+ * for the whole surface): the avatar that syncs itself, a claimed object,
+ * a bound key, the roster.
+ */
+const POND_HELPERS = `// Drawing, kept out of main.js so the project has a second file to find.
+
+function drawPeep(p) {
+  var a = p.avatar
+  // Boosting glows - and because controls are synced per player, everybody
+  // sees everybody's glow, not just their own.
+  var glowing = xp.pressed('boost', p)
+  noStroke()
+  fill(p.you ? color(120, 220, 255, glowing ? 120 : 60) : color(255, 160, 220, glowing ? 100 : 45))
+  circle(a.x, a.y, glowing ? 74 : 52)
+  fill(p.you ? color(160, 235, 255) : color(255, 190, 230))
+  circle(a.x, a.y, 26)
+  fill(255, 255, 255, 180)
+  textAlign(CENTER)
+  textSize(12)
+  text(p.name, a.x, a.y - 24)
+}
+
+function drawRipple(r) {
+  noFill()
+  stroke(255, 255, 255, 160 * (1 - r.age))
+  strokeWeight(2)
+  circle(r.x, r.y, 30 + r.age * 120)
+  noStroke()
+}
+
+function drawBall(ball) {
+  noStroke()
+  fill(255, 214, 90, 70)
+  circle(ball.x, ball.y, 44)
+  fill(255, 214, 90)
+  circle(ball.x, ball.y, 22)
+}
+`
+
+const POND_MAIN = `// Arrows, WASD or the stick to swim - xp.input folds them into one
+// axis. E (or the button) to boost. Bump the ball and it is yours.
+var ball
+var ripples = []
+
+function setup() {
+  createCanvas(windowWidth, windowHeight)
+  ball = xp.object('ball', { x: 240, y: 200, dx: 0, dy: 0 })
+  xp.avatar.x = 80 + random(240)
+  xp.avatar.y = 80 + random(240)
+
+  xp.on('join', function (p) { console.log(p.name + ' swam in') })
+
+  // A press is a trigger, and it fires for every player's press - so a
+  // boost anywhere in the pond ripples on every screen.
+  xp.on('press', function (name, p) {
+    if (name === 'boost') ripples.push({ x: p.avatar.x, y: p.avatar.y, age: 0 })
+  })
+}
+
+function windowResized() { resizeCanvas(windowWidth, windowHeight) }
+
+function draw() {
+  background(6, 2, 20)
+  swim()
+  roll()
+  drawBall(ball)
+  ripples.forEach(function (r) { r.age += deltaTime / 900 })
+  ripples = ripples.filter(function (r) { return r.age < 1 })
+  ripples.forEach(drawRipple)
+  xp.players.forEach(drawPeep)
+}
+
+function swim() {
+  var pace = xp.pressed('boost') ? 7 : 3.5
+  xp.avatar.x = constrain(xp.avatar.x + xp.input.x * pace, 0, width)
+  xp.avatar.y = constrain(xp.avatar.y + xp.input.y * pace, 0, height)
+}
+
+function roll() {
+  var span = dist(xp.avatar.x, xp.avatar.y, ball.x, ball.y)
+  if (span < 36) {
+    ball.claim()
+    ball.dx = (ball.x - xp.avatar.x) * 0.4
+    ball.dy = (ball.y - xp.avatar.y) * 0.4
+  }
+  if (ball.mine) {
+    ball.x += ball.dx
+    ball.y += ball.dy
+    ball.dx *= 0.98
+    ball.dy *= 0.98
+    if (ball.x < 20 || ball.x > width - 20) ball.dx = -ball.dx
+    if (ball.y < 20 || ball.y > height - 20) ball.dy = -ball.dy
+  }
 }
 `
 
@@ -998,6 +1105,54 @@ export const TEMPLATES: readonly XpTemplate[] = [
           },
         },
         'peepz',
+      ),
+  },
+  /**
+   * The first sketch, and the only template that is not a world.
+   *
+   * The same bar as every other entry: *finished*, not a stub. It swims, it
+   * boosts, the ball changes hands when you bump it, and a second player who
+   * opens the same room appears and moves - so the first thing a sketch
+   * author reads demonstrates the avatar, a shared object, a bound key and
+   * the roster, which are exactly the four things `window.xp` exists for.
+   *
+   * Two files on purpose: a project view with one file in it does not teach
+   * anybody that there can be two.
+   */
+  {
+    id: 'p5',
+    name: 'A p5.js sketch',
+    blurb: 'Code that draws its own game. Everybody is a glowing dot; bump the ball to take it.',
+    engine: 'p5',
+    build: (id, name) =>
+      must(
+        {
+          format: 'xp/1',
+          id,
+          name,
+          blurb: 'A pond of glowing dots, drawn in p5.js.',
+          /*
+            Both, so a new sketch is reachable from both doors on the day it
+            is made: the shelf's *keep it as a room* reads `freeplay` and the
+            battle wizard reads `match`. A sketch has no world for the parser
+            to check these against, so they are the author's to take off in
+            the project view - which is the right direction for a starter,
+            since a capability nobody knew to add is a button that never
+            appears and never explains itself.
+          */
+          capabilities: ['freeplay', 'match'],
+          player: { keys: [{ key: 'KeyE', does: 'boost' }] },
+          sketch: {
+            engine: 'p5',
+            entry: 'main.js',
+            stick: true,
+            files: {
+              'pond.js': POND_HELPERS,
+              'main.js': POND_MAIN,
+            },
+          },
+        },
+        'p5',
       ),
   },
 ]

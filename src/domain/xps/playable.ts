@@ -189,6 +189,13 @@ export interface PlayableXp {
    * which is the boundary - this is what stops the card being offered at all.
    */
   framed: boolean
+  /**
+   * A document whose content is p5.js source, run in a container - see
+   * docs/xp/sketch.md. Read off the document for a builtin and off a JSON
+   * path for a project, so a picker can badge the kind before anything is
+   * opened.
+   */
+  sketch: boolean
 }
 
 /**
@@ -298,6 +305,7 @@ export async function listBuiltinXps(
               document.rules,
               document.capabilities,
               document.frame !== undefined,
+              document.sketch !== undefined,
             ),
             id,
             needs: [...(document.backend?.needs ?? [])],
@@ -455,6 +463,9 @@ export async function listPlayableXps(
        * whole document and does not depend on this either way.
        */
       false,
+      // Unlike `framed`, this one *is* read from the row: a space makes a
+      // sketch project from the p5 starter, so "never" was false on day one.
+      summary?.sketch ?? false,
       row.copied_from,
     )
   })
@@ -474,18 +485,18 @@ async function readSummaries(
   supabase: Client,
   ids: string[],
 ): Promise<
-  Map<string, { rules: unknown; capabilities: unknown; finish: Finish | null; hue: number | null }>
+  Map<string, { rules: unknown; capabilities: unknown; finish: Finish | null; hue: number | null; sketch: boolean }>
 > {
   const out = new Map<
     string,
-    { rules: unknown; capabilities: unknown; finish: Finish | null; hue: number | null }
+    { rules: unknown; capabilities: unknown; finish: Finish | null; hue: number | null; sketch: boolean }
   >()
   if (ids.length === 0) return out
 
   const { data, error } = await supabase
     .from('xp_versions')
     .select(
-      'xp_id, version, rules:document->rules, capabilities:document->capabilities, finish:document->>finish, hue:document->>hue',
+      'xp_id, version, rules:document->rules, capabilities:document->capabilities, finish:document->>finish, hue:document->>hue, engine:document->sketch->>engine',
     )
     .in('xp_id', ids)
 
@@ -500,6 +511,8 @@ async function readSummaries(
     finish: unknown
     /** And the same, which is why it has to be parsed back to a number below. */
     hue: unknown
+    /** The sketch block's engine, or null - presence is the fact wanted. */
+    engine: unknown
   }[]) {
     out.set(`${row.xp_id}@${row.version}`, {
       rules: row.rules,
@@ -512,6 +525,9 @@ async function readSummaries(
       // an empty string is zero - which is red - so the guard is on the raw
       // value being a non-empty string before it is parsed at all.
       hue: readHue(row.hue),
+      // Presence, not the name: any engine at that path means the project
+      // is code rather than a world, which is all a picker needs to say.
+      sketch: typeof row.engine === 'string' && row.engine.length > 0,
     })
   }
 
@@ -545,6 +561,8 @@ function summarise(
   capabilities: unknown,
   /** See `PlayableXp.framed`. Only a builtin is ever one. */
   framed: boolean,
+  /** See `PlayableXp.sketch`. Builtins and projects can both be one. */
+  sketch: boolean,
   /** Null for a builtin, which has no row to have been copied from. */
   copiedFrom: string | null = null,
 ): PlayableXp {
@@ -587,6 +605,7 @@ function summarise(
         ...(whole(declared.max) ? { max: whole(declared.max) } : {}) },
     }),
     framed,
+    sketch,
     capabilities: Array.isArray(capabilities)
       ? capabilities.filter((entry): entry is Capability =>
           typeof entry === 'string' && isCapability(entry),

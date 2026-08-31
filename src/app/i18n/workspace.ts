@@ -167,7 +167,13 @@ export interface WorkspaceDict {
   studio: {
     title: string
     body: string
-    doors: Record<'video' | 'picture' | 'banner' | 'game', { title: string; blurb: string }>
+    /**
+     * `picture` was a door and is one no longer: a still is one frame of what
+     * the video studio already does, so its card was folded into the suite's
+     * blurb (the route itself stays). `sketch` opens a fresh p5.js project -
+     * a door straight to the new-project form with the engine pre-chosen.
+     */
+    doors: Record<'video' | 'banner' | 'game' | 'sketch', { title: string; blurb: string }>
     startFrom: string
     /**
      * The recents strip, and the filter over it.
@@ -702,20 +708,21 @@ export const WORKSPACE_EN: WorkspaceDict = {
     body: 'Make something with the animals, then pin it to the board or send the link to anyone.',
     doors: {
       video: {
-        title: 'Video',
-        blurb: 'Walk the cast about, let them talk, move the camera. Record it.',
-      },
-      picture: {
-        title: 'Picture',
-        blurb: 'One arrangement, one frame, exported with a transparent background.',
+        title: 'XO Suite',
+        blurb:
+          'Walk the cast about, let them talk, move the camera. Record it — or export a single frame as a picture.',
       },
       banner: {
         title: 'Banner',
         blurb: 'A sky, blocks drifting through it, and a headline you can edit.',
       },
       game: {
-        title: 'Game',
+        title: 'XP Creator',
         blurb: 'A place to walk around, things that count, and rules that end it.',
+      },
+      sketch: {
+        title: 'XP p5.js',
+        blurb: 'A game that is code, drawn on its own canvas. Opens a fresh sketch project.',
       },
     },
     startFrom: 'Start from one of these',
@@ -1127,20 +1134,21 @@ export const WORKSPACE_DE: WorkspaceDict = {
     body: 'Machen Sie etwas mit den Tieren und heften Sie es an die Pinnwand oder schicken Sie den Link an wen Sie wollen.',
     doors: {
       video: {
-        title: 'Video',
-        blurb: 'Die Darsteller umherlaufen lassen, sie reden lassen, die Kamera bewegen. Aufnehmen.',
-      },
-      picture: {
-        title: 'Bild',
-        blurb: 'Eine Anordnung, ein Einzelbild, exportiert mit transparentem Hintergrund.',
+        title: 'XO Suite',
+        blurb:
+          'Die Darsteller umherlaufen lassen, sie reden lassen, die Kamera bewegen. Aufnehmen — oder ein Einzelbild als Bild exportieren.',
       },
       banner: {
         title: 'Banner',
         blurb: 'Ein Himmel, Blöcke, die hindurchtreiben, und eine Überschrift zum Bearbeiten.',
       },
       game: {
-        title: 'Spiel',
+        title: 'XP Creator',
         blurb: 'Ein Ort zum Herumlaufen, Dinge, die zählen, und Regeln, die es beenden.',
+      },
+      sketch: {
+        title: 'XP p5.js',
+        blurb: 'Ein Spiel als Code, auf eigener Leinwand gezeichnet. Öffnet ein neues Sketch-Projekt.',
       },
     },
     startFrom: 'Mit einer davon anfangen',
@@ -1540,20 +1548,21 @@ export const WORKSPACE_BG: WorkspaceDict = {
     body: 'Направете нещо с животните, после го закачете на дъската или пратете линка на когото поискате.',
     doors: {
       video: {
-        title: 'Видео',
-        blurb: 'Разходете състава, оставете ги да говорят, местете камерата. Запишете го.',
-      },
-      picture: {
-        title: 'Снимка',
-        blurb: 'Една подредба, един кадър, изнесен с прозрачен фон.',
+        title: 'XO Suite',
+        blurb:
+          'Разходете състава, оставете ги да говорят, местете камерата. Запишете го — или изнесете един кадър като снимка.',
       },
       banner: {
         title: 'Банер',
         blurb: 'Небе, блокове, които се носят през него, и заглавие, което може да редактирате.',
       },
       game: {
-        title: 'Игра',
+        title: 'XP Creator',
         blurb: 'Място, из което да се ходи, неща, които се броят, и правила, които я приключват.',
+      },
+      sketch: {
+        title: 'XP p5.js',
+        blurb: 'Игра, която е код, върху собствено платно. Отваря нов скеч проект.',
       },
     },
     startFrom: 'Започнете от някое от тези',

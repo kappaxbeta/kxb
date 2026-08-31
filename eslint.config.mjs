@@ -14,6 +14,14 @@ const eslintConfig = defineConfig([
     ".shoot-profile",
 
     /**
+     * Vendored runtimes are served, not written here. p5.min.js is one
+     * minified line, which reads as several thousand lint errors about code
+     * nobody in this repo authored or can fix - upgrading p5 is copying a
+     * new file in, and the lint that matters ran on p5's own repo.
+     */
+    "public/xp/vendor/**",
+
+    /**
      * Every Next.js build directory this repo has or will have.
      *
      * One glob, and it is the third time this lesson has been paid for.

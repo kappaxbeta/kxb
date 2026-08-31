@@ -39,10 +39,16 @@ export const dynamic = 'force-dynamic'
  */
 export default async function NewProjectPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ engine?: string | string[] }>
 }) {
   const { slug } = await params
+  // The studio's "XP p5.js" door arrives with its answer to the engine
+  // pills already given; anything else falls back to the default.
+  const wanted = (await searchParams).engine
+  const engine = wanted === 'p5' ? ('p5' as const) : ('xp' as const)
 
   const context = await requireTenant(slug)
   requireFeature(context, 'worlds')
@@ -72,14 +78,19 @@ export default async function NewProjectPage({
 
       <NewProjectForm
         slug={slug}
+        engine={engine}
         /*
           The package's English, overlaid with the reader's language where the
           dictionary has it. A starter it has never heard of keeps the name
           `TEMPLATES` gives it, which is the same promise `t()` makes a level.
         */
-        templates={TEMPLATES.map(({ id, name, blurb }) => ({
+        templates={TEMPLATES.map(({ id, name, blurb, engine }) => ({
           id,
           ...(t.templates[id] ?? { name, blurb }),
+          // Not translated: it is the engine's own name, and the badge is
+          // there so the two kinds of project cannot be mistaken for each
+          // other on this screen.
+          ...(engine ? { engine } : {}),
         }))}
       />
     </main>

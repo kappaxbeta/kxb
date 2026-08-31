@@ -2,6 +2,7 @@ import type { Guide } from '../guide'
 import type { Text } from '../text'
 import { MAKING_BOXING } from './boxing'
 import { MAKING_MAUMAU } from './maumau'
+import { MAKING_P5 } from './p5'
 
 /**
  * The making-of shelf: how the games were actually built.
@@ -21,6 +22,7 @@ export interface Making {
 export const MAKING: Making[] = [
   { slug: 'how-we-built-boxing', guide: MAKING_BOXING },
   { slug: 'how-we-built-maumau', guide: MAKING_MAUMAU },
+  { slug: 'how-we-built-the-p5-cartridge', guide: MAKING_P5 },
 ]
 
 export function makingBySlug(slug: string): Making | undefined {

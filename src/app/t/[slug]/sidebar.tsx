@@ -1,13 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import React, { useEffect, useId, useRef, useState, useTransition } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
+import React, {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from 'react'
 import { OPEN_RAIL } from '@/app/t/[slug]/open-rail'
 import { signOut } from '@/app/(auth)/actions'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
-import { railDict } from '@/app/i18n/rail'
+import { railDict, type RailDict } from '@/app/i18n/rail'
 import { GuestExit } from '@/app/t/[slug]/guest-exit'
 import { ContactWidget } from '@/app/components/contact-widget'
 import { TourWidget } from '@/app/components/tour-widget'
@@ -27,8 +34,12 @@ import { useCurrentMatch } from '@/app/t/[slug]/match-store'
 import { useHere } from '@/app/world/_stores/here-store'
 import type { EventSurface } from '@/domain/events/presets'
 import type { GuestLinkView, GuestView } from '@/domain/guests/queries'
+import { attempt } from '@/app/components/connection'
 import { createRoom } from '@/domain/rooms/actions'
-import { hrefFor, isOwnedPlace, type PlaceId } from '@kxb/peepz-world/places'
+import { pinRoomForMe } from '@/domain/rooms/mark-actions'
+import { orderPlaces, PIN_PENDING, type RoomMarks } from '@/domain/rooms/places'
+import { RoomGlyph, tintClass } from '@/app/t/[slug]/room-icons'
+import { hrefFor } from '@kxb/peepz-world/places'
 import { type Tier, tierAtLeast } from '@/domain/billing/tiers'
 import type { TenantRoleName } from '@/lib/supabase/types'
 import { useRefusal } from '@/app/i18n/use-refusal'
@@ -199,6 +210,16 @@ export function Sidebar(props: {
    * list without either fetching.
    */
   rooms: RoomView[]
+  /**
+   * This person's own pins and last visits, keyed by room id.
+   *
+   * Read in the layout beside the rooms, for the same reason and in the same
+   * breath: both copies of the rail draw the same ordering, and two components
+   * asking for one person's preferences would be two round trips to sort one
+   * list. Empty is a complete answer - the band then draws the space's pins,
+   * the groups and creation order.
+   */
+  marks: RoomMarks
   /**
    * Levels this space keeps standing, listed as places rather than as matches.
    *
@@ -914,14 +935,6 @@ function Surfaces({
   )
 }
 
-/** The icon each place gets in the rail. */
-const PLACE_ICON: Record<PlaceId, IconName> = {
-  lounge: 'lounge',
-  cafe: 'cafe',
-  home: 'home',
-  outdoor: 'garden',
-}
-
 /**
  * The places, and who is standing in them.
  *
@@ -930,36 +943,71 @@ const PLACE_ICON: Record<PlaceId, IconName> = {
  * inside the thing you were leaving - and it had to be hidden by hand whenever
  * a HUD panel wanted the same corner.
  */
-/**
- * How many rooms the rail shows before it stops.
- *
- * Five is about where a nested list stops being scannable and starts being a
- * second navigation to read - and this column already has the places, the
- * people and the tabs competing for it. The rest are one click away.
- */
-const ROOMS_SHOWN = 5
-
 function Places({
   slug,
   features,
   role,
   rooms,
+  marks,
   canManageRooms,
 }: {
   slug: string
   features: SidebarFeatures
   role: TenantRoleName
   rooms: RoomView[]
+  /** This person's own pins and last visits, read in the layout. */
+  marks: RoomMarks
   canManageRooms: boolean
 }) {
   const pathname = usePathname()
-  const search = useSearchParams()
   const t = railDict(useLocale())
 
-  /** Whose world we are in, carried along every link so a visit survives it. */
-  const of = search.get('of') ?? undefined
-
   const here = useHere()
+
+  /**
+   * Pins this browser has changed and the server has not confirmed yet.
+   *
+   * `useState` and an overlay rather than `useOptimistic`, which is the house
+   * rule for a rail drawn over a live scene and is load-bearing here for the
+   * reason `play-rail` writes out at length: an optimistic value needs
+   * something to be confirmed against, and a pin is confirmed by a layout
+   * revalidation that arrives as a whole new tree rather than as a resolved
+   * promise. `useOptimistic` snaps back the instant the transition ends, which
+   * for this control means the room visibly jumps back down the list and then
+   * up again.
+   *
+   * Kept after it lands rather than cleared, because clearing it is the same
+   * flicker one render later: the overlay and the server agree by then, so
+   * there is nothing to clear except the agreement. It is dropped on a refusal,
+   * which is the only case where the two ever disagree.
+   */
+  const [pinning, setPinning] = useState<Record<string, boolean>>({})
+
+  /**
+   * The groups this viewer has folded away.
+   *
+   * **Open is the default and folding is the deliberate act**, which is the
+   * whole of the rule: a group exists because an admin said these rooms belong
+   * together, so arriving with them hidden would be the rail undoing the
+   * arrangement it was asked to draw. Nothing is hidden until somebody presses
+   * a caption, and what they pressed is the only thing that closes.
+   *
+   * Kept per viewer in `localStorage` rather than in a table, on the same
+   * reasoning the Pinnwand's dismissals are: this is which parts of a menu one
+   * browser has tidied, it is worth nothing to anybody else, and losing it
+   * costs one expanded group. There is no round trip and no row.
+   *
+   * `useSyncExternalStore` rather than state seeded by an effect, because
+   * `localStorage` is exactly what it is for: the server has none, so the
+   * server snapshot is the empty set and hydration matches by construction,
+   * and React re-reads on the client without a render pass that sets state
+   * from inside an effect. See `foldStore` below.
+   */
+  const folded = useSyncExternalStore(
+    subscribeToFolds,
+    () => foldsFor(slug),
+    () => NO_FOLDS,
+  )
 
   /**
    * A guest sees the lounge and nothing else.
@@ -985,107 +1033,446 @@ function Places({
    * The café, the house and the garden were three rows here and three routes
    * behind them. They are cartridges now: `dream-restaurant` and `peepz-world`
    * in the XP shelf, opened in a room like any other game, which is why the
-   * Rooms band below is where they turn up. A rail row is a *place in the
-   * product*, and a row pointing at a route nobody serves is the worst kind of
-   * navigation - it looks like the feature is broken rather than moved.
+   * rooms below are where they turn up. A rail row is a *place in the product*,
+   * and a row pointing at a route nobody serves is the worst kind of navigation
+   * - it looks like the feature is broken rather than moved.
    *
    * The `cafe` flag still gates the homestead itself: it is what
    * `openHomesteadFrame` checks before a cartridge opens, and what the purse
    * lives behind. It just no longer decides whether a *link* is drawn.
    */
-  const places: PlaceId[] = features.lounge ? (['lounge'] as const).slice() : []
-  if (places.length === 0) return null
+  if (!features.lounge) return null
+
+  /*
+   * The rooms, sorted into their bands.
+   *
+   * The overlay is applied to the marks rather than to the result, so a room
+   * being pinned takes the same path through `orderPlaces` that a pinned room
+   * takes - one ordering, and no second implementation of "where does a pinned
+   * room go" living in a click handler.
+   *
+   * The stamp on an overlaid pin is `PIN_PENDING`, which sorts exactly where
+   * the server's own stamp is about to put it - see the note there. The room
+   * moves once, when you click, and does not move again when the answer lands.
+   */
+  const overlaid: RoomMarks = { ...marks }
+  for (const [roomId, pinned] of Object.entries(pinning)) {
+    overlaid[roomId] = {
+      seenAt: marks[roomId]?.seenAt ?? null,
+      pinnedAt: pinned ? PIN_PENDING : null,
+    }
+  }
+
+  const places = orderPlaces(rooms, overlaid)
+
+  const loungeHref = hrefFor('lounge', slug, undefined)
+  const loungeActive = pathname.startsWith(`/t/${slug}/lounge`)
+
+  /** Fold a group away, or bring it back. */
+  function fold(name: string) {
+    const next = new Set(folded)
+    if (!next.delete(name)) next.add(name)
+    setFolds(slug, next)
+  }
+
+  function pin(roomId: string, pinned: boolean) {
+    setPinning((was) => ({ ...was, [roomId]: pinned }))
+    void attempt(() => pinRoomForMe(slug, roomId, pinned)).then((result) => {
+      if (result.ok) return
+      // Put it back. Nothing else in the rail moved, so the whole recovery is
+      // dropping the overlay and letting the server's answer stand.
+      setPinning((was) => {
+        const next = { ...was }
+        delete next[roomId]
+        return next
+      })
+    })
+  }
+
+  /** One room, drawn the same way wherever in the list it turns up. */
+  function roomRow(room: RoomView, byAdmin = false) {
+    return (
+      <RoomRow
+        key={room.roomId}
+        slug={slug}
+        room={room}
+        active={pathname.startsWith(`/t/${slug}/rooms/${room.slug}`)}
+        /*
+         * A room the *space* pinned gets no control, and that is not a
+         * simplification. Your pin is yours to take off; the space's is an
+         * instruction from an owner, and a member unpinning it from a rail row
+         * would either do nothing (the refusal is server-side) or quietly
+         * change the rail for everybody. Neither is a button worth drawing.
+         */
+        pinned={byAdmin ? 'space' : (overlaid[room.roomId]?.pinnedAt ? 'mine' : 'none')}
+        onPin={pin}
+        t={t}
+      />
+    )
+  }
 
   return (
     <nav aria-label={t.bands.places}>
       <Band>{t.bands.places}</Band>
-      {places.map((id) => {
-        const active = pathname.startsWith(`/t/${slug}/${id}`)
-        // The lounge is the commons - nobody's, so a visit does not follow you
-        // into it, and the link must not pretend otherwise.
-        const target = hrefFor(id, slug, isOwnedPlace(id) ? of : undefined)
 
-        const row = (
-          <Row
-            key={id}
-            href={target}
-            active={active}
-            icon={<Icon name={PLACE_ICON[id]} />}
-            meta={
-              // The head count, on the place you are actually in. Elsewhere it
-              // would be a number this client has no way to know.
-              active && here.place === id && here.people.length > 0 ? (
-                <span className="rail-count">{here.people.length + 1}</span>
-              ) : null
-            }
-          >
-            {t.places[id]}
-          </Row>
-        )
+      {/*
+        The lounge, always first and never in a band of its own.
 
-        /*
-          The space's other rooms, indented directly under the lounge.
-
-          Under it rather than after all the places, because that is what they
-          are: more lounges. Listed flat they would sit at the same level as the
-          café and somebody's house, which says they are the same kind of thing
-          - one is a place this space made and can close, the others are
-          fixtures of every space.
-
-          Guests see them too. A room is part of the commons the way the lounge
-          is, and a guest link can point straight at one, so hiding the list
-          would leave a visitor somewhere with no way back to it.
-        */
-        // The lounge keeps its indented list even with nothing under it yet,
-        // because the way to open the first room hangs off the same branch.
-        if (
-          id !== 'lounge' ||
-          (rooms.length === 0 && !canManageRooms)
-        ) {
-          return row
+        It is the commons - nobody's, so a visit does not follow you into it,
+        and the link must not pretend otherwise by carrying `?of=`.
+      */}
+      <Row
+        href={loungeHref}
+        active={loungeActive}
+        icon={<Icon name="lounge" />}
+        meta={
+          // The head count, on the place you are actually in. Elsewhere it
+          // would be a number this client has no way to know.
+          loungeActive && here.place === 'lounge' && here.people.length > 0 ? (
+            <span className="rail-count">{here.people.length + 1}</span>
+          ) : null
         }
+      >
+        {t.places.lounge}
+      </Row>
+
+      {/*
+        --- pinned ------------------------------------------------------------
+
+        Kept at the top, and captioned, because a list whose first three rows
+        are in a different order from the rest has to say why. The caption is
+        the whole explanation, and it costs one 10px line.
+      */}
+      {places.pinned.length > 0 && (
+        <>
+          <Caption>{t.rooms.pinnedHeading}</Caption>
+          {places.pinned.map((entry) => roomRow(entry.room, entry.byAdmin))}
+        </>
+      )}
+
+      {/*
+        --- the groups --------------------------------------------------------
+
+        A caption and its rooms, at the same indent as everything else. Not
+        indented, which is the change: rooms used to hang off the lounge in a
+        `pl-4` branch on the argument that they are "more lounges". They are,
+        and it was still wrong - the indent made the whole list read as one
+        place with a sub-menu, and it left the lounge carrying an empty branch
+        in every space that had no rooms yet. A caption groups rows without
+        moving them; an indent moves every row to group some of them.
+      */}
+      {places.groups.map((group) => {
+        const open = !folded.has(group.name)
 
         return (
-          <div key={id}>
-            {row}
-            <div className="pl-4">
-              {rooms.slice(0, ROOMS_SHOWN).map((room) => (
-                <Row
-                  key={room.roomId}
-                  href={`/t/${slug}/rooms/${room.slug}`}
-                  active={pathname.startsWith(`/t/${slug}/rooms/${room.slug}`)}
-                  icon={<Icon name="lounge" />}
-                  /*
-                    A room that is a level says so, and says it here rather than
-                    in a second list. That is the whole point of a level being a
-                    room: one list of places, one kind of row, and a tag for the
-                    one thing that differs about what is inside.
-                  */
-                  meta={room.xpRef ? <span className="xp-tag">XP</span> : null}
-                >
-                  {room.name}
-                </Row>
-              ))}
-
-              {/* The remainder as one line rather than as more rows - the point
-                  of the cap is that the rail stops growing. */}
-              {rooms.length > ROOMS_SHOWN && (
-                <Row
-                  href={`/t/${slug}/rooms`}
-                  active={pathname === `/t/${slug}/rooms`}
-                  icon={<span aria-hidden>+</span>}
-                >
-                  {fill(t.rooms.more, { n: rooms.length - ROOMS_SHOWN })}
-                </Row>
-              )}
-
-              {canManageRooms && <NewRoom slug={slug} />}
-            </div>
+          <div key={group.name}>
+            <Caption
+              open={open}
+              onToggle={() => fold(group.name)}
+              /* The count only while it is folded. Open, it is a number you
+                 could reach by looking; closed, it is the only thing saying
+                 what is behind the caption. */
+              count={open ? null : group.rooms.length}
+            >
+              {group.name}
+            </Caption>
+            {open && group.rooms.map((room) => roomRow(room))}
           </div>
         )
       })}
 
+      {/*
+        --- everything else ---------------------------------------------------
+
+        Captioned only when there is a group above it. Without one, these are
+        simply "the rooms" and a heading over all of them says nothing; with
+        one, an uncaptioned run of rows directly under a group's rows reads as
+        more of that group.
+      */}
+      {places.loose.length > 0 && places.groups.length > 0 && (
+        <Caption>{t.rooms.ungroupedHeading}</Caption>
+      )}
+      {places.loose.map((room) => roomRow(room))}
+
+      {/* The remainder as one line rather than as more rows - the point of the
+          cap is that the rail stops growing. */}
+      {places.overflow > 0 && (
+        <Row
+          href={`/t/${slug}/rooms`}
+          active={pathname === `/t/${slug}/rooms`}
+          icon={<span aria-hidden>+</span>}
+        >
+          {fill(t.rooms.more, { n: places.overflow })}
+        </Row>
+      )}
+
+      {canManageRooms && <NewRoom slug={slug} />}
     </nav>
+  )
+}
+
+/**
+ * A caption over a run of rows.
+ *
+ * Not `<Band>`, which is an `<h2>` and names a whole region of the rail: there
+ * is one Places band and it already has its heading. A screen reader given
+ * "Places, Pinned, Design, Other rooms" as four regions would be told about a
+ * structure that is really one list with dividers in it.
+ *
+ * A button when it can fold something and a plain paragraph when it cannot -
+ * rather than a button that is always there and sometimes does nothing. "Pinned"
+ * and "Other rooms" are not groups anybody arranged and there is nothing behind
+ * them to put away; a control on them would be a promise the rail does not keep.
+ *
+ * The caret is a caret that *turns* rather than a plus that becomes a minus: it
+ * says which way the rows went as well as that they went, and at 7px a rotation
+ * is legible where a glyph swap is a flicker.
+ *
+ * Either way it is read out, not `aria-hidden`. The caption is the only thing
+ * that says which group a room is in, so hiding it would leave somebody
+ * listening to the rail with an unexplained pile of rooms in an order they
+ * cannot account for. It is quieter than a heading, not absent.
+ */
+function Caption({
+  children,
+  open,
+  onToggle,
+  count,
+}: {
+  children: React.ReactNode
+  /** Whether what it captions is showing. Absent when it captions nothing foldable. */
+  open?: boolean
+  onToggle?: () => void
+  /** How many rows are behind it, drawn only while it is folded. */
+  count?: number | null
+}) {
+  const words = 'truncate text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted/70'
+
+  /*
+    The caret slot is drawn either way, and is only *invisible* on a caption
+    with nothing to fold. Every caption in the band then starts its words at the
+    same x - and a column where "Pinned" and "Work" begin two characters apart
+    reads as two kinds of list rather than one list with a control on some of
+    its dividers.
+  */
+  const caret = (
+    <svg
+      viewBox="0 0 8 8"
+      width={7}
+      height={7}
+      aria-hidden
+      className={`shrink-0 fill-current text-ink-muted/70 transition-transform ${
+        onToggle ? '' : 'invisible'
+      } ${open ? 'rotate-90' : ''}`}
+    >
+      <path d="M2 0.6 6.4 4 2 7.4Z" />
+    </svg>
+  )
+
+  const inside = (
+    <>
+      {caret}
+      <span className={words}>{children}</span>
+      {count !== null && count !== undefined && (
+        <span className="shrink-0 text-[10px] tabular-nums text-ink-muted/60">{count}</span>
+      )}
+    </>
+  )
+
+  const shape = 'flex w-full items-center gap-1.5 px-3 pb-0.5 pt-2 text-left'
+
+  if (!onToggle) return <p className={shape}>{inside}</p>
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className={`${shape} rounded-lg transition hover:text-ink`}
+    >
+      {inside}
+    </button>
+  )
+}
+
+/**
+ * Which groups this browser has folded away, and where that is kept.
+ *
+ * A tiny external store rather than component state, so the rail can read
+ * `localStorage` through `useSyncExternalStore` - which is the one hook that
+ * handles "the server does not have this value" without a hydration mismatch
+ * and without setting state from an effect.
+ *
+ * One key per space, because the groups are the space's: a "Design" folded away
+ * in one workspace has nothing to do with a "Design" in another, and one shared
+ * key would make them the same fold.
+ *
+ * Every access is wrapped and both directions fail silently. `localStorage`
+ * throws outright in a browser with site data blocked, and this is a menu
+ * preference - the right behaviour when it cannot be read is every group open,
+ * which is the default anyway. A rail that threw here would take the whole
+ * workspace shell with it; see the storage-denied notes.
+ */
+const FOLDED_KEY = 'places:folded:'
+
+/** The server's answer, and the answer when storage refuses. Stable, because
+ *  `useSyncExternalStore` compares snapshots by identity. */
+const NO_FOLDS: ReadonlySet<string> = new Set()
+
+/** The last set handed out, per space. Also what keeps the snapshot stable. */
+let foldCache: { slug: string; folds: ReadonlySet<string> } | null = null
+const foldListeners = new Set<() => void>()
+
+function subscribeToFolds(onChange: () => void): () => void {
+  foldListeners.add(onChange)
+  return () => {
+    foldListeners.delete(onChange)
+  }
+}
+
+function foldsFor(slug: string): ReadonlySet<string> {
+  if (foldCache?.slug === slug) return foldCache.folds
+
+  let folds: ReadonlySet<string> = NO_FOLDS
+  try {
+    const raw = window.localStorage.getItem(FOLDED_KEY + slug)
+    const names: unknown = raw ? JSON.parse(raw) : null
+    if (Array.isArray(names)) {
+      folds = new Set(names.filter((name): name is string => typeof name === 'string'))
+    }
+  } catch {
+    // Storage denied, or a value somebody else wrote. Every group opens.
+  }
+
+  foldCache = { slug, folds }
+  return folds
+}
+
+function setFolds(slug: string, folds: ReadonlySet<string>): void {
+  // The cache first, so the re-render this triggers reads the new value even
+  // when the write below throws - the fold then holds for the session and is
+  // forgotten on reload, which is the right half of the feature to keep.
+  foldCache = { slug, folds }
+  try {
+    if (folds.size === 0) window.localStorage.removeItem(FOLDED_KEY + slug)
+    else window.localStorage.setItem(FOLDED_KEY + slug, JSON.stringify([...folds]))
+  } catch {
+    // Nothing to do and nothing worth saying.
+  }
+  for (const listener of foldListeners) listener()
+}
+
+/**
+ * One room in the Places list.
+ *
+ * A `<div>` around the link rather than a link with a button inside it, because
+ * a button inside an anchor is not a thing HTML has - the click would navigate
+ * as well as pin. Same shape the rooms rail's rename control uses, and the same
+ * bargain: the control is invisible until the row is hovered and always
+ * reachable by keyboard, because a pin permanently beside every room turns a
+ * list of places to walk into into a list of things to administer.
+ */
+function RoomRow({
+  slug,
+  room,
+  active,
+  pinned,
+  onPin,
+  t,
+}: {
+  slug: string
+  room: RoomView
+  active: boolean
+  /** Whose pin holds this room up, if either. */
+  pinned: 'space' | 'mine' | 'none'
+  onPin: (roomId: string, pinned: boolean) => void
+  t: RailDict
+}) {
+  return (
+    <div className="group/room relative flex items-center">
+      <Link
+        href={`/t/${slug}/rooms/${room.slug}`}
+        aria-current={active ? 'page' : undefined}
+        className="rail-link min-w-0 flex-1"
+      >
+        <span aria-hidden className={`rail-link-icon ${tintClass(room.tint)}`}>
+          <RoomGlyph name={room.icon} />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{room.name}</span>
+        {/*
+          A room that is a level says so, and says it here rather than in a
+          second list. That is the whole point of a level being a room: one list
+          of places, one kind of row, and a tag for the one thing that differs
+          about what is inside.
+
+          It gives up its slot to the pin control on hover - two pills and a
+          glyph in a 15rem row is a row nobody can read - which is why this is
+          `group-hover/room:opacity-0` rather than a second element beside it.
+        */}
+        {room.xpRef && (
+          <span className="xp-tag transition group-hover/room:opacity-0">XP</span>
+        )}
+      </Link>
+
+      {pinned === 'space' ? (
+        /*
+          The space's pin, stated and not offered.
+
+          Drawn always rather than on hover, because it is the answer to "why is
+          this room at the top" for somebody who did not put it there - and that
+          question is asked exactly by the people who never hover it.
+        */
+        <span
+          aria-hidden
+          title={t.rooms.pinnedBySpace}
+          className="pointer-events-none absolute right-2.5 text-[11px] text-accent-2/70"
+        >
+          <PinMark filled />
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onPin(room.roomId, pinned !== 'mine')}
+          aria-pressed={pinned === 'mine'}
+          title={fill(pinned === 'mine' ? t.rooms.unpin : t.rooms.pin, {
+            name: room.name,
+          })}
+          className={`absolute right-1.5 rounded-lg p-1.5 text-ink-muted transition hover:text-ink focus-visible:opacity-100 ${
+            pinned === 'mine' ? 'text-accent-2/80 opacity-100' : 'opacity-0 group-hover/room:opacity-100'
+          }`}
+        >
+          <PinMark filled={pinned === 'mine'} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A pin, at rail size.
+ *
+ * Two states out of one drawing: the outline is "you could", the filled one is
+ * "you did". Filling it rather than colouring it alone is what makes the two
+ * tell apart for somebody who cannot see the difference between muted ink and
+ * cyan - which on a row that is already tinted a colour of its own is more
+ * people than usual.
+ */
+function PinMark({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={13}
+      height={13}
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6.2 1.8h3.6l-.5 4 2.6 2.4v1.2H4.1V8.2l2.6-2.4-.5-4Z" />
+      <path d="M8 9.4V14" />
+    </svg>
   )
 }
 

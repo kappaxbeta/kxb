@@ -2,10 +2,12 @@ import { z } from 'zod'
 import {
   ROOM_CAP_MAX,
   ROOM_CAP_MIN,
+  ROOM_GROUP_MAX,
   ROOM_NAME_MAX,
   type RoomMode,
   type RoomVisibility,
 } from '@/domain/rooms/events'
+import { ROOM_ICONS, ROOM_TINTS } from '@/domain/rooms/look'
 
 /**
  * Commands against one room.
@@ -82,6 +84,56 @@ export const setRoomGuestBuildSchema = z.object({
   allowed: z.boolean(),
 })
 
+export const setRoomPinnedSchema = z.object({
+  roomId: z.uuid(),
+  pinned: z.boolean(),
+})
+
+/**
+ * A group caption, or nothing.
+ *
+ * `nullable` rather than `optional` for the reason the cap schema gives one
+ * line up: null is a real value here - "take it out of its group" - and an
+ * optional field would make that indistinguishable from "leave it where it is".
+ *
+ * An empty string is null rather than an error. It is what the field says when
+ * somebody clears it, and refusing that would mean the only way out of a group
+ * is a separate button beside the field somebody has just emptied.
+ */
+export const roomGroupSchema = z
+  .string()
+  .trim()
+  .max(ROOM_GROUP_MAX, `A group name cannot exceed ${ROOM_GROUP_MAX} characters`)
+  .transform((value) => (value.length === 0 ? null : value))
+  .nullable()
+
+export const setRoomGroupSchema = z.object({
+  roomId: z.uuid(),
+  group: roomGroupSchema,
+})
+
+/**
+ * An icon and a colour, each out of its own fixed list, or nothing.
+ *
+ * `z.enum` over the vocabulary rather than a free string, which is the whole
+ * defence: there is no check constraint on either column - see the migration
+ * for why - so this schema is the only thing between the picker and a row
+ * holding a name nothing can draw.
+ *
+ * Nullable rather than optional, for the third time in this file and the same
+ * reason: null is "take the icon off", and an optional field would make that
+ * the same request as "leave it alone".
+ */
+export const setRoomIconSchema = z.object({
+  roomId: z.uuid(),
+  icon: z.enum(ROOM_ICONS).nullable(),
+})
+
+export const setRoomTintSchema = z.object({
+  roomId: z.uuid(),
+  tint: z.enum(ROOM_TINTS).nullable(),
+})
+
 export type CreateRoom = {
   type: 'CreateRoom'
   actorId: string
@@ -134,6 +186,26 @@ export type SetRoomGuestBuild = {
   actorId: string
   allowed: boolean
 }
+export type SetRoomPinned = {
+  type: 'SetRoomPinned'
+  actorId: string
+  pinned: boolean
+}
+export type SetRoomGroup = {
+  type: 'SetRoomGroup'
+  actorId: string
+  group: string | null
+}
+export type SetRoomIcon = {
+  type: 'SetRoomIcon'
+  actorId: string
+  icon: string | null
+}
+export type SetRoomTint = {
+  type: 'SetRoomTint'
+  actorId: string
+  tint: string | null
+}
 export type CloseRoom = { type: 'CloseRoom'; actorId: string }
 
 /**
@@ -155,4 +227,8 @@ export type RoomCommand =
   | SetRoomMode
   | SetRoomCap
   | SetRoomGuestBuild
+  | SetRoomPinned
+  | SetRoomGroup
+  | SetRoomIcon
+  | SetRoomTint
   | CloseRoom

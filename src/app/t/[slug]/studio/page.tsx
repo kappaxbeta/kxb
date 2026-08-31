@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Clapperboard, Gamepad2, Image as ImageIcon, Sparkles } from 'lucide-react'
+import { Clapperboard, Code2, Gamepad2, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { listScenes } from '@/domain/scenes/queries'
 import type { Locale } from '@/domain/i18n/locale'
@@ -137,10 +137,15 @@ export default async function SpaceStudioPage({
     .slice(0, RECENT)
     .map((entry) => entry.item)
 
+  /*
+    The order is the pitch: the suite first (video, and the still that used
+    to be its own card - the route at studio/image stays, the door went),
+    then the two creators, then the banner last. The picture door was folded
+    into the suite because a still is one frame of what it already does, and
+    four cards where one is a subset of another read as a quiz.
+  */
   const doors = [
     { href: `/t/${slug}/studio/video`, ...t.doors.video, icon: Clapperboard },
-    { href: `/t/${slug}/studio/image`, ...t.doors.picture, icon: ImageIcon },
-    { href: `/t/${slug}/studio/hero`, ...t.doors.banner, icon: Sparkles },
     /**
      * The fourth door, and the reason it is a door rather than a section.
      *
@@ -164,8 +169,15 @@ export default async function SpaceStudioPage({
     ...(xpOpen(context)
       ? [
           { href: `/t/${slug}/browse`, ...t.doors.game, icon: Gamepad2 },
+          /*
+            Straight to a new sketch rather than to the workbench: the door
+            says "p5.js", and the person who pressed it has already answered
+            the one question the form's engine pills ask.
+          */
+          { href: `/t/${slug}/browse/new?engine=p5`, ...t.doors.sketch, icon: Code2 },
         ]
       : []),
+    { href: `/t/${slug}/studio/hero`, ...t.doors.banner, icon: Sparkles },
   ]
 
   return (

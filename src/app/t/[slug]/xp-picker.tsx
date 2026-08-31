@@ -187,6 +187,32 @@ export function XpPicker({
     }
   }, [inMagazine, catalogue, moved, justIn])
 
+  /**
+   * The store shelf's two controls: a word, and where a level came from.
+   *
+   * Only on the shelf view - the browse page's Store tab, twenty-one
+   * cartridges and growing - because that is the list long enough to need
+   * finding things in. The rail's list stays a list. Filtering happens on
+   * `rest` rather than in the query: the whole catalogue is already here,
+   * and a round trip per keystroke would be a search box that lags.
+   */
+  const [seek, setSeek] = useState('')
+  const [from, setFrom] = useState<'all' | PlayableXp['source']>('all')
+  const offered = useMemo(() => {
+    const present = new Set(rest.map((row) => row.xp?.source).filter(Boolean))
+    // A chip that can only ever return nothing is a control that looks
+    // broken - same rule the battle picker's filtersFor keeps.
+    return (['builtin', 'space', 'store'] as const).filter((one) => present.has(one))
+  }, [rest])
+  const sought = useMemo(() => {
+    const word = seek.trim().toLowerCase()
+    return rest.filter((row) => {
+      if (from !== 'all' && row.xp?.source !== from) return false
+      if (word && !row.name.toLowerCase().includes(word)) return false
+      return true
+    })
+  }, [rest, seek, from])
+
   function takeIn(row: ShelfRow) {
     setError(null)
     setBusy(row.ref)
@@ -419,7 +445,11 @@ export function XpPicker({
                 ? t.goneChip
                 : open.xp.draft
                   ? t.draft
-                  : t.sources[open.xp.source]
+                  : open.xp.sketch
+                    ? // The engine's own name, so no dictionary - beside the
+                      // source, because "p5.js" answers what and not whose.
+                      `p5.js · ${t.sources[open.xp.source]}`
+                    : t.sources[open.xp.source]
             }
             note={notes(open)}
             closeLabel={t.close}
@@ -574,8 +604,35 @@ export function XpPicker({
               {t.everythingElse}
             </h3>
           )}
+          {view === 'shelf' && (rest.length > 8 || seek !== '' || from !== 'all') && (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <input
+                value={seek}
+                onChange={(event) => setSeek(event.target.value)}
+                placeholder={t.findALevel}
+                aria-label={t.findALevel}
+                className="min-w-[10rem] flex-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-muted/60 focus:border-accent focus:outline-none"
+              />
+              {offered.length > 1 &&
+                (['all', ...offered] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setFrom(option)}
+                    aria-pressed={from === option}
+                    className={`rounded-lg border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] transition ${
+                      from === option
+                        ? 'border-accent bg-accent/10 text-accent'
+                        : 'border-line text-ink-muted hover:border-accent/60'
+                    }`}
+                  >
+                    {option === 'all' ? t.fromAll : t.sources[option]}
+                  </button>
+                ))}
+            </div>
+          )}
           {view === 'shelf' ? (
-            drawShelf(rest, false)
+            drawShelf(sought, false)
           ) : (
             <ul className="space-y-1.5">{rest.map((row) => drawRow(row, false))}</ul>
           )}

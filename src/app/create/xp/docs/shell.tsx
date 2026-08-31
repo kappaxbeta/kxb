@@ -41,6 +41,7 @@ export const DOCS_NAV = [
     pages: [
       { slug: 'rules', label: 'Rules & verbs' },
       { slug: 'scripts', label: 'The script API' },
+      { slug: 'p5', label: 'p5.js sketches' },
     ],
   },
 ] as const

@@ -12,7 +12,11 @@ import {
   roomIdSchema,
   setRoomCapSchema,
   setRoomGuestBuildSchema,
+  setRoomGroupSchema,
+  setRoomIconSchema,
   setRoomModeSchema,
+  setRoomPinnedSchema,
+  setRoomTintSchema,
   setRoomVisibilitySchema,
   setRoomXpSchema,
   xpRefSchema,
@@ -24,6 +28,7 @@ import {
   type RoomMode,
   type RoomVisibility,
 } from '@/domain/rooms/events'
+import type { RoomIcon, RoomTint } from '@/domain/rooms/look'
 import { roomsProjection } from '@/domain/rooms/projection'
 import { listRooms } from '@/domain/rooms/queries'
 import { roomSlug } from '@/domain/rooms/slug'
@@ -530,6 +535,148 @@ export async function setRoomVisibility(
       actorId: guarded.userId,
       visibility: parsed.data.visibility,
     },
+    owned.slug,
+  )
+}
+
+/**
+ * Keep this room at the top of the Places list, for everybody in the space.
+ *
+ * The *space's* pin. A member's own pin is a different thing entirely - it is
+ * private, it is not a decision about the room, and it is written to
+ * `room_marks` by `pinRoomForMe` next door rather than appended here.
+ *
+ * Owner or admin, from `guard` above. That is not ceremony over an ordering:
+ * this pin is what everybody in the space sees first when they open the rail,
+ * so it is a small piece of the space's navigation, and the same pair that
+ * decides which rooms exist decides which one leads.
+ *
+ * Nothing caps how many rooms may be pinned. A space that pins all nine of its
+ * rooms has said nothing, and has done it to itself in nine deliberate clicks -
+ * a refusal at the fourth would be the product having an opinion about how
+ * somebody arranges their own rail.
+ */
+export async function setRoomPinned(
+  slug: string,
+  roomId: string,
+  pinned: boolean,
+): Promise<RoomResult> {
+  const parsed = setRoomPinnedSchema.safeParse({ roomId, pinned })
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid pin' }
+  }
+
+  const guarded = await guard(slug)
+  if (!guarded.ok) return guarded
+
+  const owned = await assertOwned(guarded.supabase, guarded.tenantId, parsed.data.roomId)
+  if (!owned.ok) return owned
+
+  return run(
+    guarded,
+    parsed.data.roomId,
+    { type: 'SetRoomPinned', actorId: guarded.userId, pinned: parsed.data.pinned },
+    owned.slug,
+  )
+}
+
+/**
+ * List this room under a caption, or take it out of one.
+ *
+ * A group is made by naming it. There is no create step and no group to pick
+ * from a list that somebody has to fill first, because a group here is not a
+ * container - it is a caption several rooms happen to share, and it exists for
+ * exactly as long as a room names it. See `RoomGroupSet`.
+ *
+ * Which means renaming a group is this call once per room in it, and taking a
+ * group off its last room is how a group goes away. Both are loops in the
+ * caller rather than operations here, and at the size a space's room list
+ * actually is - the tier caps it well under twenty - that is the right trade
+ * against a groups table with its own screens and its own projection.
+ *
+ * Owner or admin, like every other decision about how the space is laid out.
+ */
+export async function setRoomGroup(
+  slug: string,
+  roomId: string,
+  group: string | null,
+): Promise<RoomResult> {
+  const parsed = setRoomGroupSchema.safeParse({ roomId, group })
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid group' }
+  }
+
+  const guarded = await guard(slug)
+  if (!guarded.ok) return guarded
+
+  const owned = await assertOwned(guarded.supabase, guarded.tenantId, parsed.data.roomId)
+  if (!owned.ok) return owned
+
+  return run(
+    guarded,
+    parsed.data.roomId,
+    { type: 'SetRoomGroup', actorId: guarded.userId, group: parsed.data.group },
+    owned.slug,
+  )
+}
+
+/**
+ * The glyph this room is drawn with in the Places list.
+ *
+ * Owner or admin, because it is how *everybody* finds the room in the column -
+ * the same argument the group and the space's pin make, one layer down. Null
+ * takes it off and puts the room back to the default glyph.
+ *
+ * `setRoomIconSchema` is the only thing that refuses a name nothing can draw:
+ * the column has no check constraint, on purpose, so that adding an icon is a
+ * code change rather than a migration that has to ship first. See the migration
+ * header for the trade.
+ */
+export async function setRoomIcon(
+  slug: string,
+  roomId: string,
+  icon: RoomIcon | null,
+): Promise<RoomResult> {
+  const parsed = setRoomIconSchema.safeParse({ roomId, icon })
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'That is not an icon' }
+  }
+
+  const guarded = await guard(slug)
+  if (!guarded.ok) return guarded
+
+  const owned = await assertOwned(guarded.supabase, guarded.tenantId, parsed.data.roomId)
+  if (!owned.ok) return owned
+
+  return run(
+    guarded,
+    parsed.data.roomId,
+    { type: 'SetRoomIcon', actorId: guarded.userId, icon: parsed.data.icon },
+    owned.slug,
+  )
+}
+
+/** And the colour it is drawn in. Same pair, same rules - see `setRoomIcon`. */
+export async function setRoomTint(
+  slug: string,
+  roomId: string,
+  tint: RoomTint | null,
+): Promise<RoomResult> {
+  const parsed = setRoomTintSchema.safeParse({ roomId, tint })
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'That is not a colour' }
+  }
+
+  const guarded = await guard(slug)
+  if (!guarded.ok) return guarded
+
+  const owned = await assertOwned(guarded.supabase, guarded.tenantId, parsed.data.roomId)
+  if (!owned.ok) return owned
+
+  return run(
+    guarded,
+    parsed.data.roomId,
+    { type: 'SetRoomTint', actorId: guarded.userId, tint: parsed.data.tint },
     owned.slug,
   )
 }

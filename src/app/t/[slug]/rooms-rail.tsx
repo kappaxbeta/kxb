@@ -2,17 +2,25 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useId, useState, useTransition } from 'react'
 import {
   closeRoom,
   createRoom,
   renameRoom,
+  setRoomGroup,
+  setRoomIcon,
+  setRoomPinned,
+  setRoomTint,
   setRoomVisibility,
 } from '@/domain/rooms/actions'
+import { ROOM_GROUP_MAX } from '@/domain/rooms/events'
+import { ROOM_ICONS, ROOM_TINTS } from '@/domain/rooms/look'
+import { groupNames } from '@/domain/rooms/places'
+import { RoomGlyph, tintClass } from '@/app/t/[slug]/room-icons'
 import { attempt } from '@/app/components/connection'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
-import { railDict } from '@/app/i18n/rail'
+import { railDict, type RailDict } from '@/app/i18n/rail'
 import {
   closeRoomMatch,
   copyRoomXp,
@@ -72,6 +80,30 @@ export function RoomsRail({
   const [renaming, setRenaming] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   /**
+   * What is typed in the group field, and which room it is about.
+   *
+   * The pair rather than a bare string, and for the reason `asked` gives below:
+   * walking next door while a caption is half typed must not offer that caption
+   * as the room you have just walked into. Comparing in the render is what makes
+   * that free - clearing it in an effect would be a second pass, and a pass in
+   * which the new room briefly wears the old room's group.
+   */
+  const [grouping, setGrouping] = useState<{ roomId: string; value: string } | null>(null)
+  /** The datalist the group field offers, named once so both ends agree. */
+  const groupsId = useId()
+  /**
+   * The room whose face is open for editing, if any.
+   *
+   * On the *row* rather than in the "This room" panel below, and that is the
+   * whole placement decision. The panel is about the room you are standing in,
+   * which is the right home for the level and the fixture - you have to be in a
+   * room to care what it is playing. An icon is the opposite: the reason
+   * anybody sets one is that they are looking at the list and cannot tell two
+   * rooms apart, and making them walk into each room in turn to fix that is
+   * asking them to leave the only screen the problem is visible on.
+   */
+  const [facing, setFacing] = useState<string | null>(null)
+  /**
    * The levels this space can play, once somebody has asked for the picker.
    *
    * `null` until then, and fetched rather than passed down for the reason
@@ -97,6 +129,7 @@ export function RoomsRail({
   const here = rooms?.find((room) => pathname.startsWith(`/t/${slug}/rooms/${room.slug}`))
   /** What that room plays, if it plays anything. */
   const reference = here?.xpRef
+
 
   /**
    * The fixture, and the level it was asked about.
@@ -234,6 +267,29 @@ export function RoomsRail({
         router.replace(`/t/${slug}/rooms/${result.slug}`)
       }
     })
+  }
+
+  /**
+   * Commit whatever is in the group field.
+   *
+   * Reached twice for one change - Enter blurs the field, and the blur commits
+   * - so clearing the draft first is what makes the second call a no-op rather
+   * than a second append. The same shape `rename` above has, for the same
+   * reason.
+   *
+   * An empty field is "take it out of its group", not a refusal. It is what the
+   * field says when somebody clears it, and the alternative is a separate
+   * button beside a field they have just emptied.
+   */
+  function regroup(room: RoomView) {
+    if (grouping?.roomId !== room.roomId) return
+    const next = grouping.value.trim()
+    setGrouping(null)
+    // Already what it is. The decider would refuse to log it anyway; not asking
+    // saves the round trip and the layout revalidation behind it, which for a
+    // rail over a live scene is a re-render nobody asked for.
+    if (next === (room.group ?? '')) return
+    act(() => setRoomGroup(slug, room.roomId, next.length === 0 ? null : next))
   }
 
   /**
@@ -483,43 +539,100 @@ export function RoomsRail({
               />
             </form>
           ) : (
-            <div key={room.roomId} className="group flex items-center gap-1">
-              <Link
-                href={`/t/${slug}/rooms/${room.slug}`}
-                className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition hover:bg-surface-raised ${
-                  here?.roomId === room.roomId ? 'bg-accent/15 text-ink' : 'text-ink-muted'
-                }`}
-              >
-                <span className="min-w-0 flex-1 truncate">{room.name}</span>
-                {/* Only worth a mark when it is the unusual one. Every room being
-                    labelled "listed" is a column of noise. */}
-                {room.visibility === 'private' && (
-                  <span className="shrink-0 text-[10px] uppercase tracking-wider text-ink-muted/70">
-                    {t.unlistedTag}
-                  </span>
-                )}
-              </Link>
-
-              {/*
-                Hidden until the row is hovered, and always reachable by
-                keyboard - the same bargain the roster's "Show out" strikes. A
-                rename button permanently beside every room would make a list of
-                places to walk into read as a list of things to administer.
-              */}
-              {canManage && (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    setError(null)
-                    setDraft(room.name)
-                    setRenaming(room.roomId)
-                  }}
-                  title={fill(t.rename, { name: room.name })}
-                  className="shrink-0 rounded-lg px-1.5 py-1 text-[11px] text-ink-muted opacity-0 transition hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+            <div key={room.roomId}>
+              <div className="group flex items-center gap-1">
+                <Link
+                  href={`/t/${slug}/rooms/${room.slug}`}
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition hover:bg-surface-raised ${
+                    here?.roomId === room.roomId ? 'bg-accent/15 text-ink' : 'text-ink-muted'
+                  }`}
                 >
-                  {t.renameShort}
-                </button>
+                  {/*
+                    The room's own face, at the same size the rail draws it -
+                    so this list and the Places band above show the same thing,
+                    and picking an icon can be checked without leaving the
+                    panel it was picked in.
+                  */}
+                  <span
+                    aria-hidden
+                    className={`room-face shrink-0 [&_svg]:size-4 ${tintClass(room.tint)}`}
+                  >
+                    <RoomGlyph name={room.icon} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{room.name}</span>
+                  {/* Only worth a mark when it is the unusual one. Every room being
+                      labelled "listed" is a column of noise. */}
+                  {room.visibility === 'private' && (
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-ink-muted/70">
+                      {t.unlistedTag}
+                    </span>
+                  )}
+                </Link>
+
+                {/*
+                  Hidden until the row is hovered, and always reachable by
+                  keyboard - the same bargain the roster's "Show out" strikes. A
+                  rename button permanently beside every room would make a list of
+                  places to walk into read as a list of things to administer.
+
+                  The face button stays open once it is open, which is why it is
+                  not hidden while its own panel is showing: a control that
+                  vanished the moment the pointer left the row would be a panel
+                  with no way to shut it.
+                */}
+                {canManage && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => {
+                        setError(null)
+                        setDraft(room.name)
+                        setRenaming(room.roomId)
+                      }}
+                      title={fill(t.rename, { name: room.name })}
+                      className="shrink-0 rounded-lg px-1.5 py-1 text-[11px] text-ink-muted opacity-0 transition hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+                    >
+                      {t.renameShort}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={pending}
+                      aria-expanded={facing === room.roomId}
+                      onClick={() => {
+                        setError(null)
+                        setFacing(facing === room.roomId ? null : room.roomId)
+                      }}
+                      title={fill(t.faceOf, { name: room.name })}
+                      className={`shrink-0 rounded-lg px-1.5 py-1 text-[11px] transition hover:text-ink focus-visible:opacity-100 disabled:opacity-50 ${
+                        facing === room.roomId
+                          ? 'text-ink opacity-100'
+                          : 'text-ink-muted opacity-0 group-hover:opacity-100'
+                      }`}
+                    >
+                      {t.faceShort}
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {canManage && facing === room.roomId && (
+                <RoomFace
+                  slug={slug}
+                  room={room}
+                  rooms={rooms ?? []}
+                  groupsId={groupsId}
+                  groupDraft={
+                    grouping?.roomId === room.roomId ? grouping.value : (room.group ?? '')
+                  }
+                  onGroupType={(value) => setGrouping({ roomId: room.roomId, value })}
+                  onGroupDone={() => regroup(room)}
+                  onGroupCancel={() => setGrouping(null)}
+                  act={act}
+                  pending={pending}
+                  t={t}
+                />
               )}
             </div>
           ),
@@ -913,6 +1026,194 @@ export function RoomsRail({
     </div>
   )
 }
+
+/**
+ * How one room turns up in everybody's Places list.
+ *
+ * Four controls that all answer one question, kept together because somebody
+ * arranging a rail does all four in one sitting: they pin the room the space
+ * runs on, group the ones that belong together, and give each a face so the
+ * column can be read rather than scanned.
+ *
+ * All four are the *space's*, which is what puts the whole panel behind
+ * `canManage`. A member's own pin is a control on the row in the Places band
+ * and writes nowhere near the log - see `pinRoomForMe`.
+ *
+ * Rendered under the row it is about rather than in the "This room" panel
+ * below, and that placement is the whole of it: "This room" is about the room
+ * you are standing in, which is the right home for the level and the fixture,
+ * because you have to be in a room to care what it is playing. An icon is the
+ * opposite. The reason anybody sets one is that they are looking at the list
+ * and cannot tell two rooms apart - so making them walk into each room in turn
+ * would be asking them to leave the only screen the problem is visible on.
+ */
+function RoomFace({
+  slug,
+  room,
+  rooms,
+  groupsId,
+  groupDraft,
+  onGroupType,
+  onGroupDone,
+  onGroupCancel,
+  act,
+  pending,
+  t,
+}: {
+  slug: string
+  room: RoomView
+  /** The space's rooms, for the captions the group field offers. */
+  rooms: RoomView[]
+  groupsId: string
+  groupDraft: string
+  onGroupType: (value: string) => void
+  onGroupDone: () => void
+  onGroupCancel: () => void
+  act: (run: () => Promise<{ ok: boolean; error?: string }>) => void
+  pending: boolean
+  t: RailDict['roomTab']
+}) {
+  return (
+    <div className="mb-1 ml-2 space-y-2 rounded-lg border border-line/60 p-2">
+      <label className="flex items-start gap-2 text-[11px] text-ink-muted">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={room.adminPinnedAt !== null}
+          disabled={pending}
+          onChange={(event) =>
+            act(() => setRoomPinned(slug, room.roomId, event.target.checked))
+          }
+        />
+        <span>
+          {t.pinForEveryone}
+          <span className="block text-ink-muted/70">{t.pinNote}</span>
+        </span>
+      </label>
+
+      {/*
+        A field rather than a picker of existing groups, because a group *is*
+        the name: there is no list to pick from until somebody has typed one,
+        and a picker with a "new..." escape hatch is two controls for one
+        string. The datalist is the best of both - the captions already in use
+        are offered, and typing past them makes a new one.
+      */}
+      <label className="block text-[11px] text-ink-muted">
+        <span className="block pb-1">{t.groupLabel}</span>
+        <input
+          value={groupDraft}
+          list={groupsId}
+          onChange={(event) => onGroupType(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              onGroupCancel()
+            }
+          }}
+          // Leaving the field commits, exactly as the rename row does and for
+          // the same reason: there is no Save button beside it, so a blur that
+          // threw the caption away would be a change that silently did not
+          // happen.
+          onBlur={onGroupDone}
+          maxLength={ROOM_GROUP_MAX}
+          placeholder={t.groupPlaceholder}
+          disabled={pending}
+          className="w-full rounded-lg border border-line bg-surface px-2 py-1 text-xs disabled:opacity-50"
+        />
+        <datalist id={groupsId}>
+          {groupNames(rooms).map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <span className="block pt-1 text-ink-muted/70">{t.groupNote}</span>
+      </label>
+
+      {/*
+        The face: twenty-five glyphs in five rows of five, in the order
+        `ROOM_ICONS` groups them. A grid rather than a select, because the thing
+        being chosen is a picture - a dropdown of the *names* of pictures is a
+        control that has to be opened twenty-five times to be read once.
+
+        The whole grid wears the room's tint, so the choice is made in the
+        colour it will be drawn in rather than in grey and then recoloured.
+      */}
+      <div>
+        <p className="pb-1 text-[11px] text-ink-muted">{t.iconLabel}</p>
+        <div className={`grid grid-cols-5 gap-0.5 ${tintClass(room.tint)}`}>
+          {ROOM_ICONS.map((icon) => (
+            <button
+              key={icon}
+              type="button"
+              disabled={pending}
+              aria-pressed={room.icon === icon}
+              title={t.icons[icon]}
+              aria-label={t.icons[icon]}
+              onClick={() => act(() => setRoomIcon(slug, room.roomId, icon))}
+              className={`grid place-items-center rounded-md py-1.5 transition disabled:opacity-50 ${
+                room.icon === icon
+                  ? 'room-face bg-accent/20'
+                  : 'text-ink-muted hover:bg-surface-raised hover:text-ink'
+              }`}
+            >
+              <RoomGlyph name={icon} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="pb-1 text-[11px] text-ink-muted">{t.colourLabel}</p>
+        <div className="flex flex-wrap items-center gap-1">
+          {/*
+            Off, first. A room with no colour is not a ninth colour and must not
+            read as one - it is the row every room has until somebody chooses,
+            so it is drawn as an empty ring rather than as a swatch.
+          */}
+          <button
+            type="button"
+            disabled={pending}
+            aria-pressed={room.tint === null}
+            title={t.colourNone}
+            aria-label={t.colourNone}
+            onClick={() => act(() => setRoomTint(slug, room.roomId, null))}
+            className={`grid size-6 place-items-center rounded-full border transition disabled:opacity-50 ${
+              room.tint === null
+                ? 'border-accent-2 bg-accent/15'
+                : 'border-line hover:border-ink-muted'
+            }`}
+          >
+            <span className="room-swatch border border-line/60" />
+          </button>
+
+          {ROOM_TINTS.map((tint) => (
+            <button
+              key={tint}
+              type="button"
+              disabled={pending}
+              aria-pressed={room.tint === tint}
+              title={t.tints[tint]}
+              aria-label={t.tints[tint]}
+              onClick={() => act(() => setRoomTint(slug, room.roomId, tint))}
+              className={`grid size-6 place-items-center rounded-full border transition disabled:opacity-50 ${tintClass(tint)} ${
+                room.tint === tint
+                  ? 'border-accent-2 bg-accent/15'
+                  : 'border-transparent hover:border-line'
+              }`}
+            >
+              <span className="room-swatch" />
+            </button>
+          ))}
+        </div>
+        <p className="pt-1 text-[10px] leading-snug text-ink-muted/70">{t.faceNote}</p>
+      </div>
+    </div>
+  )
+}
+
 
 /**
  * The picker's rows, with the ones made for this room first and marked.

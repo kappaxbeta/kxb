@@ -1,4 +1,5 @@
 import type { BattleMode } from '@/domain/battle/events'
+import type { RoomIcon, RoomTint } from '@/domain/rooms/look'
 import type { PlaceId } from '@kxb/peepz-world/places'
 import type { Locale } from '@/domain/i18n/locale'
 import type { TenantRoleName } from '@/lib/supabase/types'
@@ -76,6 +77,22 @@ export interface RailDict {
     visitingLead: string
     visitingTail: string
     goHome: string
+
+    /** The caption over the rooms kept at the top of the list. */
+    pinnedHeading: string
+    /**
+     * The caption over the rooms in no group.
+     *
+     * Drawn only when there is at least one group above them - without one they
+     * would look like the last group's rooms, and with no groups at all a
+     * caption over the whole list says nothing.
+     */
+    ungroupedHeading: string
+    /** `{name}` is the room. The title on your own pin control. */
+    pin: string
+    unpin: string
+    /** The title on a room the space pinned. There is no control to offer. */
+    pinnedBySpace: string
   }
 
   who: {
@@ -307,6 +324,35 @@ export interface RailDict {
     opening: string
     openAnother: string
 
+    pinForEveryone: string
+    pinNote: string
+    groupLabel: string
+    groupPlaceholder: string
+    groupNote: string
+    /** Above the captions this space already uses. */
+    groupExisting: string
+    /** `{name}` is the room. The title on the row's face button. */
+    faceOf: string
+    /** The button's own word, beside "Rename". */
+    faceShort: string
+    iconLabel: string
+    colourLabel: string
+    /** The swatch that takes the colour off again. */
+    colourNone: string
+    /** Both pickers, one sentence: what these change and for whom. */
+    faceNote: string
+    /**
+     * What each glyph is, for the picker's buttons.
+     *
+     * Named rather than left to a `title` on an English identifier, because a
+     * grid of twenty-five line drawings is exactly the control a screen reader
+     * user cannot guess their way around - and because `watergun` is not a word
+     * in two of the three languages here.
+     */
+    icons: Record<RoomIcon, string>
+    /** And each colour. */
+    tints: Record<RoomTint, string>
+
     modes: Record<BattleMode, string>
   }
 
@@ -359,6 +405,10 @@ export interface RailDict {
 
     /** Where a level came from, in the corner of its row. */
     sources: Record<'builtin' | 'space' | 'store', string>
+    /** The store shelf's controls: the search box, and the chip that undoes
+     * a source filter. The chips themselves reuse `sources`. */
+    findALevel: string
+    fromAll: string
     draft: string
     goneChip: string
     notHereAnyMore: string
@@ -540,6 +590,11 @@ export const RAIL_EN: RailDict = {
     visitingLead: 'You are in',
     visitingTail: '’s place.',
     goHome: 'Go home',
+    pinnedHeading: 'Pinned',
+    ungroupedHeading: 'Other rooms',
+    pin: 'Keep {name} at the top',
+    unpin: 'Stop keeping {name} at the top',
+    pinnedBySpace: 'Pinned for the whole space',
   },
 
   who: {
@@ -719,6 +774,56 @@ export const RAIL_EN: RailDict = {
     opening: 'Opening…',
     openAnother: '+ Open a room',
 
+    pinForEveryone: 'Keep at the top for everyone',
+    pinNote: 'Pinned rooms lead the Places list for everybody in the space.',
+    groupLabel: 'Group',
+    groupPlaceholder: 'No group',
+    groupNote: 'Rooms sharing a group name are listed together. Empty for none.',
+    groupExisting: 'Already in use',
+    faceOf: 'How {name} is listed',
+    faceShort: 'Look',
+    iconLabel: 'Icon',
+    colourLabel: 'Colour',
+    colourNone: 'No colour',
+    faceNote: 'How this room is drawn in everybody’s Places list.',
+    icons: {
+      lounge: 'Couch',
+      cafe: 'Cup',
+      home: 'House',
+      hearth: 'Fireplace',
+      stage: 'Stage',
+      garden: 'Sprig',
+      plant: 'Potted plant',
+      sun: 'Sun',
+      moon: 'Moon',
+      globe: 'Globe',
+      desk: 'Desk',
+      board: 'Board',
+      flask: 'Flask',
+      music: 'Music',
+      chat: 'Speech bubble',
+      ball: 'Football',
+      club: 'Club crest',
+      battle: 'Crossed swords',
+      watergun: 'Water pistol',
+      cards: 'Cards',
+      trophy: 'Trophy',
+      tools: 'Spanner',
+      book: 'Book',
+      rocket: 'Rocket',
+      star: 'Star',
+    },
+    tints: {
+      violet: 'Violet',
+      cyan: 'Cyan',
+      emerald: 'Emerald',
+      lime: 'Lime',
+      amber: 'Amber',
+      rose: 'Rose',
+      fuchsia: 'Fuchsia',
+      sky: 'Sky',
+    },
+
     modes: {
       ffa: 'all vs all',
       team: 'teams',
@@ -880,6 +985,8 @@ export const RAIL_EN: RailDict = {
     everythingElse: 'Everything else',
 
     sources: { builtin: 'ours', space: 'this space', store: 'store' },
+    findALevel: 'Find a level…',
+    fromAll: 'all',
     draft: 'draft',
     goneChip: 'gone',
     notHereAnyMore: 'not here any more',
@@ -960,6 +1067,11 @@ export const RAIL_DE: RailDict = {
     visitingLead: 'Sie sind bei',
     visitingTail: ' zu Besuch.',
     goHome: 'Nach Hause',
+    pinnedHeading: 'Angeheftet',
+    ungroupedHeading: 'Weitere Räume',
+    pin: '{name} oben behalten',
+    unpin: '{name} nicht mehr oben behalten',
+    pinnedBySpace: 'Für den ganzen Space angeheftet',
   },
 
   who: {
@@ -1147,6 +1259,56 @@ export const RAIL_DE: RailDict = {
     opening: 'Wird geöffnet …',
     openAnother: '+ Raum öffnen',
 
+    pinForEveryone: 'Für alle oben behalten',
+    pinNote: 'Angeheftete Räume stehen bei allen im Space ganz oben unter Orte.',
+    groupLabel: 'Gruppe',
+    groupPlaceholder: 'Keine Gruppe',
+    groupNote: 'Räume mit demselben Gruppennamen stehen zusammen. Leer lassen für keine.',
+    groupExisting: 'Bereits vergeben',
+    faceOf: 'Wie {name} gelistet wird',
+    faceShort: 'Aussehen',
+    iconLabel: 'Symbol',
+    colourLabel: 'Farbe',
+    colourNone: 'Keine Farbe',
+    faceNote: 'So wird dieser Raum in der Orte-Liste aller dargestellt.',
+    icons: {
+      lounge: 'Sofa',
+      cafe: 'Tasse',
+      home: 'Haus',
+      hearth: 'Kamin',
+      stage: 'Bühne',
+      garden: 'Zweig',
+      plant: 'Topfpflanze',
+      sun: 'Sonne',
+      moon: 'Mond',
+      globe: 'Globus',
+      desk: 'Schreibtisch',
+      board: 'Tafel',
+      flask: 'Kolben',
+      music: 'Musik',
+      chat: 'Sprechblase',
+      ball: 'Fußball',
+      club: 'Vereinswappen',
+      battle: 'Gekreuzte Schwerter',
+      watergun: 'Wasserpistole',
+      cards: 'Karten',
+      trophy: 'Pokal',
+      tools: 'Schraubenschlüssel',
+      book: 'Buch',
+      rocket: 'Rakete',
+      star: 'Stern',
+    },
+    tints: {
+      violet: 'Violett',
+      cyan: 'Cyan',
+      emerald: 'Smaragd',
+      lime: 'Limette',
+      amber: 'Bernstein',
+      rose: 'Rosé',
+      fuchsia: 'Fuchsia',
+      sky: 'Himmelblau',
+    },
+
     modes: {
       ffa: 'alle gegen alle',
       team: 'Teams',
@@ -1314,6 +1476,8 @@ export const RAIL_DE: RailDict = {
     everythingElse: 'Alles andere',
 
     sources: { builtin: 'von uns', space: 'dieser Raum', store: 'Laden' },
+    findALevel: 'Level finden …',
+    fromAll: 'alle',
     draft: 'Entwurf',
     goneChip: 'weg',
     notHereAnyMore: 'nicht mehr hier',
@@ -1411,6 +1575,11 @@ export const RAIL_BG: RailDict = {
     visitingLead: 'На гости сте при',
     visitingTail: '.',
     goHome: 'Към дома',
+    pinnedHeading: 'Закачени',
+    ungroupedHeading: 'Други стаи',
+    pin: 'Дръж {name} най-отгоре',
+    unpin: 'Не дръж {name} най-отгоре',
+    pinnedBySpace: 'Закачена за целия екип',
   },
 
   who: {
@@ -1597,6 +1766,56 @@ export const RAIL_BG: RailDict = {
     opening: 'Отваря се…',
     openAnother: '+ Отвори стая',
 
+    pinForEveryone: 'Дръж най-отгоре за всички',
+    pinNote: 'Закачените стаи водят списъка „Места“ за всички в екипа.',
+    groupLabel: 'Група',
+    groupPlaceholder: 'Без група',
+    groupNote: 'Стаите с едно и също име на група стоят заедно. Празно — без група.',
+    groupExisting: 'Вече се използват',
+    faceOf: 'Как е показана {name}',
+    faceShort: 'Вид',
+    iconLabel: 'Икона',
+    colourLabel: 'Цвят',
+    colourNone: 'Без цвят',
+    faceNote: 'Така изглежда тази стая в списъка „Места“ на всички.',
+    icons: {
+      lounge: 'Диван',
+      cafe: 'Чаша',
+      home: 'Къща',
+      hearth: 'Камина',
+      stage: 'Сцена',
+      garden: 'Клонка',
+      plant: 'Саксия',
+      sun: 'Слънце',
+      moon: 'Луна',
+      globe: 'Глобус',
+      desk: 'Бюро',
+      board: 'Дъска',
+      flask: 'Колба',
+      music: 'Музика',
+      chat: 'Балонче',
+      ball: 'Футболна топка',
+      club: 'Клубен герб',
+      battle: 'Кръстосани мечове',
+      watergun: 'Воден пистолет',
+      cards: 'Карти',
+      trophy: 'Купа',
+      tools: 'Гаечен ключ',
+      book: 'Книга',
+      rocket: 'Ракета',
+      star: 'Звезда',
+    },
+    tints: {
+      violet: 'Виолетово',
+      cyan: 'Циан',
+      emerald: 'Изумрудено',
+      lime: 'Лайм',
+      amber: 'Кехлибарено',
+      rose: 'Розово',
+      fuchsia: 'Фуксия',
+      sky: 'Небесно',
+    },
+
     modes: {
       ffa: 'всеки срещу всеки',
       team: 'отбори',
@@ -1762,6 +1981,8 @@ export const RAIL_BG: RailDict = {
     everythingElse: 'Всичко останало',
 
     sources: { builtin: 'наше', space: 'този спейс', store: 'магазин' },
+    findALevel: 'Намерете ниво…',
+    fromAll: 'всички',
     draft: 'чернова',
     goneChip: 'няма го',
     notHereAnyMore: 'вече не е тук',

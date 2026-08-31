@@ -243,6 +243,16 @@ export function MagazineSection({
                 <p className="text-[11px] text-accent-2">
                   {t.inYourPlace}
                 </p>
+              ) : row.xp !== null && !row.xp.capabilities.includes('freeplay') ? (
+                /*
+                  The rule the play rail already states: only a level that
+                  says it can be a room offers to be one. This site offered
+                  "put it in our place" to battle-only levels anyway, which
+                  is a button `createXpRoom` would honour into a room nobody
+                  can freely walk around in. Absent beats drawn-and-wrong;
+                  the match button above is still the way to play it.
+                */
+                null
               ) : (
                 <button
                   type="button"

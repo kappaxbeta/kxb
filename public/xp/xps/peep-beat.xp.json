@@ -1,0 +1,53 @@
+{
+  "format": "xp/1",
+  "id": "peep-beat",
+  "name": "Peep Beat",
+  "blurb": "Three lanes, three peeps, one chart - hit the ring on the beat.",
+  "finish": "hologram",
+  "hue": 322,
+  "packs": [],
+  "capabilities": [
+    "freeplay",
+    "match"
+  ],
+  "sketch": {
+    "engine": "p5",
+    "entry": "main.js",
+    "files": {
+      "beat.js": "// The chart and the drawing. Lanes are keys; see main.js.\nvar LANES = [\n  { does: 'left', peep: 'peepz/bunny', hue: 190 },\n  { does: 'mid', peep: 'peepz/cat', hue: 322 },\n  { does: 'right', peep: 'peepz/chick', hue: 48 },\n]\nvar STEP = 500        // ms per chart step\nvar DROP = 2000       // a note is visible this long before its moment\nvar PATTERN = [0, -1, 1, -1, 2, 0, -1, 1, 2, -1, 0, 1, -1, 2, 1, 0,\n               0, 1, -1, 2, -1, 1, 0, -1, 2, 2, -1, 0, 1, -1, 2, -1]\n\n// Every note is fully described by its index: the chart is the code, so\n// every player is playing the same song without a byte on the wire.\nfunction noteAt(step) {\n  var lane = PATTERN[step % PATTERN.length]\n  return lane === -1 ? null : lane\n}\n\nfunction laneX(lane) {\n  return width / 2 + (lane - 1) * min(140, width / 4)\n}\n\nfunction drawLane(lane, faces) {\n  var x = laneX(lane)\n  colorMode(HSB, 360, 100, 100)\n  stroke(LANES[lane].hue, 40, 60)\n  strokeWeight(1)\n  line(x, 0, x, height)\n  noFill()\n  stroke(LANES[lane].hue, 70, 95)\n  strokeWeight(3)\n  circle(x, height - 140, 84)\n  colorMode(RGB, 255)\n  noStroke()\n  var face = faces[lane]\n  if (face.ready) image(face.image, x - 24, height - 120, 48, 48)\n}\n\nfunction drawNote(lane, msLeft, faces) {\n  var x = laneX(lane)\n  var y = map(msLeft, DROP, 0, -60, height - 140)\n  var face = faces[lane]\n  if (face.ready) image(face.image, x - 30, y - 30, 60, 60)\n  else { noStroke(); fill(255); circle(x, y, 40) }\n}\n\nfunction drawScores() {\n  noStroke()\n  textAlign(LEFT)\n  textSize(14)\n  var top = xp.players.slice().sort(function (a, b) {\n    return (b.avatar.data.score || 0) - (a.avatar.data.score || 0)\n  })\n  for (var i = 0; i < top.length && i < 6; i += 1) {\n    fill(top[i].you ? color(160, 235, 255) : color(255, 255, 255, 170))\n    text(top[i].name + '  ' + (top[i].avatar.data.score || 0), 16, 28 + i * 22)\n  }\n}\n",
+      "main.js": "// Peep Beat: notes fall down three lanes, each lane is a key\n// (and a button on a phone). Hit the ring on the beat. Everybody plays\n// the same chart; scores ride the avatar sync, so the board is live.\nvar faces = []\nvar judged = {}       // note step -> true once scored or missed\nvar said = ''         // the last verdict, drawn big for a moment\nvar saidAt = -9999\n\nfunction setup() {\n  createCanvas(windowWidth, windowHeight)\n  for (var i = 0; i < LANES.length; i += 1) faces.push(xp.load.image(LANES[i].peep))\n  xp.avatar.data.score = 0\n  xp.avatar.data.streak = 0\n\n  xp.on('press', function (name, p) {\n    if (!p.you) return\n    for (var lane = 0; lane < LANES.length; lane += 1) {\n      if (LANES[lane].does === name) judge(lane)\n    }\n  })\n}\n\nfunction windowResized() { resizeCanvas(windowWidth, windowHeight) }\n\nfunction judge(lane) {\n  var now = millis()\n  var best = null, bestOff = 99999\n  // The nearest unjudged note in this lane, within reach.\n  for (var step = floor((now - DROP) / STEP); step <= ceil((now + 300) / STEP); step += 1) {\n    if (step < 0 || judged[step] || noteAt(step) !== lane) continue\n    var off = now - step * STEP\n    if (abs(off) < abs(bestOff)) { best = step; bestOff = off }\n  }\n  if (best === null || abs(bestOff) > 200) return\n  judged[best] = true\n  if (abs(bestOff) < 70) {\n    xp.avatar.data.streak += 1\n    xp.avatar.data.score += 3 + xp.avatar.data.streak\n    say('perfect')\n    // A sound made, not loaded: the pitch climbs with the streak, which no\n    // recorded take could do.\n    xp.tone(520 + min(xp.avatar.data.streak, 20) * 24, 0.12, 'triangle')\n  } else {\n    xp.avatar.data.streak = 0\n    xp.avatar.data.score += 1\n    say('good')\n    xp.tone(360, 0.1, 'sine')\n  }\n}\n\nfunction say(what) { said = what; saidAt = millis() }\n\nfunction draw() {\n  background(6, 2, 20)\n  var now = millis()\n\n  for (var lane = 0; lane < LANES.length; lane += 1) drawLane(lane, faces)\n\n  // Every note whose moment is near, drawn falling; a missed one resets\n  // the streak exactly once as it slips past the ring.\n  for (var step = floor((now - 400) / STEP); step <= ceil((now + DROP) / STEP); step += 1) {\n    if (step < 0) continue\n    var lane = noteAt(step)\n    if (lane === null) continue\n    var msLeft = step * STEP - now\n    if (msLeft < -200) {\n      if (!judged[step]) { judged[step] = true; xp.avatar.data.streak = 0; say('miss'); xp.tone(140, 0.2, 'sawtooth') }\n      continue\n    }\n    if (!judged[step]) drawNote(lane, msLeft, faces)\n  }\n\n  if (now - saidAt < 500) {\n    textAlign(CENTER)\n    textSize(28)\n    fill(said === 'miss' ? color(255, 120, 140) : color(160, 235, 255))\n    text(said, width / 2, height - 200)\n  }\n\n  drawScores()\n}\n"
+    }
+  },
+  "blueprints": {},
+  "player": {
+    "keys": [
+      {
+        "key": "KeyJ",
+        "does": "left"
+      },
+      {
+        "key": "KeyK",
+        "does": "mid"
+      },
+      {
+        "key": "KeyL",
+        "does": "right"
+      }
+    ]
+  },
+  "entities": [],
+  "world": {
+    "floorY": 0,
+    "ground": false,
+    "restart": false,
+    "fatal": false,
+    "placements": [],
+    "marks": []
+  },
+  "spawn": {
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "facing": 0
+  }
+}

@@ -212,13 +212,33 @@ const nextConfig: NextConfig = {
        * note there for why a draft deliberately answers `no-store` instead.
        */
       {
-        source: '/xp/:dir(packs|thumbs|shots)/:path*',
+        // `vendor` rides along: the p5 runtime is stable art in the same
+        // sense - added to when p5 is upgraded, never rewritten in place.
+        source: '/xp/:dir(packs|thumbs|shots|vendor)/:path*',
         headers: [
           {
             key: 'Cache-Control',
             value: 'public, max-age=2592000, stale-while-revalidate=31536000',
           },
         ],
+      },
+
+      /**
+       * The sketch container's reach.
+       *
+       * A p5 sketch runs in a sandboxed iframe with an *opaque* origin (see
+       * `src/app/xp/_sketch/srcdoc.ts`), so every request it makes is
+       * cross-origin by definition - and p5's loaders ask with
+       * `crossOrigin="anonymous"`, which a response without this header
+       * refuses outright. These three directories are exactly what the
+       * container's CSP lets it reach: CC0 art, thumbnails, and the p5
+       * runtime itself. Public art stays public; nothing here reads a
+       * cookie, and the header grants nothing the CSP had not already
+       * scoped.
+       */
+      {
+        source: '/xp/:dir(packs|thumbs|vendor)/:path*',
+        headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
       },
     ]
   },

@@ -34,6 +34,7 @@ const xp = (over: Partial<PlayableXp> = {}): PlayableXp => ({
   players: { min: 1, max: 8 },
   capabilities: [],
   framed: false,
+  sketch: false,
   ...over,
 })
 

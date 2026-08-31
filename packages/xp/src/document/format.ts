@@ -50,6 +50,7 @@ import {
   type XpCapabilities,
 } from './capabilities'
 import { readFrame, type XpFrame } from './frame'
+import { readSketch, type XpSketch } from './sketch'
 import { type Finish, readFinish, readHue } from './finish'
 import {
   BODY_FIELDS,
@@ -942,6 +943,16 @@ export interface XpDocument {
    * it already knows.
    */
   frame?: XpFrame
+  /**
+   * Code that draws its own game, instead of a world this document describes.
+   *
+   * The other kind of cartridge: where `frame` names a game the host already
+   * ships, this *carries* one, as source, run in a container the host builds.
+   * Same excusals as `frame` — no world required, an empty one materialised —
+   * and see ./sketch for why the sources living in the document keeps
+   * backend.md §1.2's refusal of `.js` files intact.
+   */
+  sketch?: XpSketch
   /**
    * Doors out of this level, by a name the level invents.
    *
@@ -5085,11 +5096,25 @@ export function parseXp(raw: unknown): XpParse {
   const frame = readFrame(raw.frame, 'frame', problems)
   const framed = frame !== undefined
 
+  /**
+   * And its sibling, for the same reason. A sketch document has no world
+   * either, so every check below that a framed document is excused from, a
+   * sketch document is excused from too - `worldless` is the flag they share.
+   */
+  const sketch = readSketch(raw.sketch, 'sketch', problems)
+  if (framed && sketch !== undefined) {
+    // One document, one kind of content. The runtime forks on `frame` first,
+    // so a document carrying both would have its sketch silently ignored -
+    // refusing it here turns that silence into a sentence.
+    problems.push({ at: 'sketch', message: 'a document cannot be both a cartridge and a sketch' })
+  }
+  const worldless = framed || sketch !== undefined
+
   // --- packs ----------------------------------------------------------------
   const packs: PackRef[] = []
   if (!Array.isArray(raw.packs)) {
     // A cartridge draws none of our art. Absent is correct rather than tolerated.
-    if (!framed) problems.push({ at: 'packs', message: 'missing' })
+    if (!worldless) problems.push({ at: 'packs', message: 'missing' })
   } else {
     raw.packs.forEach((entry, i) => {
       const at = `packs[${i}]`
@@ -5129,7 +5154,7 @@ export function parseXp(raw: unknown): XpParse {
    * and it is a shape all of them already handle.
    */
   const world =
-    framed && raw.world === undefined
+    worldless && raw.world === undefined
       ? /**
          * Through `readWorld` rather than as a hand-written literal.
          *
@@ -5983,7 +6008,7 @@ export function parseXp(raw: unknown): XpParse {
    * world whose placements were all rejected is a second, misleading complaint
    * about the same mistake.
    */
-  if (problems.length === 0 && !framed) {
+  if (problems.length === 0 && !worldless) {
     /**
      * Not checked for a cartridge, and that is a real gap rather than a
      * shortcut.
@@ -6352,6 +6377,8 @@ export function parseXp(raw: unknown): XpParse {
       // Present only on a cartridge, which is a handful of documents and no
       // level anybody draws. See ./frame.
       ...(frame ? { frame } : {}),
+      // Its sibling, present only on a sketch. See ./sketch.
+      ...(sketch ? { sketch } : {}),
       blueprints,
       player,
       entities,

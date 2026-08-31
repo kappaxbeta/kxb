@@ -306,6 +306,25 @@ export {
 } from './document/frame'
 
 /**
+ * The other kind of cartridge: a document that carries its game as source,
+ * for a container the host builds. See ./document/sketch for the trust
+ * argument - the block is refused or accepted here, and run nowhere near here.
+ */
+export {
+  MAX_SKETCH_FILE,
+  MAX_SKETCH_FILES,
+  MAX_SKETCH_PATH,
+  MAX_SKETCH_TOTAL,
+  SKETCH_ENGINES,
+  SKETCH_PATH,
+  isSketchEngine,
+  readSketch,
+  runsInSketch,
+  type SketchEngine,
+  type XpSketch,
+} from './document/sketch'
+
+/**
  * What a level's cartridge is made of, on a shelf.
  *
  * Exported as a value list as well as a type because the editor draws a picker

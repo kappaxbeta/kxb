@@ -194,8 +194,24 @@ export function XpMatchRoom({
   }, [slug, initialBattle.id])
 
   const sides = sidesFor(battle.mode)
-  /** Whether this document is a cartridge - see `Framed` in the XP runtime. */
-  const framedDoc = xp.frame !== undefined
+  /**
+   * Whether this document runs itself, rather than being a world this room
+   * can seat people in.
+   *
+   * Two kinds do: a cartridge, which names a game the host ships (`Framed`),
+   * and a sketch, which carries one as p5 source (`Sketch`). Both have no
+   * world, no marks and therefore no sides for this panel to offer - and the
+   * reason it matters is not tidiness.
+   *
+   * A sketch used to fall on the *level* side of this line, and the effect
+   * was a match that could not start: the panel demanded two ready players
+   * (`readyNeeded` is at least `MIN_PLAYERS`) while the game underneath was
+   * already drawing and perfectly playable alone. Reported as exactly that -
+   * "the battle with a p5.js dont start". A level earns that gate because
+   * its match is scored against marks and spawns; a sketch's rules are code
+   * this room cannot read, so the whistle was guarding nothing.
+   */
+  const framedDoc = xp.frame !== undefined || xp.sketch !== undefined
 
   const mine = battle.participants.find((player) => player.userId === me.id)
   const joined = mine !== undefined || initiallyJoined
@@ -981,7 +997,19 @@ export function XpMatchRoom({
           timeLimit: rules.timeLimit ?? null,
           scoreLimit: rules.scoreLimit ?? null,
         }}
-        startedAt={battle.startedAt}
+        /*
+          The three-state start, and why a sketch is given none of it.
+
+          `FrameProps.started` reads an absent value as "nothing outside this
+          game runs a lobby - run your own", and a present one as "something
+          does, and here is whether it blew the whistle". A cartridge gets the
+          battle's answer because it was written against that contract.
+
+          A sketch is not: this room now hides its own lobby for one (see
+          `framedDoc`), so passing `false` would be telling the game to wait
+          for a whistle nobody can blow. Absent is the true statement.
+        */
+        {...(xp.sketch === undefined ? { startedAt: battle.startedAt } : {})}
         me={me}
         {...(avatar ? { avatar } : {})}
         {...(xpId ? { xpId } : {})}

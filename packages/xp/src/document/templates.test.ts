@@ -46,6 +46,9 @@ describe.each(TEMPLATES.map((t) => [t.id, t] as const))('the %s template', (id, 
 
   test('has something to stand on, under the spawn', () => {
     const document = built()
+    // A sketch has no world to stand in - its ground is inside code this
+    // package cannot see, the same excusal parseXp itself makes.
+    if (document.sketch) return
     const solids = buildSolids(document.world)
     expect(solids.count).toBeGreaterThan(0)
     // Feet clear, head clear, ground below - the same three the shipped
@@ -62,6 +65,10 @@ describe.each(TEMPLATES.map((t) => [t.id, t] as const))('the %s template', (id, 
    */
   test('every capability it claims is one the world backs up', () => {
     const document = built()
+    // Except a sketch, whose capabilities are believed for the reason
+    // `parseXp` believes them: the spawns and goals that would back a claim
+    // up are inside code this package cannot read. See ./sketch.
+    if (document.sketch) return
     for (const capability of document.capabilities) {
       expect(capabilityProblems(capability, document.world)).toEqual([])
     }

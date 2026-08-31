@@ -1,5 +1,6 @@
 import 'server-only'
 import type { RoomMode, RoomVisibility } from '@/domain/rooms/events'
+import { roomIcon, roomTint, type RoomIcon, type RoomTint } from '@/domain/rooms/look'
 import type { Client } from '@/es/store'
 
 /**
@@ -40,8 +41,41 @@ export interface RoomView {
    * the view rather than fetched where it is needed.
    */
   roundStartedAt: string | null
+  /**
+   * When an owner or admin pinned this room for the whole space, or null.
+   *
+   * The *space's* pin. A member's own is in `room_marks` and is private to
+   * them - see `src/domain/rooms/marks.ts` for why the two are stored in
+   * completely different ways, and `orderPlaces` for how they are read
+   * together.
+   *
+   * A timestamp rather than a boolean, because several pinned rooms need an
+   * order and "whichever was pinned first" is the only one nobody has to be
+   * taught.
+   */
+  adminPinnedAt: string | null
+  /** The caption this room is listed under in the rail, or null. */
+  group: string | null
+  /**
+   * The glyph this room is drawn with, or null for the default one.
+   *
+   * A name out of `ROOM_ICONS`, narrowed on the way out of the row - an
+   * unrecognised one becomes the default rather than throwing, see `roomIcon`.
+   */
+  icon: RoomIcon | null
+  /** The palette token that glyph is drawn in, or null for the rail's own. */
+  tint: RoomTint | null
   createdAt: string
 }
+
+/**
+ * Every column a `RoomView` is made of, written once.
+ *
+ * Three selects had the same list and it had grown to eleven columns; the next
+ * one added would have been added to two of them.
+ */
+const ROOM_COLUMNS =
+  'room_id, tenant_id, name, slug, visibility, mode, cap, guest_build, xp_ref, round_started_at, pinned_at, room_group, room_icon, room_tint, created_at'
 
 type Row = {
   room_id: string
@@ -54,6 +88,10 @@ type Row = {
   guest_build: boolean
   xp_ref: string | null
   round_started_at: string | null
+  pinned_at: string | null
+  room_group: string | null
+  room_icon: string | null
+  room_tint: string | null
   created_at: string
 }
 
@@ -74,6 +112,13 @@ function toView(row: Row): RoomView {
     cap: typeof row.cap === 'number' ? row.cap : null,
     xpRef: row.xp_ref ?? null,
     roundStartedAt: row.round_started_at ?? null,
+    adminPinnedAt: row.pinned_at ?? null,
+    // Trimmed to null, so a caption that is nothing but whitespace - which the
+    // command schema refuses but an older row could hold - reads as ungrouped
+    // rather than drawing a heading with no words in it.
+    group: row.room_group?.trim() ? row.room_group.trim() : null,
+    icon: roomIcon(row.room_icon),
+    tint: roomTint(row.room_tint),
     // Towards permissive, unlike the two above, and for the reason the column
     // default gives: this switch only ever *narrows* the event's answer, so a
     // value this build cannot read must not be what silently stops a room
@@ -99,7 +144,7 @@ export async function listRooms(
 ): Promise<RoomView[]> {
   let query = supabase
     .from('rooms_read_model')
-    .select('room_id, tenant_id, name, slug, visibility, mode, cap, guest_build, xp_ref, round_started_at, created_at')
+    .select(ROOM_COLUMNS)
     .eq('tenant_id', tenantId)
     .eq('closed', false)
 
@@ -132,7 +177,7 @@ export async function findRoomBySlug(
 ): Promise<RoomView | null> {
   const { data, error } = await supabase
     .from('rooms_read_model')
-    .select('room_id, tenant_id, name, slug, visibility, mode, cap, guest_build, xp_ref, round_started_at, created_at')
+    .select(ROOM_COLUMNS)
     // Scoped to the space, unlike `findRoom` below: a slug is only unique
     // within one, so this pair is the key and either half alone is not.
     .eq('tenant_id', tenantId)
@@ -157,7 +202,7 @@ export async function findRoom(
 ): Promise<RoomView | null> {
   const { data, error } = await supabase
     .from('rooms_read_model')
-    .select('room_id, tenant_id, name, slug, visibility, mode, cap, guest_build, xp_ref, round_started_at, created_at')
+    .select(ROOM_COLUMNS)
     .eq('room_id', roomId)
     .eq('closed', false)
     .maybeSingle()

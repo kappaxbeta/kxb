@@ -11,6 +11,7 @@ import { battlefieldsProjection } from '@/domain/battlefields/projection'
 import { listBattlefields } from '@/domain/battlefields/queries'
 import { guestMay } from '@/domain/events/queries'
 import { admitToRoom } from '@/domain/rooms/admission'
+import { touchRoom } from '@/domain/rooms/marks'
 import { loungeProjection } from '@/domain/lounge/projection'
 import { loungeGoalsProjection } from '@/domain/lounge/goal-projection'
 import { listGoals } from '@/domain/lounge/goal-queries'
@@ -136,6 +137,26 @@ export default async function RoomPage({
       />
     )
   }
+
+  /**
+   * Remember that this person was in here.
+   *
+   * Below every refusal above, and that ordering is the whole correctness of
+   * it: somebody redirected to another room, held outside a round, or turned
+   * away from a full one did not visit this room, and a rail that floated rooms
+   * to the top on the strength of a refused knock would be ordering by where
+   * you were turned away.
+   *
+   * Awaited rather than left floating, which is the opposite of what it looks
+   * like it should be. A fire-and-forget write in a server component races the
+   * response: the render finishes, the request is torn down, and the insert may
+   * or may not have left the process - so the room you visit least reliably is
+   * the one you leave quickest. It is one upsert on a connection this page has
+   * already used half a dozen times, and `touchRoom` returns a boolean rather
+   * than throwing, so the cost of certainty here is a millisecond and no new
+   * failure mode.
+   */
+  await touchRoom(supabase, tenant.id, user.id, room.roomId)
 
   /**
    * A room that is a level draws the level, and stops here.

@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
+import { PerspectiveCamera } from '@react-three/drei'
 import { studioEnvironment } from '@/app/components/cartridge/studio'
 import { Cartridge, type ShelfItem, type ShelfPointer } from '@/app/components/cartridge/cartridge'
 import { columnsFor, shelfExtent, placeOnShelf } from '@/app/components/cartridge/grid'
@@ -156,18 +157,30 @@ export function CartridgeShelf({
         className="w-full touch-pan-y"
       >
         {width > 0 && items.length > 0 && (
-          <Canvas
-            frameloop="demand"
-            dpr={[1, 2]}
-            gl={{ antialias: true, alpha: true }}
-            camera={{
-              fov: FOV,
-              position: [0, 0, world.height / 2 / Math.tan((FOV / 2) * (Math.PI / 180))],
-              near: 0.1,
-              far: 100,
-            }}
-          >
+          <Canvas frameloop="demand" dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+            {/*
+              Declared rather than passed to `<Canvas camera={...}>`, because
+              the distance is not a constant: the camera stands exactly far
+              enough back for `world.height` to fill the frustum, and that
+              height changes every time the shelf is filtered - twelve
+              cartridges over three rows becoming five over two.
+
+              R3F reads the `camera` prop when it *creates* the camera and
+              never again, so the element dutifully resized to the new aspect
+              while the camera stayed parked at the old distance: the picker
+              drew its cartridges at two-thirds size, adrift in a frame far too
+              wide for them, the moment you switched tabs. This one follows its
+              props.
+            */}
+            <PerspectiveCamera
+              makeDefault
+              fov={FOV}
+              near={0.1}
+              far={100}
+              position={[0, 0, world.height / 2 / Math.tan((FOV / 2) * (Math.PI / 180))]}
+            />
             <Invalidator intoRef={askRef} />
+            <Refit height={world.height} />
 
             {/*
               A room to reflect, then key, fill and a cool rim.
@@ -255,6 +268,24 @@ function Studio() {
  * A demand-driven canvas only redraws when something asks, and the thing that
  * knows the pointer moved is a React event on a div outside the reconciler.
  */
+/**
+ * Asks for a frame whenever the camera has moved.
+ *
+ * `frameloop="demand"` means nothing redraws itself, and the declarative
+ * camera above changes its own position without telling the loop - so the
+ * shelf would sit on the last frame it drew, at the old distance, until a
+ * pointer moved over it.
+ */
+function Refit({ height }: { height: number }) {
+  const invalidate = useThree((state) => state.invalidate)
+
+  useEffect(() => {
+    invalidate()
+  }, [height, invalidate])
+
+  return null
+}
+
 function Invalidator({ intoRef }: { intoRef: React.RefObject<(() => void) | null> }) {
   const invalidate = useThree((state) => state.invalidate)
 

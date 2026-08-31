@@ -2466,6 +2466,48 @@ export type Database = {
         }
         Relationships: []
       }
+      room_marks: {
+        Row: {
+          pinned_at: string | null
+          room_id: string
+          seen_at: string | null
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          pinned_at?: string | null
+          room_id: string
+          seen_at?: string | null
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          pinned_at?: string | null
+          room_id?: string
+          seen_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_marks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_marks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_perf_samples: {
         Row: {
           channel_state: string
@@ -2580,7 +2622,11 @@ export type Database = {
           guest_build: boolean
           mode: string
           name: string
+          pinned_at: string | null
+          room_group: string | null
+          room_icon: string | null
           room_id: string
+          room_tint: string | null
           round_started_at: string | null
           slug: string
           tenant_id: string
@@ -2597,7 +2643,11 @@ export type Database = {
           guest_build?: boolean
           mode?: string
           name: string
+          pinned_at?: string | null
+          room_group?: string | null
+          room_icon?: string | null
           room_id: string
+          room_tint?: string | null
           round_started_at?: string | null
           slug: string
           tenant_id: string
@@ -2614,7 +2664,11 @@ export type Database = {
           guest_build?: boolean
           mode?: string
           name?: string
+          pinned_at?: string | null
+          room_group?: string | null
+          room_icon?: string | null
           room_id?: string
+          room_tint?: string | null
           round_started_at?: string | null
           slug?: string
           tenant_id?: string
