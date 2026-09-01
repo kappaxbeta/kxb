@@ -1,6 +1,7 @@
 'use client'
 
 import { Canvas } from '@react-three/fiber'
+import { KeepContext, useSurface } from '@/app/world/_canvas/keep-context'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
@@ -34,11 +35,21 @@ import {
 } from '@/app/world/lounge/_hud/combat-hud'
 import { FinishLine } from '@/app/world/lounge/_canvas/finish-line'
 import { useCombat } from '@/app/world/lounge/_hooks/use-combat'
+import { BodySwap } from '@/app/world/lounge/_hud/body-swap'
 import { Hud, loungeControls } from '@/app/world/lounge/_hud/lounge-hud'
 import { PlayerControls } from '@/app/world/lounge/_canvas/player-controls'
 import { ImagePanel } from '@/app/world/lounge/_hud/image-panel'
+import { ThingPanel } from '@/app/world/lounge/_hud/thing-panel'
+import { ClipMenu } from '@/app/world/lounge/_hud/clip-menu'
+import { StaminaBar } from '@/app/world/lounge/_hud/stamina-bar'
+import { THING_DRAG, ThingiverseView } from '@/app/world/lounge/_hud/thingiverse-view'
+import { nameForModel } from '@/domain/thingiverse/summon'
+import { drivable } from '@/domain/thingiverse/vehicle'
+import { DrivenVehicle, RideAlong } from '@/app/world/lounge/_canvas/vehicle-rig'
+import type { DriveState, DriveTuning } from '@/app/world/lounge/_sim/drive'
 import { TouchLayer } from '@/app/world/lounge/_hud/touch-layer'
 import { useLoungeImages } from '@/app/world/lounge/_hooks/use-images'
+import { useThings } from '@/app/world/lounge/_hooks/use-things'
 /**
  * Loaded on demand, because almost nothing wants it.
  *
@@ -111,6 +122,7 @@ import {
   Rainbow,
 } from '@/app/world/_canvas/rainbow'
 import { publishRainbow } from '@/app/world/_stores/rainbow-store'
+import { useStaminaOverride } from '@/app/world/_stores/stamina-store'
 import { SpawnMark } from '@/app/world/lounge/_canvas/spawn-mark'
 import type { WorldSpawn } from '@/domain/worlds/queries'
 import {
@@ -156,6 +168,11 @@ import { LOCAL_SPEAKER, onSaid } from '@/app/world/_stores/said-store'
 import type { EmoteId } from '@/domain/world/emotes'
 import { useEditBuffer } from '@/app/world/lounge/_hooks/use-edit-buffer'
 import { LoungeImages } from '@/app/world/lounge/_canvas/lounge-images'
+import { LoungeThings, ThingPreview } from '@/app/world/lounge/_canvas/lounge-things'
+import { freeSeat, seatOf, Usables } from '@/app/world/lounge/_canvas/usables'
+import { ThingSolids } from '@/app/world/lounge/_sim/thing-solids'
+import { dropTo, spotFor, stepBy } from '@/app/world/lounge/_sim/carry'
+import { fits } from '@/app/world/lounge/_sim/fit'
 import { CosmicGround, LoungeLighting, SKY } from '@/app/world/lounge/_canvas/lounge-sky'
 import {
   applyWorldTemplate,
@@ -175,11 +192,30 @@ import {
 import { planGoalPair } from '@/domain/lounge/pitch'
 import { findTemplate } from '@/domain/lounge/templates'
 import { saveWorldAsArena } from '@/domain/battlefields/actions'
+import { claimThing, myConn, slotsOn } from '@/app/world/_stores/thing-life-store'
+import { PocketPanel } from '@/app/world/lounge/_hud/pocket-panel'
+import { emptyPockets } from '@/app/world/_stores/pocket-store'
+import { POCKET_KEY } from '@/domain/thingiverse/pocket'
+import { heldIndex, heldNow, nextInPocket, takeFromPocket } from '@/app/world/_stores/pocket-store'
+import { answersUse, priceOfSlot } from '@/domain/thingiverse/blueprint'
+import { payToTake } from '@/domain/thingiverse/shop'
+import { reachFor } from '@/domain/thingiverse/craft'
 import { removeLoungeImage } from '@/domain/lounge/image-actions'
 import type { LoungeImageView } from '@/domain/lounge/image-queries'
-import { DEFAULT_AVATAR } from '@/domain/lounge/avatars'
-import { chooseAvatar } from '@/domain/profile/avatar-actions'
-import { wearLoungeSkin } from '@/domain/skins/actions'
+import type {
+  BlueprintView,
+  ClipView,
+  ThingView,
+} from '@/domain/thingiverse/queries'
+import { toClip } from '@/app/world/_canvas/baked-clip'
+import {
+  AVATAR_CLIPS,
+  type AvatarClip,
+  DEFAULT_AVATAR,
+  DUMMY_LOOK,
+} from '@/domain/lounge/avatars'
+import { chooseAvatar, wearDummy } from '@/domain/profile/avatar-actions'
+import { chooseSkin, wearSkinInLounge } from '@/domain/skins/actions'
 import { blockKey } from '@/domain/lounge/events'
 import {
   DEFAULT_MODEL,
@@ -189,6 +225,7 @@ import { setRoomMode } from '@/domain/rooms/actions'
 import { setLoungeMode } from '@/domain/tenants/actions'
 import { useLocale } from '@/app/i18n/locale-context'
 import { worldDict } from '@/app/i18n/world'
+import { fill } from '@/app/i18n/fill'
 import { useRefusal } from '@/app/i18n/use-refusal'
 
 /**
@@ -212,12 +249,37 @@ const SHOT_RESTORE = {
   quaternion: new THREE.Quaternion(),
 }
 
+/**
+ * How far in front of somebody a thing appears when they pick it up.
+ *
+ * Three cells: outside arm's reach, inside the frame the placement camera puts
+ * around it, and far enough that the body is not standing in the picture.
+ */
+const REACH_AHEAD = 3
+
+/**
+ * The keys that move a thing rather than a body, and how fast they repeat.
+ *
+ * The walk keys, plus a pair for height - R up, F down - which is the
+ * convention every editor with a vertical axis has settled on and the two
+ * letters nearest the walk keys that nothing else in this scene claims.
+ *
+ * A sixth of a second between steps: as fast as somebody can watch a thing move
+ * and still stop it where they meant.
+ */
+const CARRY_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF'])
+const CARRY_STEP_MS = 160
+
 export function LoungeScene({
   slug,
   worldId,
   worldName,
   initialBlocks,
   initialImages,
+  initialThings = [],
+  initialShelf = [],
+  initialClips = [],
+  stamina = false,
   initialGoals = [],
   football,
   race,
@@ -235,7 +297,9 @@ export function LoungeScene({
   avatar = DEFAULT_AVATAR,
   animal,
   skins,
-  wearingSkin = null,
+  xpBody = null,
+  asDummy = false,
+  showXp = false,
   presence,
   perf,
   perfReadout,
@@ -257,6 +321,35 @@ export function LoungeScene({
   worldName?: string
   initialBlocks: BlockView[]
   initialImages: LoungeImageView[]
+  /**
+   * The things summoned into this world, and the shelf they came off.
+   *
+   * Both default to empty, which is what a scene rendered with the thingiverse
+   * switched off gets - and what the demo, the still renderer and the shot
+   * server get, none of which have a workspace to read a shelf from. An empty
+   * shelf draws no furniture and offers no summoning, rather than an error.
+   */
+  initialThings?: ThingView[]
+  initialShelf?: BlueprintView[]
+  /**
+   * The clips this space animated for itself.
+   *
+   * Loaded with the world rather than fetched when one is wanted: a chair whose
+   * sit-down arrived half a second after somebody sat in it would play the
+   * first half of the animation as a body standing still. Sixty-four of them is
+   * the cap, and the samples are what makes that a real number - see
+   * `listClips`.
+   */
+  initialClips?: ClipView[]
+  /**
+   * Whether running costs anything here.
+   *
+   * The space's `stamina` capability, read by the page. Off is what every world
+   * has always been. It is a *prop* and also a store - see `useStaminaOverride`
+   * - because an admin flipping the switch in the rail must not re-render the
+   * page the scene is mounted on.
+   */
+  stamina?: boolean
   /**
    * The goals standing in this world, from the log.
    *
@@ -394,18 +487,31 @@ export function LoungeScene({
    */
   avatar?: string
   /**
-   * The animal underneath, when a skin is over the top of it.
+   * The animal on the peep, always - never a skin.
    *
-   * Kept apart from `avatar` because the wardrobe needs both: the body draws
-   * the skin, and the picker still has to show which peep is selected and
-   * which still-image to put on its button - and a skin id handed to
-   * `avatarShotUrl` is a broken picture.
+   * Kept apart from `avatar` because the two answer different questions: that
+   * one is what the room draws, this one is who you are underneath it. The
+   * wardrobe needs both, and a skin id handed to `avatarShotUrl` is a broken
+   * picture.
    */
   animal?: string
   /** The skins this account owns, for the wardrobe. Empty for a guest. */
   skins?: { id: string; name: string }[]
-  /** Which of them is worn in here, or null for the animal. */
-  wearingSkin?: string | null
+  /**
+   * The XP body this account has on: a skin's catalogue id, or null for the
+   * dummy every player starts in.
+   *
+   * What it is *not* is what the room is drawing. Everybody has two bodies at
+   * once - the peep above and this one - and `showXp` is the only thing that
+   * says which of them a world puts on screen. Reading this as "the body over
+   * the animal" is exactly the conflation that used to replace somebody's peep
+   * everywhere the moment they equipped a skin for the games.
+   */
+  xpBody?: string | null
+  /** Whether the peep half is the plain mannequin rather than the animal. */
+  asDummy?: boolean
+  /** The mode: draw the XP body in this world instead of the peep. */
+  showXp?: boolean
   /**
    * Who you are on the presence channel. Absent for the public showcase, which
    * is deliberately a one-way window: a visitor with no membership cannot pass
@@ -702,40 +808,72 @@ export function LoungeScene({
   const [mirror, setMirror] = useState(false)
 
   /**
-   * What we are wearing right now, in three parts.
+   * Both bodies, and which of them this room is drawing.
    *
    * Seeded from the props and then owned here, because changing your look from
    * inside the room has to show on the body in the mirror immediately - the
    * save is a round trip, and the whole reason the switcher sits beside the
    * mirror is to look at the result.
    *
-   * `worn` is what the renderer draws and can be either kind - an animal or a
-   * skin's catalogue id, told apart by the slash. `animal` and `skin` are what
-   * the wardrobe highlights, kept apart from it so that taking a skin off puts
-   * back the peep you already had rather than asking for it again.
+   * Deliberately *not* one "worn" value with the rest hanging off it. You have
+   * a peep and an XP body at the same time and neither is spent by the other,
+   * so all three parts are held: `animal` and `dummy` are the peep half, `xp`
+   * is the other body, and `showXp` is a mode rather than a costume. What the
+   * renderer draws is derived from them below and stored nowhere, which is what
+   * makes it impossible for the two to drift apart again - equipping a skin
+   * used to overwrite the single worn value, and the peep was gone from every
+   * space until it was picked a second time.
    *
    * Re-synced by comparing against the last props we saw, *during render*
-   * rather than in an effect. Three effects calling setState would render the
-   * room a second time for every change, on a page whose render mounts a
-   * canvas - and this is React's own answer for state that follows a prop.
+   * rather than in an effect. Effects calling setState would render the room a
+   * second time for every change, on a page whose render mounts a canvas - and
+   * this is React's own answer for state that follows a prop.
    */
   const [look, setLook] = useState({
-    worn: avatar,
     animal: animal ?? avatar,
-    skin: wearingSkin,
+    dummy: asDummy,
+    xp: xpBody,
+    showXp,
   })
-  const [seenProps, setSeenProps] = useState({ avatar, animal, wearingSkin })
+  const [seenProps, setSeenProps] = useState({ avatar, animal, xpBody, asDummy, showXp })
+
+  /**
+   * The body swap's own two pieces of state: why the last one was refused, and
+   * a counter that is bumped once per switch to (re)start the rain over the
+   * room. A counter rather than a boolean because switching again while the
+   * first is still playing has to restart it, and a boolean already true
+   * changes nothing.
+   */
+  const [xpProblem, setXpProblem] = useState<string | null>(null)
+  const [swap, setSwap] = useState<number | null>(null)
 
   if (
     seenProps.avatar !== avatar ||
     seenProps.animal !== animal ||
-    seenProps.wearingSkin !== wearingSkin
+    seenProps.xpBody !== xpBody ||
+    seenProps.asDummy !== asDummy ||
+    seenProps.showXp !== showXp
   ) {
-    setSeenProps({ avatar, animal, wearingSkin })
-    setLook({ worn: avatar, animal: animal ?? avatar, skin: wearingSkin })
+    setSeenProps({ avatar, animal, xpBody, asDummy, showXp })
+    setLook({ animal: animal ?? avatar, dummy: asDummy, xp: xpBody, showXp })
   }
 
-  const wearing = look.worn
+  /**
+   * The one body on screen, worked out from the three above.
+   *
+   * The order is the one `readLoungeLook` writes down on the server, and it is
+   * written twice on purpose rather than shared: this one has to answer before
+   * the round trip lands, and the server's has to answer for everybody else in
+   * the room. They agree because both start from the mode.
+   *
+   * `avatar` is the fallback rather than `look.animal` for the showcase, where
+   * there is no account behind any of this and the prop is the whole answer.
+   */
+  const wearing = look.showXp
+    ? (look.xp ?? DUMMY_LOOK)
+    : look.dummy
+      ? DUMMY_LOOK
+      : (look.animal ?? avatar)
 
   /**
    * Looking at the whole room from above, on purpose.
@@ -888,6 +1026,24 @@ export function LoungeScene({
    * refuses, the same shape as every other write in this scene.
    */
   const [heldMode, setMode] = useState<'creative' | 'battle'>(initialMode)
+
+  /**
+   * Whether the pocket is open.
+   *
+   * Scene state rather than a store, unlike what is *in* it: the contents are
+   * read from three places on both sides of the Canvas, and whether a panel is
+   * showing is read here and nowhere else. See `pocket-store` for the other
+   * half and why it is split this way.
+   */
+  const [pocketOpen, setPocketOpen] = useState(false)
+
+  /*
+    What you were carrying does not follow you out. The same promise every
+    other store here makes, and the one `@/domain/thingiverse/pocket` argues
+    for at length: a pocket that survived the room is a different feature with
+    three unanswered questions in it.
+  */
+  useEffect(() => () => emptyPockets(), [])
 
   /**
    * The demo, and only the demo, drives the mode from outside.
@@ -1607,9 +1763,954 @@ export function LoungeScene({
     dropFile: handleDropFile,
   } = useLoungeImages({ slug, initial: initialImages, readOnly, demo, target, dict, refusal })
 
+  /**
+   * The things summoned into this world, and the shelf they come off.
+   *
+   * Its own hook for the same reason the pictures have one - its own aggregate,
+   * its own lifecycle, and nothing else in this file reads any of its state.
+   * What it adds is the *preview*: `/thingiverse ball` hands you a ball rather
+   * than placing one, and `carrying` below is what is in your hand.
+   *
+   * It also publishes the lot to `thing-store` for the rail, which is three
+   * route segments above this scene and has no other way to know what is in the
+   * room. See that file for why data crosses that seam when behaviour usually
+   * is all that does.
+   */
+  /**
+   * Where the things that block the way are standing.
+   *
+   * A mutable object rather than state, and read by the character controller
+   * every frame - so it must not be a value that re-renders the scene when a
+   * bench finishes loading. The renderer measures each model as it draws it and
+   * writes here; see ./_sim/thing-solids for why the footprint is measured
+   * rather than declared.
+   */
+  const thingSolids = useMemo(() => new ThingSolids(), [])
+
+  /**
+   * Where a summoned thing stands.
+   *
+   * A few cells in front of whoever asked for it, on whatever is there, and in
+   * a spot it fits. This replaces the crosshair the preview used to follow, and
+   * it had to: `/xo bench` stands a bench up rather than handing you one, so
+   * there is no moment in which somebody is aiming at anything.
+   *
+   * A function rather than a value, called once when something is summoned,
+   * because both halves of it - where the player is and which way they face -
+   * are refs that change sixty times a second.
+   *
+   * It searches outward rather than taking the first cell: `/xo bench` puts a
+   * bench down without asking, so the spot has to be one it fits in. Dropping
+   * one into the wall somebody happens to be facing is worse than refusing,
+   * because the only sign anything happened is a bench you cannot see.
+   */
+  /**
+   * Take the key, and take it from everything else too.
+   *
+   * `preventDefault` alone asks the other listeners to notice; stopping the
+   * event as well means a listener that never thought to check cannot act on
+   * it. Used only where this scene is certain the key was meant for it - G at
+   * a crate, a chair's own bound letter - so nothing else is ever silenced by
+   * accident.
+   */
+  const claim = useCallback((event: KeyboardEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }, [])
+
+  const spot = useCallback(() => {
+    const player = refs.playerRef.current
+    const heading = refs.headingRef.current
+
+    return spotFor(player, heading, REACH_AHEAD, blocks, (x, y, z) =>
+      // Free means free of both: the cell a bench would stand in, and the one
+      // its head would be in. Two is enough to keep it out of a wall and out of
+      // whatever is already standing there, without pretending to know how big
+      // the model is before it has been drawn.
+      fits([blockKey(x, y, z), blockKey(x, y + 1, z)], [blocks, thingSolids]),
+    )
+  }, [refs, blocks, thingSolids])
+
+  /**
+   * The wheel, while this player is behind one.
+   *
+   * A ref because everything in it changes every frame: `stepDrive` advances
+   * the state inside <PlayerControls>, the vehicle rig draws from it, and the
+   * effect below only creates and clears it. Null the whole of the rest of
+   * the time, which is what tells the controller to keep walking.
+   */
+  const driveRef = useRef<{ state: DriveState; tuning: DriveTuning } | null>(null)
+
+  /**
+   * Where the body - or the vehicle under it - is, as a cell and a quarter.
+   *
+   * Handed to `useThings` beside `spot` and for the same reason: both halves
+   * are refs the scene owns. Two readers - `/vehicle kart` faces the summoned
+   * kart the way you face, and getting out parks the thing where it stopped.
+   * The cell is the *feet's*, which while driving is within the vehicle of
+   * the vehicle's own origin - close enough for a parking spot, and honest
+   * about what is actually known without re-deriving the seat sum here.
+   */
+  const pose = useCallback(() => {
+    const player = refs.playerRef.current
+    const heading = driveRef.current
+      ? driveRef.current.state.heading
+      : Math.atan2(refs.headingRef.current.x, refs.headingRef.current.z)
+
+    return {
+      x: Math.floor(player.x),
+      y: Math.max(0, Math.round(player.y - EYE_HEIGHT)),
+      z: Math.floor(player.z),
+      facing: ((Math.round(heading / (Math.PI / 2)) % 4) + 4) % 4,
+    }
+  }, [refs])
+
+  /**
+   * What this body can be asked to do.
+   *
+   * The pack's own four, plus whatever this space animated for itself, deduped:
+   * a space is allowed to make a clip called `dance`, and when it does the
+   * space's is the one that plays - see `spacePose`. One name, one answer, or
+   * `/clip dance` and the menu row under it would do two different things.
+   *
+   * Named here rather than at the menu because two things ask now: the menu
+   * draws it, and `/clip wink` is checked against it.
+   */
+  const bodyClips = useMemo(
+    () => [...new Set([...Object.values(AVATAR_CLIPS), ...initialClips.map((made) => made.name)])],
+    [initialClips],
+  )
+
+  const {
+    things,
+    shelf: thingShelf,
+    browsing,
+    setBrowsing,
+    announced,
+    step: moveStep,
+    setStep: setMoveStep,
+    summon: summonThing,
+    pending: carriedThing,
+    carrying,
+    selectedId: selectedThingId,
+    error: thingError,
+    setError: setThingError,
+    using: usingThing,
+    usingSeat,
+    atWheel,
+    driveIn,
+    near: nearThing,
+    bodyClip,
+    clipMenu,
+    setClipMenu,
+    playClip,
+    setNearId,
+    enter: enterThing,
+    leave: leaveThing,
+    press: pressInThing,
+    carry: carryThing,
+    cancel: cancelSummon,
+    dismiss: dismissThing,
+    setFalls,
+    setSolid,
+    nudge: nudgeSummon,
+    place: placeThing,
+    move: moveThing,
+    live: thingLive,
+  } = useThings({
+    slug,
+    worldId: worldId ?? null,
+    /*
+      Whose loans to sweep on the way out. Empty in the demo and on the public
+      showcase, which have no account and cannot summon anything anyway - so
+      the sweep matches nothing, which is the right answer rather than a guard.
+    */
+    userId: presence?.userId ?? '',
+    /*
+      Who to tell. Null in the demo and on the showcase, which have no presence
+      channel and nobody to tell - see the note on the things channel.
+    */
+    tenantId: presence?.tenantId ?? null,
+    initial: initialThings,
+    initialShelf,
+    readOnly,
+    canBuild,
+    spot,
+    pose,
+    clips: bodyClips,
+    dict,
+    refusal,
+  })
+
+
+
+  /**
+   * Whether running costs anything, as of this moment.
+   *
+   * The server's answer, unless the rail has said otherwise since - see
+   * `stamina-store` for why a switch in the rail cannot simply revalidate.
+   */
+  const staminaOverride = useStaminaOverride()
+  const staminaOn = staminaOverride ?? stamina
+
+  /** What is in your hands is exactly where you put it. Nothing follows a look. */
+  const carryAt = carriedThing?.at ?? null
+
+  /**
+   * The carried cell and the act of putting it down, as refs.
+   *
+   * Both are read from a document-level mousedown listener and from a pad that
+   * is drawn outside the canvas, and both change as the crosshair moves - which
+   * is every frame. Bound as dependencies they would tear the listener down and
+   * rebuild it sixty times a second; read from a ref they are simply current.
+   */
+  const carryAtRef = useRef<{ x: number; y: number; z: number } | null>(null)
+  /**
+   * The step size, for the key handler.
+   *
+   * A ref because that effect must not re-register every time somebody changes
+   * the size - re-registering a keydown listener mid-hold loses the keys that
+   * are already down, and the thing stops moving until they are let go.
+   */
+  const moveStepRef = useRef(moveStep)
+
+  const placeThingRef = useRef(placeThing)
+  /** Whether anything is in your hands at all, for the same listener. */
+  const carryingRef = useRef(false)
+  useEffect(() => {
+    carryAtRef.current = carryAt
+    placeThingRef.current = placeThing
+    carryingRef.current = carrying !== null
+    moveStepRef.current = moveStep
+  })
+
+  /**
+   * A thumb push on the pad, turned into a cell.
+   *
+   * The heading is read at the moment of the push rather than subscribed to,
+   * because it changes sixty times a second and this reads it once per press.
+   * `stepBy` snaps it to a quarter turn, so "away from me" is a whole cell
+   * along one axis and the thing stays on the lattice it has to line up with.
+   */
+  const shoveCarried = useCallback(
+    (right: number, forward: number, up: number) => {
+      const at = carryAtRef.current
+      if (!at) return
+
+      const step = stepBy(Math.atan2(refs.headingRef.current.x, refs.headingRef.current.z), right, forward)
+
+      nudgeSummon({
+        at: {
+          x: at.x + step.dx,
+          y: Math.max(0, at.y + up),
+          z: at.z + step.dz,
+        },
+      })
+    },
+    [nudgeSummon, refs],
+  )
+
+  /**
+   * And the walk keys move the thing.
+   *
+   * While something is in hand the body is standing still - the camera is
+   * parked on the object, so a step forward would move a body that is off
+   * screen and change nothing anybody can see (see `framing` in the character
+   * controller). Which leaves WASD free, and free next to a thing somebody is
+   * trying to line up is a waste: the keys that move you move it instead.
+   *
+   * Camera-relative, in whole steps, at the size the pad is set to - one number
+   * for both controls, or they would disagree about what "half a cell" means.
+   *
+   * Held rather than tapped: a key is tracked down-to-up and a clock spends it,
+   * because the browser's own repeat starts late and then runs far too fast for
+   * something being placed - thirty steps a second is half a room.
+   */
+  useEffect(() => {
+    if (!carrying) return
+
+    const down = new Set<string>()
+
+    const push = () => {
+      const right = (down.has('KeyD') ? 1 : 0) - (down.has('KeyA') ? 1 : 0)
+      const ahead = (down.has('KeyW') ? 1 : 0) - (down.has('KeyS') ? 1 : 0)
+      const up = (down.has('KeyR') ? 1 : 0) - (down.has('KeyF') ? 1 : 0)
+      if (!right && !ahead && !up) return
+
+      shoveCarried(right * moveStepRef.current, ahead * moveStepRef.current, up * moveStepRef.current)
+    }
+
+    const onDown = (event: KeyboardEvent) => {
+      if (isTyping(event) || !CARRY_KEYS.has(event.code)) return
+
+      claim(event)
+      if (event.repeat) return
+
+      // The first step on the press, the rest on the clock - a key that does
+      // nothing until its own interval comes round reads as a key that missed.
+      const first = down.size === 0
+      down.add(event.code)
+      if (first) {
+        push()
+        clock.current = setInterval(push, CARRY_STEP_MS)
+      } else {
+        push()
+      }
+    }
+
+    const onUp = (event: KeyboardEvent) => {
+      if (!CARRY_KEYS.has(event.code)) return
+      down.delete(event.code)
+      if (down.size > 0) return
+      if (clock.current) clearInterval(clock.current)
+      clock.current = null
+    }
+
+    const clock: { current: ReturnType<typeof setInterval> | null } = { current: null }
+
+    window.addEventListener('keydown', onDown, true)
+    window.addEventListener('keyup', onUp, true)
+    return () => {
+      window.removeEventListener('keydown', onDown, true)
+      window.removeEventListener('keyup', onUp, true)
+      if (clock.current) clearInterval(clock.current)
+    }
+  }, [carrying, claim, shoveCarried])
+
+  /**
+   * Enter puts it down, Escape drops it.
+   *
+   * Keys as well as the panel's buttons, because both hands are already on the
+   * keyboard while you line something up - and Escape especially, since the
+   * panel's Cancel is a small target to hit with the pointer locked.
+   *
+   * Escape is *not* stopped from propagating: it also releases the pointer
+   * lock, and a key that did one of its two jobs silently would read as the
+   * lock being broken.
+   */
+  useEffect(() => {
+    if (!carrying) return
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cancelSummon()
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        void placeThing(carryAtRef.current)
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [carrying, cancelSummon, placeThing])
+
+  /**
+   * What you are about to put down, when it is a thing rather than a block.
+   *
+   * Stored as a *model id* and resolved against the shelf on every render, so
+   * the chip is never out of step with the blueprint behind it: rename the
+   * thing, share it, turn its gravity off, and the chip says so on the next
+   * frame without anything having to remember to tell it. A copy of the row
+   * would be the second answer that goes stale.
+   */
+  /**
+   * The drawing surface, and getting it back when the browser takes it.
+   *
+   * Saying so was not enough: the surface usually does not return on its own,
+   * and the tab keeps a dead canvas with a sad face drawn where the world was.
+   * `useSurface` waits for a restore and then asks for a new canvas, which is
+   * the one move that actually brings the page back. See `keep-context`.
+   */
+  const surface = useSurface()
+
+  const [heldModel, setHeldModel] = useState<string | null>(null)
+
+  const held = useMemo(() => {
+    /*
+      What is in your hands wins over what you last picked off the shelf.
+
+      Both are "the kind of thing you are placing" and for most of a session
+      they are the same one - but a thing picked up off the floor with E never
+      went through the shelf, and reading only the shelf's answer left the
+      panel with no gravity switch for exactly the things somebody is most
+      likely to be re-placing.
+    */
+    const model = carrying?.model ?? heldModel
+    if (!model) return null
+    const entry = thingShelf.find((one) => one.spec.model === model)
+    if (!entry) return null
+
+    return {
+      id: entry.id,
+      name: entry.name,
+      model,
+      mine: entry.mine,
+      // Null is scenery and `{}` is a crate - see `BlueprintSpec.body`. The
+      // panel asks the two questions somebody changes while placing, and the
+      // pair of them is what makes a ball - see `knockable`.
+      falls: entry.spec.body !== null,
+      solid: entry.spec.blocking,
+    }
+  }, [carrying, heldModel, thingShelf])
+
+  /**
+   * The clip a thing asked for, if this space made one by that name.
+   *
+   * Built once per name rather than per frame: `toClip` allocates a
+   * `Float32Array` per bone track, and a body sitting in a chair asks for the
+   * same clip sixty times a second.
+   *
+   * The pack's own four are *not* resolved here - `asAvatarClip` does that, and
+   * the two are deliberately separate lookups. A space is allowed to make a
+   * clip called `dance`, and when it does, the space's wins: somebody who keyed
+   * their own dance meant that one.
+   */
+  const spacePose = useMemo(() => {
+    if (!bodyClip) return null
+    const made = initialClips.find((entry) => entry.name === bodyClip)
+    return made ? toClip(made.clip) : null
+  }, [bodyClip, initialClips])
+
+  /**
+   * Which things are under somebody right now, and must not be drawn parked.
+   *
+   * Two sources: our own wheel, and every peer's `v` field, lifted out of the
+   * frame loop by <Multiplayer> when it changes. State rather than a ref
+   * because <LoungeThings> renders from it - a kart has to disappear from its
+   * cell in the same commit its driver starts carrying it about.
+   */
+  const [peerDriven, setPeerDriven] = useState<Record<string, string>>({})
+
+  const onPeerDriving = useCallback((user: string, thingId: string | null) => {
+    setPeerDriven((current) => {
+      if ((current[user] ?? null) === thingId) return current
+      const next = { ...current }
+      if (thingId) next[user] = thingId
+      else delete next[user]
+      return next
+    })
+  }, [])
+
+  const drivenThings = useMemo(() => {
+    const set = new Set<string>(Object.values(peerDriven))
+    if (atWheel && usingThing) set.add(usingThing.id)
+    return set
+  }, [peerDriven, atWheel, usingThing])
+
+  /**
+   * Whose wheel this seat belongs to, when you are riding rather than driving.
+   *
+   * Null on foot, at the wheel, and in a parked thing - the pin below is the
+   * static one in all three. A user id the moment somebody's packets say they
+   * hold the wheel of the thing you are sitting in, at which point your body
+   * stops being pinned to the parked row and starts following theirs - see
+   * <RideAlong>.
+   */
+  const ridingDriverId = useMemo(() => {
+    if (atWheel || !usingThing) return null
+    const spec = usingThing.blueprint?.spec
+    if (!spec || !drivable(spec)) return null
+    for (const [user, thingId] of Object.entries(peerDriven)) {
+      if (thingId === usingThing.id) return user
+    }
+    return null
+  }, [atWheel, usingThing, peerDriven])
+
+  /**
+   * Whether being aboard hides your body.
+   *
+   * The blueprint's own switch (`hideDriver`): a car with a roof, or a
+   * football somebody rolls about as. Yours included - the room sees the
+   * vehicle move, and you watch it from behind exactly as you watch your own
+   * body.
+   */
+  const cloaked = Boolean(
+    usingThing?.blueprint?.spec &&
+      drivable(usingThing.blueprint.spec) &&
+      usingThing.blueprint.spec.vehicle?.hideDriver,
+  )
+
+  /**
+   * Where the body is pinned while it is in something, or null.
+   *
+   * A ref rather than state, because the character controller reads it every
+   * frame and a chair should not re-render the scene. Written here and read in
+   * <PlayerControls>, which is the same shape every other per-frame fact in
+   * this scene takes.
+   */
+  const seatRef = useRef<{ x: number; y: number; z: number } | null>(null)
+
+  const seat =
+    usingThing?.blueprint?.spec.use && !atWheel
+      ? seatOf(usingThing, usingThing.blueprint.spec.use, usingSeat)
+      : null
+
+  /**
+   * Mirrored into the ref after the render rather than during it.
+   *
+   * A ref written while rendering is one React is allowed to throw away, and
+   * the lint rule says so. The cost of doing it in an effect is that the pin
+   * lands one frame after somebody presses E, which at sixty frames a second is
+   * not a thing anybody can see - and the alternative, state, would re-render
+   * the whole scene every time a chair changed hands.
+   */
+  useEffect(() => {
+    // While riding, the pin is written per frame by <RideAlong> from the
+    // driver's live pose, and the static one here - computed from the parked
+    // row, which is stale the whole drive - must not clobber it on re-renders.
+    if (!ridingDriverId) seatRef.current = seat
+  })
+
+  /**
+   * Taking the wheel, and letting go of it.
+   *
+   * The drive state is born here and nowhere else: speed zero, nose where the
+   * parked thing pointed, tuning straight off the blueprint. The body is set
+   * into the driver's seat in the same moment - the pin above deliberately
+   * does not run while driving (the physics carries the body), so without
+   * this snap you would take the wheel from wherever you were standing.
+   *
+   * Keyed on the id rather than the row, because the row is replaced when the
+   * thing is parked - by which point the wheel is already let go.
+   */
+  useEffect(() => {
+    const spec = usingThing?.blueprint?.spec
+    if (!atWheel || !usingThing || !spec?.vehicle) {
+      driveRef.current = null
+      return
+    }
+
+    driveRef.current = {
+      state: { speed: 0, heading: (usingThing.facing * Math.PI) / 2, steer: 0 },
+      tuning: { top: spec.vehicle.speed, turn: spec.vehicle.turn },
+    }
+
+    if (spec.use) {
+      const at = seatOf(usingThing, spec.use, 0)
+      refs.playerRef.current.set(at.x, at.y + EYE_HEIGHT, at.z)
+    }
+    // The row's identity churns with the list; the *drive* changes when the
+    // thing or the wheel does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atWheel, usingThing?.id])
+
+  /**
+   * What the chip in the middle of the HUD is about, this second.
+   *
+   * The thing you are in, then the thing you are next to, then nothing - and
+   * "nothing" is the block, which is what the chip has always drawn. Not the
+   * thing you are *holding*: that has a panel of its own, with its name across
+   * the top and every control that belongs to it, and a chip repeating it was
+   * the same sentence in a second place.
+   *
+   * Null while carrying for the same reason - your hands are full, E is not
+   * offered, and a chip promising a key that does nothing is worse than a chip
+   * showing the block you will place next.
+   */
+  const chipNear = useMemo(() => {
+    const t = dict.things
+
+    if (usingThing) {
+      return {
+        name: usingThing.blueprint?.name ?? '',
+        model: usingThing.blueprint?.spec.model ?? '',
+        line: isTouch ? t.tapLeave : t.leaveIt,
+      }
+    }
+
+    if (carrying || !nearThing) return null
+
+    // Under somebody right now: neither key does anything, so promise nothing.
+    if (drivenThings.has(nearThing.id)) return null
+
+    // In play mode the promise is only good for things you can get into: a
+    // crate you cannot lift and cannot sit on has nothing to say at all.
+    const spec = nearThing.blueprint?.spec
+    const usable = Boolean(spec?.use)
+    if (!canBuild && !usable) return null
+
+    const drives = Boolean(spec && drivable(spec))
+    const using = usable ? (drives ? t.driveIt : t.useIt) : null
+
+    /*
+      Both verbs, when both apply.
+
+      Two short keycap phrases fit on the chip's second line, and in a lobby
+      both are true of the same chair: G sits on it, E moves it. Naming only
+      one would teach the wrong half to whichever person read it - the builder
+      who wanted to nudge the chair, or the guest who wanted to sit.
+
+      On touch there are no keycaps to print. The interact verb has a button
+      of its own down beside the stick, so the chip - which is what a thumb
+      taps - carries the *other* one, and says so.
+    */
+    return {
+      name: nearThing.blueprint?.name ?? '',
+      model: spec?.model ?? '',
+      line: isTouch
+        ? canBuild
+          ? t.tapPickUp
+          : drives
+            ? t.tapDrive
+            : t.tapUse
+        : [using, canBuild ? t.pickUp : null].filter(Boolean).join(' · '),
+    }
+  }, [canBuild, carrying, dict.things, drivenThings, isTouch, nearThing, usingThing])
+
+  /**
+   * What E does to the thing in front of you, as a function rather than a key.
+   *
+   * Pulled out of the key handler because the chip does it too: a phone has no
+   * E, so the thing named on the chip is reached by tapping the chip, and two
+   * spellings of "get into that" that drifted apart would be the kind of bug
+   * only touch players ever see. Returns whether anything happened, which is
+   * what tells the key handler whether to eat the press.
+   */
+  const interact = useCallback(() => {
+    if (carrying) return false
+
+    if (usingThing) {
+      leaveThing()
+      return true
+    }
+
+    if (!nearThing) return false
+
+    // Already under somebody: its row is where the drive *began*, not where
+    // the vehicle is, and boarding it would teleport you across the room onto
+    // a moving kart. G goes quiet, exactly as it does at a full bench.
+    if (drivenThings.has(nearThing.id)) return false
+
+    /*
+      The machine, and the table, before the seat.
+
+      G already meant "use this thing" and now three answers share it: set a
+      machine going, put something down, pick something up. They are checked
+      first because a thing that answers any of them and *also* has seats - a
+      cooker you can lean on - should cook rather than seat you, and because the
+      seat search below returns false at a full bench, which would swallow the
+      key for the half of these things that have no seats at all.
+
+      Only one of the three fires per press. See `reachFor` for why put and take
+      are one verb rather than two.
+    */
+    const machined = nearThing.blueprint?.spec
+    if (machined && answersUse(machined)) {
+      const reach = machined.craft
+        ? reachFor(machined.craft, slotsOn(nearThing.id), heldNow())
+        : ({ do: 'nothing' } as const)
+
+      if (reach.do === 'put') {
+        const at = heldIndex()
+        // Out of the pocket first, so the item is never in two places even for
+        // a frame. If the driver refuses the slot the item is gone, and that is
+        // the trade this direction makes on purpose: putting is the claim you
+        // can afford to lose, because you are standing at the table and can see
+        // that nothing landed. Taking is the one that had to be exact - see
+        // `Pulse.gave`.
+        if (at !== null) takeFromPocket(at)
+        claimThing({ i: nearThing.id, c: myConn(), put: [reach.socket, reach.item] })
+        return true
+      }
+
+      if (reach.do === 'take') {
+        const socket = reach.socket
+        const ask = () =>
+          // Nothing goes into the pocket here. The driver decides who got it
+          // and says so on the next heartbeat, which is what stops one patty
+          // becoming two when two people reach at once.
+          claimThing({ i: nearThing.id, c: myConn(), took: socket })
+
+        /*
+          Free things are instant; priced ones wait for the till.
+
+          The price is on the blueprint, which this client already has, so the
+          common case - a rack in a store room - costs no round trip at all.
+          Only a counter that actually charges pays for the trip, which is
+          exactly where being right matters more than being quick.
+
+          The server is asked with an id and a socket name and works the price
+          out itself; no number crosses the wire. See `payToTake`.
+        */
+        if (priceOfSlot(machined, socket) === 0) {
+          ask()
+          return true
+        }
+
+        void payToTake(slug, {
+          blueprintId: nearThing.blueprintId,
+          socket,
+        }).then((paid) => {
+          if (paid.ok) ask()
+          // A refusal is the till's - not enough coins, or no homestead to
+          // spend from - and it belongs in front of the person who tried.
+          else setThingError(paid.error)
+        })
+        return true
+      }
+
+      claimThing({ i: nearThing.id, c: myConn(), used: true })
+      return true
+    }
+
+    /*
+      No `canBuild` branch, and that is the whole of the two-key split.
+
+      This used to pick the thing *up* whenever you could build, on the
+      argument that the modes never overlap - somebody building a room is
+      moving furniture, somebody playing in one is using it. In a lobby you
+      are both: the same person arranges the chairs and then sits on one, and
+      a single key that guessed which from the mode always guessed wrong for
+      one of them. So the two verbs are two keys - E edits the thing, G uses
+      it - and each one means the same thing in every mode.
+    */
+    const use = nearThing.blueprint?.spec.use
+    if (!use) return false
+
+    /**
+     * The wheel first, when the thing in front of you drives.
+     *
+     * Free is judged by looking, exactly as a seat is: a body standing in the
+     * driver's seat means somebody is there. A taken wheel falls through to
+     * the seat search below, which is how a kart's passenger gets in - the
+     * same G, one thing, two places to be in it.
+     */
+    const spec = nearThing.blueprint?.spec
+    if (spec && drivable(spec)) {
+      const wheelAt = seatOf(nearThing, use, 0)
+      const bodies = [...(refs.transformsRef.current?.values() ?? [])].map(
+        (peer) => peer.current,
+      )
+      const wheelFree = !bodies.some(
+        (body) => Math.hypot(body.x - wheelAt.x, body.z - wheelAt.z) < 0.5,
+      )
+      if (wheelFree) {
+        driveIn(nearThing)
+        return true
+      }
+    }
+
+    /**
+     * Which seat, decided here rather than in the hook.
+     *
+     * Both halves of the question are refs that live in this scene: where you
+     * are standing, and where everybody else's body is drawn. Neither has any
+     * business being state, and passing them into the hook would mean lifting
+     * the whole peer transform map across a boundary it is deliberately on one
+     * side of.
+     *
+     * Null is a full bench, and pressing G at one does nothing - which is the
+     * honest answer, and the reason the prompt is only a promise for things
+     * that can be got into rather than for a seat that is free.
+     */
+    const player = refs.playerRef.current
+    const bodies = [...(refs.transformsRef.current?.values() ?? [])].map(
+      (peer) => peer.current,
+    )
+    const seat = freeSeat(nearThing, use, player, bodies)
+    if (seat === null) return false
+
+    enterThing(nearThing.id, seat)
+    return true
+  }, [
+    carrying,
+    driveIn,
+    drivenThings,
+    enterThing,
+    leaveThing,
+    nearThing,
+    refs,
+    usingThing,
+  ])
+
+  /**
+   * E, the other half: pick the thing up to move or resize it.
+   *
+   * Creative only, and deliberately silent about anything you are *in*: a
+   * chair you are sitting on is not a chair you can pocket, and standing up
+   * first is what G is for. Returns whether it did anything, so the key can
+   * fall through to the block palette when there is nothing to edit - which
+   * is what E has always opened in open space.
+   */
+  const edit = useCallback(() => {
+    if (carrying || !canBuild || !nearThing) return false
+    if (usingThing) return false
+    // Under somebody, and its row is not where it is. Same guard as `interact`.
+    if (drivenThings.has(nearThing.id)) return false
+
+    carryThing(nearThing.id)
+    return true
+  }, [canBuild, carrying, carryThing, drivenThings, nearThing, usingThing])
+
+  /**
+   * E and G, the two things you can do to the thing in front of you.
+   *
+   * E picks it up, and putting it down is the same preview a summon uses. G
+   * gets you *into* it and gets you out again. One key used to do both by
+   * reading the mode; see `interact` for why a lobby broke that.
+   *
+   * The thing's own extra keys are offered while you are in it and are checked
+   * *first*, so a chair that binds Q to a wave eats the Q rather than letting it
+   * through to the emote picker as well. `press` returns whether it was one.
+   */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat || isTyping(event)) return
+
+      // The shelf is a panel over the world, and every panel over this world
+      // shuts on Escape. It was the one that did not.
+      if (event.key === 'Escape' && browsing) {
+        setBrowsing(false)
+        return
+      }
+
+      if (usingThing && pressInThing(event.key)) {
+        claim(event)
+        return
+      }
+
+      const pressed = event.key.toLowerCase()
+
+      /*
+        The pocket.
+
+        Above the G/E gate rather than beside it, because it is not a verb about
+        the thing in front of you - it is a look at what you are carrying, and
+        it should answer whether or not you are standing anywhere in particular.
+      */
+      if (pressed === POCKET_KEY) {
+        /*
+          Shift steps to the next thing in your hand without opening anything.
+
+          Which is the binding `nextInHand` exists for: a kitchen is a place you
+          move through, and opening a menu between every ingredient is the
+          difference between cooking and doing data entry. Same key, because the
+          two are the same idea at two speeds - look at the pocket, or just
+          reach into it.
+        */
+        if (event.shiftKey) nextInPocket()
+        else setPocketOpen((was) => !was)
+        return
+      }
+
+      if (pressed !== 'g' && pressed !== 'e') return
+
+      // A ghost in your hands already: neither key is a third meaning here.
+      // Enter puts the carried thing down and Escape drops it.
+      if (carrying) return
+
+      /*
+        Two keys, two verbs, and each one means the same thing in every mode.
+
+        E edits the thing - pick it up, move it, resize it - and G uses it:
+        sit down, take the wheel, get up. They were one key that guessed from
+        the mode, which is fine anywhere you only build or only play, and
+        wrong in a lobby, where the same person arranges the chairs and then
+        sits on one.
+
+        Each is claimed only when it did something, which is what leaves the
+        other meaning of that key reachable: E over open ground falls through
+        to the block palette, and G with nothing in front of you falls through
+        to the dance. Both of those live in the bubble handler below, which
+        checks `defaultPrevented`.
+      */
+      const did = pressed === 'e' ? edit() : interact()
+      if (!did) return
+
+      claim(event)
+      // Sitting down, taking a wheel or picking something up ends a dance: a
+      // body in a seat playing the dance loop is two idle states at once.
+      setDancing(false)
+    }
+
+    /**
+     * Listened for on the way *down*, not on the way up.
+     *
+     * This key has meant two things in this scene before - act on the thing
+     * you are standing next to, and (when it was E) open the block palette -
+     * and the first attempt at settling
+     * that marked the event handled and had the palette check for the mark.
+     * Which worked exactly until this effect re-ran: its dependencies include
+     * the nearest thing, so it re-registers as you walk, and a listener
+     * re-added is a listener at the *back* of the queue. From then on the
+     * palette ran first and both happened, which is what was reported.
+     *
+     * The capture phase is not a queue position, it is a phase: a capture
+     * listener on `window` runs before every bubble listener on it, whatever
+     * order they were added in. So this cannot lose the race again.
+     */
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [
+    browsing,
+    carrying,
+    claim,
+    edit,
+    interact,
+    pressInThing,
+    setBrowsing,
+    usingThing,
+  ])
+
+  /**
+   * The one contextual thumb button, for the layer that has no keyboard.
+   *
+   * The same decision `act` makes on G, said as a label: get up when you are
+   * in something, take when you are building, drive when it drives, use
+   * otherwise. Null the rest of the time, and null is the dance - see the
+   * `action` prop on <TouchLayer>.
+   */
+  const touchAction = useMemo(() => {
+    const sk = dict.softKeys
+
+    if (carrying) return null
+
+    if (usingThing) return { label: sk.getUp, onPress: () => void interact() }
+
+    if (!nearThing || drivenThings.has(nearThing.id)) return null
+
+    const spec = nearThing.blueprint?.spec
+    if (!spec?.use) return null
+
+    return {
+      label: drivable(spec) ? sk.drive : sk.use,
+      onPress: () => {
+        if (interact()) setDancing(false)
+      },
+    }
+  }, [carrying, dict.softKeys, drivenThings, interact, nearThing, usingThing])
+
+  /**
+   * What pressing the chip itself does.
+   *
+   * The chip names one verb and has to do that one. On touch it is the edit
+   * half whenever there is one, because the interact half has a button; with
+   * a mouse, clicking the picture of a chair means sitting on it, and moving
+   * it is a thing you reach for E to do.
+   */
+  const chipAct = useCallback(() => {
+    if (isTouch && canBuild) {
+      if (edit()) return
+    }
+    if (interact()) {
+      setDancing(false)
+      return
+    }
+    edit()
+  }, [canBuild, edit, interact, isTouch])
+
   const controls = useMemo(
-    () => loungeControls({ isTouch, flying, canBuild, combat, dict }),
-    [isTouch, flying, canBuild, combat, dict],
+    () =>
+      loungeControls({
+        isTouch,
+        flying,
+        canBuild,
+        combat,
+        // The Tab row, and only for the pair who may press it - the panel's
+        // rule is that it never promises a key that does nothing here.
+        canSetMode: Boolean(canSetMode && presence),
+        dict,
+      }),
+    [isTouch, flying, canBuild, combat, canSetMode, presence, dict],
   )
 
   const lookDrag = useLookDrag(lookRef, isTouch && touchActive)
@@ -1744,9 +2845,22 @@ export function LoungeScene({
       // starts a dance and throws a kick on the way past. See `isTyping`.
       if (isTyping(event)) return
 
+      // Something nearer to hand already answered this key - a crate picked up,
+      // a chair sat in. See the G handler above, which marks the event.
+      if (event.defaultPrevented) return
+
       if (event.code === 'KeyE') {
         if (!canBuild) return
         event.preventDefault()
+
+        /*
+          The palette, always - the shelf is `/xo`.
+
+          This used to open the shelf whenever a thing was in hand, so that the
+          key agreed with the chip. The chip has since gone back to showing the
+          block whenever there is no thing in front of you, and the key follows
+          it: what E opens is what the chip is showing.
+        */
         setPickerOpen((current) => {
           if (!current && document.pointerLockElement) document.exitPointerLock()
           return !current
@@ -1808,6 +2922,33 @@ export function LoungeScene({
         // in the rooms where you can do both, a kick must not also break a wall.
         // Filtered on `repeat` for the same reason F is.
         if (!event.repeat && active) kickRef.current.requested = true
+      } else if (event.code === 'Tab') {
+        /**
+         * Tab flips the world between building and fighting.
+         *
+         * The switch is a chip in the corner of the HUD, and reaching for it
+         * costs the thing the chip is for: the pointer is locked to the world,
+         * so changing mode means unlocking, aiming at a ten-pixel button and
+         * clicking back in. Which is fine once and wrong every time after that,
+         * because the two modes are a pair somebody flips between while showing
+         * a room what it does.
+         *
+         * Exactly the button's own gate - `canSetMode` is the owner/admin pair,
+         * and without `presence` there is nobody to tell - so this can never do
+         * something the corner of the screen says is not offered.
+         *
+         * And only while somebody is actually driving, which no other key here
+         * needs and this one does. Tab is how a keyboard reaches a panel's
+         * buttons, and the moment a panel is open - the block picker, the
+         * emotes - the pointer is unlocked and `active` is false: so the key
+         * belongs to the browser again exactly when a person is using it to get
+         * around. Anybody who may not flip the mode never loses it at all.
+         */
+        if (!active || !canSetMode || !presence || modeBusy) return
+        event.preventDefault()
+        // Held down is one flip, not a mode per key repeat - each of those is
+        // a write, and a room being told twenty times which mode it is in.
+        if (!event.repeat) changeMode(mode === 'battle' ? 'creative' : 'battle')
       } else if (event.code === 'Escape') {
         setPickerOpen(false)
         setEmotesOpen(false)
@@ -1817,7 +2958,7 @@ export function LoungeScene({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
     // Refs from the bundle: stable, so listing them is free. See ./_scene/scene-refs.
-  }, [active, canBuild, dashRef, kickRef])
+  }, [active, canBuild, canSetMode, changeMode, dashRef, kickRef, mode, modeBusy, presence])
 
   // The click handler needs the *current* target without re-subscribing a DOM
   // listener every time the crosshair moves, which is many times a second.
@@ -1909,6 +3050,23 @@ export function LoungeScene({
        * what that means. A second way to change mode would be a second thing
        * that can disagree about what mode it is.
        */
+      /**
+       * Something in your hands takes the click, before anything else does.
+       *
+       * Building is the same two buttons - left breaks a block, right places
+       * one - so without this, lining a bench up against a wall and clicking
+       * puts a *block* there instead, and the bench is still in your hands. The
+       * report was exactly that: "the blocks are blocking the placing".
+       *
+       * Both buttons are swallowed rather than only the left one. Right-click
+       * while holding something is somebody reaching for the other way to
+       * place, not somebody asking for a block behind it.
+       */
+      if (carryingRef.current) {
+        if (button === 0) void placeThingRef.current(carryAtRef.current)
+        return
+      }
+
       const onMenu = vrMenuAim.current
       if (onMenu) {
         if (button === 0) {
@@ -1935,7 +3093,27 @@ export function LoungeScene({
       if (button === 0 && current.hit) {
         remove(current.hit)
       } else if (button === 2 && current.place) {
-        place(current.place, selected)
+        /**
+         * Another one, where you are pointing.
+         *
+         * The same button that places another block, because it is the same
+         * act - you have something in hand and you are putting one down. It
+         * drops to the surface under the crosshair rather than sitting in the
+         * cell against the face, for the reason `dropTo` gives: that cell is
+         * right for a cube and hangs a bench in the air beside a wall.
+         */
+        if (held) {
+          const cell = current.place
+          summonThing({
+            kind: 'blueprint',
+            id: held.id,
+            name: held.name,
+            model: held.model,
+            mine: held.mine,
+          })
+        } else {
+          place(current.place, selected)
+        }
       }
     },
     [place, remove, selected, canSetMode, presence, changeMode, setSelectedImageId],
@@ -2293,6 +3471,26 @@ export function LoungeScene({
           onDrop={(event) => {
             if (readOnly) return
             event.preventDefault()
+
+            /**
+             * A model dragged out of the shelf, and dropped into the room.
+             *
+             * The same drop the pictures already use, carrying a *model id*
+             * instead of a file - which is why it is checked first: a browser
+             * hands both over on the same event, and a drag that had neither
+             * falls through to the picture path exactly as it did before.
+             *
+             * It puts the thing in your hands rather than on the floor. The
+             * drop tells us *what*, and where a bench goes is a decision worth
+             * a second look - the preview is already the place that decision is
+             * made, with a turn, a size and a box round it.
+             */
+            const model = event.dataTransfer?.getData(THING_DRAG) ?? ''
+            if (model) {
+              summonThing({ kind: 'model', model, name: nameForModel(model) })
+              return
+            }
+
             const file = Array.from(event.dataTransfer?.files ?? []).find((candidate) =>
               candidate.type.startsWith('image/'),
             )
@@ -2329,6 +3527,12 @@ export function LoungeScene({
             reason.
           */}
           <Canvas
+            /*
+              Changed when the surface has been taken and did not come back: a
+              new canvas asks for a context of its own, which is the only thing
+              that reliably works. See `useSurface`.
+            */
+            key={surface.key}
             shadows="percentage"
             camera={{ position: spawn, fov: 70, far: 600 }}
             /* Where the resolution starts. See <AdaptiveResolution>, which owns
@@ -2337,6 +3541,7 @@ export function LoungeScene({
             gl={{ preserveDrawingBuffer: true }}
           >
             <AdaptiveResolution />
+            <KeepContext onChange={surface.watch} />
             <Shutter />
             {/* Fog, lights, and the party's rig while it is on. See ./lounge-sky. */}
             <LoungeLighting party={party} />
@@ -2369,21 +3574,91 @@ export function LoungeScene({
                 selectedId={selectedImageId}
                 onSelect={setSelectedImageId}
               />
+
+              {/*
+                Inside <Rainbow> with the blocks and the pictures, because a
+                summoned thing is scenery: rainbow mode repaints the world and a
+                bench that stayed wooden while the wall behind it turned to glass
+                would look like the bench had been missed.
+              */}
+              <LoungeThings
+                things={things}
+                selectedId={selectedThingId}
+                carrying={carriedThing?.movingId ?? null}
+                hidden={drivenThings}
+                solids={thingSolids}
+                ground={blocks}
+                /*
+                  Where a kicked thing came to rest. Only for somebody who may
+                  build: a visitor in a read-only room can knock a ball about
+                  for as long as they are standing there, and the room forgets
+                  it - which is the same promise every other thing keeps.
+                */
+                onMoved={canBuild ? moveThing : undefined}
+                /*
+                  The wire the machines talk over. Handed down rather than
+                  reached for: the socket belongs to `use-things`, which lives
+                  out here, and the clock that reads it has to live inside the
+                  Canvas.
+                */
+                live={thingLive}
+                /*
+                  The same `combat` that decides whether *people* can hit each
+                  other, and deliberately not a second switch. A room where a
+                  dash does nothing to a person and takes a crate apart would be
+                  a room with two answers to one question - and in creative mode
+                  the E that would swing is the E that picks the crate up.
+                */
+                fighting={combat}
+              />
             </Rainbow>
 
             <CosmicGround />
             <SelfAvatar
               model={wearing}
+              /*
+                A clip a thing is making the body play, mapped onto the four this
+                rig actually has. A blueprint may name any clip - which clips
+                exist is the body's business, and this app has two kinds of body
+                - so a name this pack does not carry arrives as null and the
+                body simply stands there, which is what a chair with a missing
+                clip should look like.
+              */
+              posing={asAvatarClip(bodyClip)}
+              pose={spacePose}
               // Our own side. Always 'ally' when there is one - the ring says
               // which colour you are, and you are on your own side by definition.
               tone={teams ? 'ally' : undefined}
               // Visible in the mirror too, and obviously so: the mirror exists to
-              // look at this body, and first-person hides it.
-              visible={thirdPerson || mirror}
+              // look at this body, and first-person hides it. A vehicle that
+              // swallows its driver hides it everywhere - see `cloaked`.
+              visible={(thirdPerson || mirror) && !cloaked}
               dancing={dancing}
               party={party ? (presence?.userId ?? 'you') : null}
               partyHost={Boolean(presence && partyHost === presence.userId)}
             />
+            {/*
+              The kart under your own body, while you are at its wheel. A
+              sibling of <SelfAvatar> rather than part of the things above,
+              because while it is driven it is not furniture - it follows the
+              player ref, and its parked row is hidden with `drivenThings`.
+            */}
+            {atWheel && usingThing && (
+              <DrivenVehicle thing={usingThing} drive={driveRef} />
+            )}
+            {/*
+              Riding along: while somebody else holds the wheel of the thing
+              you are sitting in, your seat follows their live body instead of
+              the parked row. Writes the same pin the chair writes, per frame.
+            */}
+            {ridingDriverId && usingThing && (
+              <RideAlong
+                thing={usingThing}
+                seat={usingSeat}
+                driverId={ridingDriverId}
+                seatRef={seatRef}
+              />
+            )}
             {presence && (
               <Multiplayer
                 topic={
@@ -2397,6 +3672,12 @@ export function LoungeScene({
                 name={presence.name}
                 avatar={wearing}
                 dancing={dancing}
+                aboard={
+                  usingThing?.blueprint?.spec && drivable(usingThing.blueprint.spec)
+                    ? { thing: usingThing.id, seat: atWheel ? 0 : usingSeat }
+                    : null
+                }
+                onDriving={onPeerDriving}
                 health={health}
                 roomRef={roomRef}
                 onRoom={onRoom}
@@ -2529,7 +3810,22 @@ export function LoungeScene({
               </Suspense>
             )}
             <Targeting onTarget={onTarget} vrRay={vrRayRef} />
+            {/*
+              What you are standing next to, answered inside the Canvas because
+              it depends on where the player is this frame. Everything counts in
+              creative mode, where E is "pick that up"; only what can be got into
+              counts while playing, where the prompt is a promise.
+            */}
+            <Usables things={things} all={canBuild} onNear={setNearId} />
             {canBuild && <Preview target={target} />}
+            {carrying && (
+              <ThingPreview
+                model={carrying.model}
+                cell={carryAt}
+                facing={carriedThing?.facing ?? 0}
+                scale={carriedThing?.scale ?? 1}
+              />
+            )}
             <PlayerControls
               onLockChange={setLocked}
               pointerLock={!isTouch}
@@ -2537,6 +3833,11 @@ export function LoungeScene({
               mirror={mirror}
               fly={flying}
               blocks={blocks}
+              solids={thingSolids}
+              seat={seatRef}
+              drive={driveRef}
+              focus={carryAtRef}
+              stamina={staminaOn}
               combat={combat}
               dead={dead}
               onDash={noteDash}
@@ -2545,6 +3846,29 @@ export function LoungeScene({
               watching={!entered || overview}
             />
           </Canvas>
+
+          {/*
+            Said over the canvas rather than instead of it: the surface may come
+            back on its own, and a scene torn down to show a message could not
+            take it back if it did.
+          */}
+          {surface.lost && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0a0616]/90 p-6 text-center">
+              <div className="max-w-sm">
+                <p className="text-sm font-medium text-ink">{dict.hud.lostTitle}</p>
+                <p className="mt-2 text-xs leading-relaxed text-ink-muted">
+                  {dict.hud.lostBody}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="mt-4 rounded-full border border-fuchsia-400/50 px-4 py-1.5 text-xs text-fuchsia-200 transition hover:bg-fuchsia-500/15"
+                >
+                  {dict.hud.lostReload}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/*
@@ -2557,6 +3881,21 @@ export function LoungeScene({
           the last of the way into the background so there is no border to find.
         */}
         <div className="pointer-events-none absolute inset-0 rounded-[3rem] shadow-[inset_0_0_140px_60px_#0a0616]" />
+
+        {/*
+          The rain, over everything and under nothing: same rounding and the
+          same clip as the viewport, so it stops at the room's edge rather than
+          squaring off the corners the whole scene is drawn inside.
+
+          Mounted only while it runs. It holds a canvas and a rAF loop, and a
+          layer that is present-but-idle for the whole session is a loop
+          somebody eventually forgets is there.
+        */}
+        {swap !== null && (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[3rem]">
+            <BodySwap seed={swap} onDone={() => setSwap(null)} />
+          </div>
+        )}
 
         {/*
           The way out to the café, the house and the garden used to be a bar
@@ -2604,25 +3943,88 @@ export function LoungeScene({
             peep={{
               current: look.animal,
               onChange: (pick) => {
-                setLook({ worn: pick, animal: pick, skin: null })
-                void chooseAvatar(pick)
+                // The peep half only. The XP body is left exactly where it was,
+                // which is the point: picking a fox does not sell the Knight.
+                setLook((was) => ({ ...was, animal: pick, dummy: false }))
+                // `chooseAvatar` clears the dummy in the same write, so an
+                // animal never has to be picked twice to actually appear.
+                if (!demo) void chooseAvatar(pick)
               },
-              ...(skins && skins.length > 0
-                ? {
-                    skins,
-                    wearing: look.skin,
-                    /**
-                     * The same optimism the animal gets: the body changes on
-                     * the click and the save follows it. Taking a skin off
-                     * falls back to the animal already in hand, so the room
-                     * never shows an empty body while a round trip lands.
-                     */
-                    onWearSkin: (id: string | null) => {
-                      setLook((was) => ({ ...was, worn: id ?? was.animal, skin: id }))
-                      void wearLoungeSkin(id)
+              /**
+               * The peep's mannequin, as a switch beside the animals.
+               *
+               * The animal is kept underneath, so taking it off gives back the
+               * one that was already there - see `wearDummy`. Nothing here
+               * touches the XP body.
+               */
+              dummy: {
+                on: look.dummy,
+                onToggle: (next) => {
+                  setLook((was) => ({ ...was, dummy: next }))
+                  if (demo) return
+                  void wearDummy(next)
+                },
+              },
+              /**
+               * The other body, and the mode.
+               *
+               * `onWear` equips for the games and changes nothing you can see in
+               * here unless the mode is on; `onShow` is what changes the room.
+               * They used to be one call - `wearLoungeSkin`, which equipped and
+               * switched the mode in a single write - and that is why a bought
+               * body replaced the peep in every space at once.
+               *
+               * Absent in the demo and for anybody with no account: both writes
+               * go through `requireUser`, which *redirects to the login page*
+               * rather than returning a refusal, so a visitor who clicked here
+               * would find themselves at a sign-in form. The room changes and
+               * nothing is written.
+               */
+              xp: demo
+                ? undefined
+                : {
+                    skins: skins ?? [],
+                    wearing: look.xp,
+                    onWear: (id) => {
+                      /**
+                       * Taking the XP body off takes the mode with it: a world
+                       * told to show a body that is not there would draw the
+                       * dummy while the switch claimed otherwise, and the save
+                       * refuses that combination anyway.
+                       */
+                      setLook((was) => ({
+                        ...was,
+                        xp: id,
+                        showXp: id === null ? false : was.showXp,
+                      }))
+                      void chooseSkin(id)
                     },
-                  }
-                : {}),
+                    showing: look.showXp,
+                    problem: xpProblem,
+                    /**
+                     * The one write in this panel whose answer is worth
+                     * reading. The others change what you own; this one changes
+                     * what the room draws, and the room has already changed by
+                     * the time the server answers - so a refusal that is thrown
+                     * away leaves the switch claiming a body nobody else can
+                     * see, until the next server render silently puts it back.
+                     *
+                     * So: flip, play the rain, and put it back with a sentence
+                     * if the save says no. Rolled back rather than left alone
+                     * because the mode is not a local preference - it is what
+                     * every other person in the room is being shown.
+                     */
+                    onShow: (next) => {
+                      setLook((was) => ({ ...was, showXp: next }))
+                      setXpProblem(null)
+                      setSwap((n) => (n ?? 0) + 1)
+                      void wearSkinInLounge(next).then((result) => {
+                        if (result.ok) return
+                        setLook((was) => ({ ...was, showXp: !next }))
+                        setXpProblem(result.error)
+                      })
+                    },
+                  },
             }}
             className={emoteAnchor(hand)}
           />
@@ -2649,6 +4051,12 @@ export function LoungeScene({
           entered={entered}
           readOnly={readOnly}
           canBuild={canBuild}
+          /*
+            What the one key in front of somebody would do, and the way to do
+            it without a keyboard. See `chipNear`.
+          */
+          near={chipNear}
+          onAct={chipAct}
           blockCount={blocks.size}
           pending={pending}
           saving={saving}
@@ -2741,6 +4149,135 @@ export function LoungeScene({
           />
         )}
 
+        {/*
+          What you are holding, before it is put down.
+
+          Above the image panel in the same corner and never at the same time as
+          it: selecting a picture and carrying a bench are two different jobs,
+          and the one you are doing is the one you last started.
+        */}
+        {carriedThing && (
+          <ThingPanel
+            carrying={carrying}
+            matches={carriedThing.matches}
+            index={carriedThing.index}
+            facing={carriedThing.facing}
+            scale={carriedThing.scale}
+            cell={carryAt}
+            dict={dict.things}
+            busy={false}
+            onNudge={nudgeSummon}
+            onShove={shoveCarried}
+            step={moveStep}
+            onStep={setMoveStep}
+            onPlace={() => void placeThing(carryAtRef.current)}
+            onCancel={cancelSummon}
+            /*
+              Removing what is in your hands, which is the other half of having
+              picked it up. Only ever a thing that already exists - `/xo` places
+              directly now - so there is always something to remove.
+            */
+            onRemove={
+              carriedThing?.movingId
+                ? () => {
+                    const id = carriedThing.movingId
+                    cancelSummon()
+                    if (id) dismissThing(id)
+                  }
+                : undefined
+            }
+            /*
+              Gravity, beside turn and size rather than out on the HUD.
+
+              Only for your own blueprints, and only once the thing in hand has
+              one: a catalogue model summoned by name has no row on the shelf
+              yet, so there is nothing to write to until it is put down.
+            */
+            falls={held?.falls}
+            onFalls={
+              held?.mine ? (falls) => setFalls(held.id, falls) : undefined
+            }
+            solid={held?.solid}
+            onSolid={held?.mine ? (solid) => setSolid(held.id, solid) : undefined}
+          />
+        )}
+
+        {/*
+          What you just put in the room.
+
+          It used to carry the E prompt as well, which put the same sentence on
+          screen twice: this pill read "E - pick up Dummy Base" and the chip
+          under it read "Dummy Base / Press E". The key is announced once now,
+          on the chip, on the thing it acts on - and what is left here is the
+          one line no chip can say, because it is about something that already
+          happened rather than something you could do.
+        */}
+        {!carrying && announced && (
+          <div className="pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80">
+            {/*
+              What just appeared wins the line while it is being said.
+
+              The three readings are the same sentence at three moments - here
+              is the thing you made, here is the thing you are standing next to,
+              here is the way out of the thing you are in - so they share one
+              place rather than stacking into a column of captions.
+            */}
+            {fill(dict.things.placed, { name: announced })}
+          </div>
+        )}
+
+        {/*
+          The shelf, over the room. Opened by a bare `/xo` - see `ask`.
+
+          Above the carried preview in the stack and never at the same time as
+          it: picking a tile closes this and puts the thing in your hands, which
+          is the whole of the flow this panel exists to shorten.
+        */}
+        {browsing && (
+          <ThingiverseView
+            shelf={thingShelf}
+            dict={dict.things}
+            onSummon={(match) => {
+              // Placed *and* kept in hand: the chip becomes this, so putting a
+              // second one down is a right-click rather than another trip
+              // through the shelf. Blocks have always worked that way.
+              setHeldModel(match.model)
+              summonThing(match)
+            }}
+            onClose={() => setBrowsing(false)}
+          />
+        )}
+
+        {/*
+          `/clip`: what this body can do, and what the thing you are in adds.
+
+          The body's four rather than a list from the blueprint, because the
+          clips a body has are the *body's* - see `AVATAR_CLIPS`. A blueprint
+          may name anything and the renderer plays what it recognises, so a
+          menu built from the blueprint would offer rows that do nothing.
+        */}
+        {clipMenu && (
+          <ClipMenu
+            clips={bodyClips}
+            bound={usingThing?.blueprint?.spec.use?.inputs ?? []}
+            dict={dict.things}
+            onPlay={(clip) => {
+              playClip(clip)
+              setClipMenu(false)
+            }}
+            onClose={() => setClipMenu(false)}
+          />
+        )}
+
+        {thingError && (
+          <div
+            role="alert"
+            className="absolute bottom-48 left-1/2 max-w-md -translate-x-1/2 rounded-lg bg-red-600/90 px-3 py-2 text-xs text-white"
+          >
+            {thingError}
+          </div>
+        )}
+
         {imageError && (
           <div
             role="alert"
@@ -2755,6 +4292,11 @@ export function LoungeScene({
             {dict.image.working}
           </div>
         )}
+
+        {/* Only when the space charges for running - see `StaminaBar`. */}
+        {staminaOn && !readOnly && <StaminaBar />}
+
+        <PocketPanel open={pocketOpen} onClose={() => setPocketOpen(false)} />
 
         {football && <KickoffCountdown />}
         {football && <HostStalledBadge />}
@@ -2866,8 +4408,14 @@ export function LoungeScene({
           under a menu is not something anybody is trying to reach, and leaving it
           mounted means a stray thumb walks you across the room while you are
           choosing a block.
+
+          The same is true twice over while something is being placed. The stick
+          sits in the bottom-left corner for a right-handed player, which is
+          exactly where the carry panel is - and the walk is suspended anyway
+          while the camera is parked on the thing, so what would be drawn under
+          that panel is a control that cannot do the one thing it depicts.
         */}
-        {isTouch && touchActive && !pickerOpen && (
+        {isTouch && touchActive && !pickerOpen && !carrying && !browsing && (
           <TouchLayer
             hand={hand}
             dict={dict}
@@ -2881,6 +4429,7 @@ export function LoungeScene({
             flying={flying}
             dancing={dancing}
             onDancing={setDancing}
+            action={touchAction}
             onPlace={place}
             onRemove={remove}
           />
@@ -2888,4 +4437,19 @@ export function LoungeScene({
       </div>
     </SceneRefsProvider>
   )
+}
+
+/**
+ * A clip name off a blueprint, as one of the four this rig has.
+ *
+ * Null for anything else, including null itself. The blueprint's vocabulary is
+ * deliberately open - see `UseSpec` - and this is the one place it meets a
+ * closed one, so the narrowing happens here rather than at the boundary where
+ * a name is written down.
+ */
+function asAvatarClip(name: string | null): AvatarClip | null {
+  if (!name) return null
+  return (Object.values(AVATAR_CLIPS) as readonly string[]).includes(name)
+    ? (name as AvatarClip)
+    : null
 }

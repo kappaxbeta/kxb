@@ -5,8 +5,20 @@ import { MagazineSection } from '@/app/t/[slug]/browse/magazine-section'
 import { ShelfFollow } from '@/app/t/[slug]/browse/shelf-follow'
 import { ProjectShelf, type ProjectCartridge } from '@/app/t/[slug]/browse/project-shelf'
 import { cartridgeOf } from '@/app/t/[slug]/browse/project-cartridge'
+import { ClipsPanel } from '@/app/t/[slug]/thingiverse/clips-panel'
+import { EmoteTreeEditor } from '@/app/t/[slug]/thingiverse/emote-tree-editor'
+import { Hub } from '@/app/t/[slug]/thingiverse/hub'
+import { Shelf } from '@/app/t/[slug]/thingiverse/shelf'
+import { Showcase } from '@/app/t/[slug]/thingiverse/showcase'
+import { PacksPanel } from '@/app/t/[slug]/thingiverse/workbench'
 import { WorldCard } from '@/app/worlds/world-card'
 import { readShelf } from '@/domain/magazine/shelf'
+import { thingiverseProjection } from '@/domain/thingiverse/projection'
+import { readAvatarHere } from '@/domain/profile/avatar-queries'
+import { readXpBody } from '@/domain/skins/queries'
+import { walk } from '@/domain/thingiverse/emote-tree'
+import { MODEL_COUNT } from '@/domain/thingiverse/models'
+import { listBlueprints, listClips, readEmoteTree } from '@/domain/thingiverse/queries'
 import { listSpaceWorlds } from '@/domain/worlds/queries'
 import { xpsProjection } from '@/domain/xps/projection'
 import {
@@ -18,6 +30,7 @@ import {
 } from '@/domain/xps/queries'
 import { runProjection } from '@/es/projection'
 import {
+  hasTier,
   requireFeature,
   requireTenant,
   requireProjects,
@@ -69,10 +82,22 @@ export const dynamic = 'force-dynamic'
  */
 export default async function SpaceBrowsePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  /**
+   * The thingiverse tab's own filter, carried in the URL.
+   *
+   * Client state everywhere else on this page - see `BrowseTabs` - and a query
+   * string here for the one reason that argument allows: 5,770 models cannot be
+   * searched in the browser, so the search is a plain `method="get"` form and
+   * the answer has to come back from the server. It lands on the first tab,
+   * which is the tab that asked, so the round trip returns where it left.
+   */
+  searchParams: Promise<{ q?: string; pack?: string }>
 }) {
   const { slug } = await params
+  const { q, pack } = await searchParams
 
   const context = await requireTenant(slug)
   requireFeature(context, 'worlds')
@@ -130,10 +155,55 @@ export default async function SpaceBrowsePage({
   // already above, and printing it twice would make the second list read as a
   // filter of the first rather than as a different question.
   const elsewhere = owned.filter((project) => project.tenantId !== tenant.id)
+
+  /**
+   * The thingiverse's own shelf, or null when this space has no thingiverse.
+   *
+   * Both gates, exactly as the page it came from ran them and as the layout
+   * runs them for the rail: the installation flag *and* `xo`. The tier is the
+   * half worth naming - furnishing a room is world-building, and world-building
+   * is what xo is.
+   *
+   * Null rather than an empty list, so the tab is absent rather than empty. A
+   * tab that exists and says nothing is a promise of a feature this space does
+   * not have, which is the rule the whole surface is gated on.
+   *
+   * Its own await rather than a fifth entry in the `Promise.all` above: the
+   * projection has to be caught up before the shelf is read, and putting a
+   * two-step sequence into a list of independent queries is how one of them
+   * quietly starts reading a table the other has not finished writing.
+   */
+  const things =
+    context.features.thingiverse && hasTier(context, 'xo')
+      ? await (async () => {
+          await runProjection(supabase, thingiverseProjection, tenant.id)
+
+          /**
+           * The shelf, the clips and the body, together.
+           *
+           * The projection first and on its own - see above - then four
+           * independent reads at once. The body is two of them because an
+           * account has two and keeps both: the animal, which every space draws
+           * by default, and the XP skin, which one draws only when asked. See
+           * `readXpBody` and the note there about why conflating the two put a
+           * Knight in the lounge.
+           */
+          const [shelf, clips, menu, avatar, body] = await Promise.all([
+            listBlueprints(supabase, tenant.id, user.id),
+            listClips(supabase, tenant.id, user.id),
+            readEmoteTree(supabase, tenant.id),
+            readAvatarHere(supabase, user.id, tenant.id),
+            readXpBody(supabase, user.id),
+          ])
+          return { shelf, clips, menu, avatar, body }
+        })()
+      : null
+
   const locale = await readLocale()
   const t = browseDict(locale)
   const needWords = xpDict(locale).needs
   const worldWords = workspaceDict(locale).worlds
+  const thingWords = workspaceDict(locale).thingiverse
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-8">
@@ -153,6 +223,121 @@ export default async function SpaceBrowsePage({
       */}
       <BrowseTabs
         tabs={[
+          /*
+            The thingiverse, first.
+
+            First because `BrowseTabs` opens on `tabs[0]` and this is the tab
+            somebody arriving is most often after: the magazine and the store are
+            catalogues you visit, and this is a workbench you *use*. It also had
+            a row of its own in the navigation, which is what it replaces - a
+            surface with one shelf on it did not earn a permanent line beside
+            Dashboard and Battle, and it belongs in here with the other two
+            answers to "what is this space made of".
+
+            Spread rather than a `show` flag, because `BrowseTabs` takes a list
+            and a hole in it would be a tab that renders as nothing. See
+            `things`, which is null when this space has no thingiverse.
+          */
+          ...(things
+            ? [
+                {
+                  id: 'thingiverse',
+                  label: thingWords.heading,
+                  count: things.shelf.length,
+                  panel: (
+                    <section aria-label={thingWords.heading} className="space-y-6">
+                      {/*
+                        Who you are, above what you make.
+
+                        Everything behind the three doors is measured against a
+                        body - a seat is where one stands, a clip is what one
+                        does, a held item hangs off one's hand - so the body is
+                        the first thing on the page. See `Showcase`.
+                      */}
+                      <Showcase
+                        slug={slug}
+                        avatar={things.avatar}
+                        skin={things.body.model}
+                        inLounge={things.body.inLounge}
+                        hasShop={context.features.skin_shop}
+                        t={thingWords.you}
+                      />
+
+                      <Hub
+                        slug={slug}
+                        t={thingWords}
+                        counts={{
+                          blueprints: things.shelf.filter((one) => !one.spec.vehicle).length,
+                          vehicles: things.shelf.filter((one) => one.spec.vehicle).length,
+                          clips: things.clips.length,
+                          emotes: walk(things.menu.tree).length,
+                          models: MODEL_COUNT,
+                        }}
+                        /*
+                          Rendered here rather than inside the hub, because all
+                          three are server components reading this page's data
+                          and the hub is only the client that switches between
+                          them. Just the open one is mounted; the other two cost
+                          their markup in the payload and nothing else.
+                        */
+                        panels={{
+                          /*
+                            Without the vehicles, which have a door of their
+                            own. One thing behind one door: a kart listed here
+                            *and* there would make each door's count disagree
+                            with what the other shows, and "where did my car
+                            go" has to have one answer.
+                          */
+                          blueprints: (
+                            <Shelf
+                              slug={slug}
+                              shelf={things.shelf.filter((one) => !one.spec.vehicle)}
+                              t={thingWords}
+                              headed={false}
+                            />
+                          ),
+                          /*
+                            The same shelf, filtered the other way. A vehicle
+                            *is* a blueprint - one row, one spec, with a
+                            `vehicle` block on it - so this is a view of the
+                            list rather than a second list, and every control
+                            on a row keeps working.
+                          */
+                          vehicles: (
+                            <Shelf
+                              slug={slug}
+                              shelf={things.shelf.filter((one) => one.spec.vehicle)}
+                              t={thingWords}
+                              headed={false}
+                            />
+                          ),
+                          clips: (
+                            <ClipsPanel slug={slug} clips={things.clips} t={thingWords.clips} />
+                          ),
+                          emotes: (
+                            <EmoteTreeEditor
+                              slug={slug}
+                              tree={things.menu.tree}
+                              clips={things.clips}
+                              t={thingWords.emotes}
+                            />
+                          ),
+                          models: (
+                            <PacksPanel
+                              shelf={things.shelf}
+                              q={q}
+                              pack={pack}
+                              t={thingWords}
+                              href={`/t/${slug}/browse`}
+                            />
+                          ),
+                        }}
+                      />
+                    </section>
+                  ),
+                },
+              ]
+            : []),
           {
             id: 'magazine',
             label: t.tabs.magazine,

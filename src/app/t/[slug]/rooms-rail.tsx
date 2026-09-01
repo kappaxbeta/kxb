@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useId, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import {
   closeRoom,
   createRoom,
@@ -15,8 +15,9 @@ import {
 } from '@/domain/rooms/actions'
 import { ROOM_GROUP_MAX } from '@/domain/rooms/events'
 import { ROOM_ICONS, ROOM_TINTS } from '@/domain/rooms/look'
-import { groupNames } from '@/domain/rooms/places'
+import { groupNames, groupRooms, LOOSE_SHOWN } from '@/domain/rooms/places'
 import { RoomGlyph, tintClass } from '@/app/t/[slug]/room-icons'
+import { Icon } from '@/app/t/[slug]/rail-icons'
 import { attempt } from '@/app/components/connection'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
@@ -76,8 +77,25 @@ export function RoomsRail({
   const [visibility, setVisibility] = useState<RoomVisibility>('open')
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  /** The room whose row has turned into a name field, if any. */
-  const [renaming, setRenaming] = useState<string | null>(null)
+  /**
+   * The room whose panel is open, if any, and what its name field holds.
+   *
+   * One panel at a time and one control to open it. The row used to carry two
+   * - `Rename`, which turned the row itself into a field, and `Look`, which
+   * opened everything else - and they were two doors onto the same job:
+   * nobody renames a room except while reading the list they are renaming it
+   * in, which is exactly what the panel is for.
+   *
+   * On the *row* rather than in the "This room" panel below, and that is the
+   * whole placement decision. That panel is about the room you are standing
+   * in, which is the right home for the level and the fixture - you have to be
+   * in a room to care what it is playing. A name, a group and an icon are the
+   * opposite: the reason anybody sets one is that they are looking at the list
+   * and cannot tell two rooms apart, and making them walk into each room in
+   * turn to fix that is asking them to leave the only screen the problem is
+   * visible on.
+   */
+  const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   /**
    * What is typed in the group field, and which room it is about.
@@ -89,20 +107,16 @@ export function RoomsRail({
    * which the new room briefly wears the old room's group.
    */
   const [grouping, setGrouping] = useState<{ roomId: string; value: string } | null>(null)
-  /** The datalist the group field offers, named once so both ends agree. */
-  const groupsId = useId()
   /**
-   * The room whose face is open for editing, if any.
+   * Whether the loose band is showing all of itself.
    *
-   * On the *row* rather than in the "This room" panel below, and that is the
-   * whole placement decision. The panel is about the room you are standing in,
-   * which is the right home for the level and the fixture - you have to be in a
-   * room to care what it is playing. An icon is the opposite: the reason
-   * anybody sets one is that they are looking at the list and cannot tell two
-   * rooms apart, and making them walk into each room in turn to fix that is
-   * asking them to leave the only screen the problem is visible on.
+   * Held here rather than per band, because there is only ever one band it can
+   * be about - the captions are never cut. Kept for as long as the rail lives:
+   * somebody who opened the pile once is arranging it, and folding it back up
+   * under them between two edits would be the panel disagreeing with what they
+   * are plainly doing.
    */
-  const [facing, setFacing] = useState<string | null>(null)
+  const [allLoose, setAllLoose] = useState(false)
   /**
    * The levels this space can play, once somebody has asked for the picker.
    *
@@ -124,6 +138,11 @@ export function RoomsRail({
    * kept - that one is the space's, not the room's.
    */
   const [swapping, setSwapping] = useState<string | null>(null)
+
+  /** The rooms as this panel draws them: under their captions, loose last. */
+  const bands = groupRooms(rooms ?? [])
+  /** The captions in use, offered as chips before the field is reached for. */
+  const groups = groupNames(rooms ?? [])
 
   /** The room this rail is being rendered inside, if it is one. */
   const here = rooms?.find((room) => pathname.startsWith(`/t/${slug}/rooms/${room.slug}`))
@@ -245,9 +264,8 @@ export function RoomsRail({
    * makes the second call a no-op rather than a second append.
    */
   function rename(room: RoomView) {
-    if (renaming !== room.roomId) return
+    if (editing !== room.roomId) return
     const next = draft.trim()
-    setRenaming(null)
     // An empty field or the name it already had is a cancel, not an error to
     // put in front of somebody who has just pressed Escape's slower cousin.
     if (next.length === 0 || next === room.name) return
@@ -502,141 +520,156 @@ export function RoomsRail({
           {t.theLounge}
         </Link>
 
-        {rooms?.map((room) =>
-          renaming === room.roomId ? (
-            /*
-              The row itself becomes the field, rather than a dialog or a panel
-              below. Renaming is the smallest edit in here - one word, usually
-              a typo - and the thing you are checking your typing against is the
-              list of the other names, which a modal would cover up.
-            */
-            <form
-              key={room.roomId}
-              onSubmit={(event) => {
-                event.preventDefault()
-                rename(room)
-              }}
-              className="px-1 py-1"
-            >
-              <input
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    setRenaming(null)
-                  }
-                }}
-                // Leaving the field is the same as pressing Enter. There is no
-                // Save button beside it, so a blur that threw the new name away
-                // would be a rename that silently did not happen.
-                onBlur={() => rename(room)}
-                maxLength={60}
-                autoFocus
-                disabled={pending}
-                aria-label={fill(t.rename, { name: room.name })}
-                className="w-full rounded-lg border border-accent/60 bg-surface px-2 py-1 text-xs disabled:opacity-50"
-              />
-            </form>
-          ) : (
-            <div key={room.roomId}>
-              <div className="group flex items-center gap-1">
-                <Link
-                  href={`/t/${slug}/rooms/${room.slug}`}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition hover:bg-surface-raised ${
-                    here?.roomId === room.roomId ? 'bg-accent/15 text-ink' : 'text-ink-muted'
-                  }`}
-                >
-                  {/*
-                    The room's own face, at the same size the rail draws it -
-                    so this list and the Places band above show the same thing,
-                    and picking an icon can be checked without leaving the
-                    panel it was picked in.
-                  */}
-                  <span
-                    aria-hidden
-                    className={`room-face shrink-0 [&_svg]:size-4 ${tintClass(room.tint)}`}
-                  >
-                    <RoomGlyph name={room.icon} />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{room.name}</span>
-                  {/* Only worth a mark when it is the unusual one. Every room being
-                      labelled "listed" is a column of noise. */}
-                  {room.visibility === 'private' && (
-                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-ink-muted/70">
-                      {t.unlistedTag}
-                    </span>
-                  )}
-                </Link>
+        {/*
+          Under their captions, and the loose ones cut short.
 
-                {/*
-                  Hidden until the row is hovered, and always reachable by
-                  keyboard - the same bargain the roster's "Show out" strikes. A
-                  rename button permanently beside every room would make a list of
-                  places to walk into read as a list of things to administer.
+          A space with nine rooms drew nine rows here, then the panel about the
+          room you are standing in, then the door to open another - and the
+          list pushed both of them off the bottom of a rail that is also
+          carrying the roster and the tabs. The list grew and everything you
+          might *do* with it left the screen.
 
-                  The face button stays open once it is open, which is why it is
-                  not hidden while its own panel is showing: a control that
-                  vanished the moment the pointer left the row would be a panel
-                  with no way to shut it.
-                */}
-                {canManage && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => {
-                        setError(null)
-                        setDraft(room.name)
-                        setRenaming(room.roomId)
-                      }}
-                      title={fill(t.rename, { name: room.name })}
-                      className="shrink-0 rounded-lg px-1.5 py-1 text-[11px] text-ink-muted opacity-0 transition hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
-                    >
-                      {t.renameShort}
-                    </button>
+          So the arrangement somebody made in this very panel is used to read
+          it: rooms under the caption they were given, and the pile nobody has
+          sorted cut to `LOOSE_SHOWN` with the rest one press away. The same
+          rule the Places band uses, for the same reason it gives - what is
+          capped is the band that grows without anybody deciding it should, and
+          never the ones somebody arranged on purpose.
+        */}
+        {bands.map((band) => {
+          const loose = band.name === null
+          const hidden = loose && !allLoose ? Math.max(0, band.rooms.length - LOOSE_SHOWN) : 0
+          const shown = hidden > 0 ? band.rooms.slice(0, LOOSE_SHOWN) : band.rooms
 
-                    <button
-                      type="button"
-                      disabled={pending}
-                      aria-expanded={facing === room.roomId}
-                      onClick={() => {
-                        setError(null)
-                        setFacing(facing === room.roomId ? null : room.roomId)
-                      }}
-                      title={fill(t.faceOf, { name: room.name })}
-                      className={`shrink-0 rounded-lg px-1.5 py-1 text-[11px] transition hover:text-ink focus-visible:opacity-100 disabled:opacity-50 ${
-                        facing === room.roomId
-                          ? 'text-ink opacity-100'
-                          : 'text-ink-muted opacity-0 group-hover:opacity-100'
+          return (
+            <div key={band.name ?? '\u0000loose'} className="mt-1.5 first:mt-0">
+              {/*
+                A caption only when there is something to tell apart. One band
+                is just the rooms, and heading it "Not in a group" would be a
+                label on the only thing there is.
+              */}
+              {bands.length > 1 && (
+                <p className="px-1 pb-0.5 pt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted/60">
+                  {band.name ?? t.ungrouped}
+                </p>
+              )}
+
+              {shown.map((room) => (
+                <div key={room.roomId}>
+                  <div className="rail-row flex items-center gap-1">
+                    <Link
+                      href={`/t/${slug}/rooms/${room.slug}`}
+                      className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition hover:bg-surface-raised ${
+                        here?.roomId === room.roomId ? 'bg-accent/15 text-ink' : 'text-ink-muted'
                       }`}
                     >
-                      {t.faceShort}
-                    </button>
-                  </>
-                )}
-              </div>
+                      {/*
+                        The room's own face, at the same size the rail draws it -
+                        so this list and the Places band above show the same thing,
+                        and picking an icon can be checked without leaving the
+                        panel it was picked in.
+                      */}
+                      <span
+                        aria-hidden
+                        className={`room-face shrink-0 [&_svg]:size-4 ${tintClass(room.tint)}`}
+                      >
+                        <RoomGlyph name={room.icon} />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{room.name}</span>
+                      {/* Only worth a mark when it is the unusual one. Every room being
+                          labelled "listed" is a column of noise. */}
+                      {room.visibility === 'private' && (
+                        <span className="shrink-0 text-[10px] uppercase tracking-wider text-ink-muted/70">
+                          {t.unlistedTag}
+                        </span>
+                      )}
+                    </Link>
 
-              {canManage && facing === room.roomId && (
-                <RoomFace
-                  slug={slug}
-                  room={room}
-                  rooms={rooms ?? []}
-                  groupsId={groupsId}
-                  groupDraft={
-                    grouping?.roomId === room.roomId ? grouping.value : (room.group ?? '')
-                  }
-                  onGroupType={(value) => setGrouping({ roomId: room.roomId, value })}
-                  onGroupDone={() => regroup(room)}
-                  onGroupCancel={() => setGrouping(null)}
-                  act={act}
-                  pending={pending}
-                  t={t}
-                />
+                    {/*
+                      One control, not two words.
+
+                      It was `Rename` and `Look`, side by side, in text - which
+                      in German is `Umbenennen` and `Aussehen` beside a room
+                      name in a 15.5rem rail, and the row had nowhere to put
+                      them. They were also two doors onto one job: nobody
+                      renames a room without looking at the list they are
+                      renaming it in. So both are behind this, and the name is
+                      a field at the top of the panel like everything else
+                      about the room.
+                    */}
+                    {canManage && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        aria-expanded={editing === room.roomId}
+                        onClick={() => {
+                          setError(null)
+                          setDraft(room.name)
+                          setEditing(editing === room.roomId ? null : room.roomId)
+                        }}
+                        title={fill(t.editOf, { name: room.name })}
+                        aria-label={fill(t.editOf, { name: room.name })}
+                        className="rail-tool rail-tool-quiet"
+                      >
+                        <Icon name="edit" />
+                      </button>
+                    )}
+                  </div>
+
+                  {canManage && editing === room.roomId && (
+                    <RoomEdit
+                      slug={slug}
+                      room={room}
+                      groups={groups}
+                      nameDraft={draft}
+                      onNameType={setDraft}
+                      onNameDone={() => rename(room)}
+                      onNameCancel={() => setDraft(room.name)}
+                      groupDraft={
+                        grouping && grouping.roomId === room.roomId ? grouping.value : null
+                      }
+                      onGroupType={(value) => setGrouping({ roomId: room.roomId, value })}
+                      onGroupDone={() => regroup(room)}
+                      onGroupCancel={() => setGrouping(null)}
+                      onGroupPick={(name) => act(() => setRoomGroup(slug, room.roomId, name))}
+                      act={act}
+                      pending={pending}
+                      t={t}
+                    />
+                  )}
+                </div>
+              ))}
+
+              {/*
+                The rest of the pile, on request.
+
+                `Show 4 more` rather than a scroller inside a panel that already
+                scrolls: two nested scrollbars in 15.5rem is a control nobody
+                can aim at, and the answer to "where is my ninth room" should be
+                a press rather than a drag.
+              */}
+              {hidden > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAllLoose(true)}
+                  className="mt-0.5 w-full rounded-lg px-2 py-1 text-left text-[11px] text-ink-muted transition hover:bg-surface-raised hover:text-ink"
+                >
+                  {fill(t.showAll, { n: hidden })}
+                </button>
+              )}
+
+              {loose && allLoose && band.rooms.length > LOOSE_SHOWN && (
+                <button
+                  type="button"
+                  onClick={() => setAllLoose(false)}
+                  className="mt-0.5 w-full rounded-lg px-2 py-1 text-left text-[11px] text-ink-muted transition hover:bg-surface-raised hover:text-ink"
+                >
+                  {t.showFewer}
+                </button>
               )}
             </div>
-          ),
-        )}
+          )
+        })}
 
         {rooms?.length === 0 && (
           <p className="px-2 py-1 text-[11px] text-ink-muted">{t.noneYet}</p>
@@ -1028,53 +1061,163 @@ export function RoomsRail({
 }
 
 /**
- * How one room turns up in everybody's Places list.
+ * One room's whole face, in the order somebody sets it.
  *
- * Four controls that all answer one question, kept together because somebody
- * arranging a rail does all four in one sitting: they pin the room the space
- * runs on, group the ones that belong together, and give each a face so the
- * column can be read rather than scanned.
+ * Everything about how a room turns up in everybody's list, behind the one
+ * control on its row: what it is called, which group it belongs to, whether it
+ * is held at the top, and the glyph and colour it is drawn with. Somebody
+ * arranging a rail does all of it in one sitting, and the reason each of them
+ * is here rather than on the room's own page is the same: they are answers to
+ * "I am looking at this list and cannot tell two rooms apart", and the list is
+ * the only screen that problem is visible on.
  *
- * All four are the *space's*, which is what puts the whole panel behind
- * `canManage`. A member's own pin is a control on the row in the Places band
- * and writes nowhere near the log - see `pinRoomForMe`.
+ * All of it is the *space's*, which is what puts the panel behind `canManage`.
+ * A member's own pin is a control on the row in the Places band and writes
+ * nowhere near the log - see `pinRoomForMe`.
  *
- * Rendered under the row it is about rather than in the "This room" panel
- * below, and that placement is the whole of it: "This room" is about the room
- * you are standing in, which is the right home for the level and the fixture,
- * because you have to be in a room to care what it is playing. An icon is the
- * opposite. The reason anybody sets one is that they are looking at the list
- * and cannot tell two rooms apart - so making them walk into each room in turn
- * would be asking them to leave the only screen the problem is visible on.
+ * The name leads, because it is the thing that was already there and the thing
+ * most often wrong. It used to turn the row itself into a field, which read
+ * well and cost the row a second control - and put the one edit everybody
+ * makes somewhere different from the four they make rarely.
  */
-function RoomFace({
+function RoomEdit({
   slug,
   room,
-  rooms,
-  groupsId,
+  groups,
+  nameDraft,
+  onNameType,
+  onNameDone,
+  onNameCancel,
   groupDraft,
   onGroupType,
   onGroupDone,
   onGroupCancel,
+  onGroupPick,
   act,
   pending,
   t,
 }: {
   slug: string
   room: RoomView
-  /** The space's rooms, for the captions the group field offers. */
-  rooms: RoomView[]
-  groupsId: string
-  groupDraft: string
+  /** The captions this space already uses, offered as chips. */
+  groups: string[]
+  nameDraft: string
+  onNameType: (value: string) => void
+  onNameDone: () => void
+  onNameCancel: () => void
+  /** What is typed in the new-caption field, or null while it is closed. */
+  groupDraft: string | null
   onGroupType: (value: string) => void
   onGroupDone: () => void
   onGroupCancel: () => void
+  onGroupPick: (name: string | null) => void
   act: (run: () => Promise<{ ok: boolean; error?: string }>) => void
   pending: boolean
   t: RailDict['roomTab']
 }) {
   return (
-    <div className="mb-1 ml-2 space-y-2 rounded-lg border border-line/60 p-2">
+    <div className="mb-1 ml-2 space-y-2.5 rounded-lg border border-line/60 p-2">
+      <label className="block text-[11px] text-ink-muted">
+        <span className="block pb-1">{t.nameLabel}</span>
+        <input
+          value={nameDraft}
+          onChange={(event) => onNameType(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              // Blur rather than submit: the commit is on the way out of the
+              // field, so Enter and clicking away are the same act rather than
+              // two paths to keep in step.
+              event.currentTarget.blur()
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              onNameCancel()
+            }
+          }}
+          // Leaving the field is the same as pressing Enter. There is no Save
+          // button beside it, so a blur that threw the new name away would be a
+          // rename that silently did not happen.
+          onBlur={onNameDone}
+          maxLength={60}
+          disabled={pending}
+          aria-label={fill(t.rename, { name: room.name })}
+          className="w-full rounded-lg border border-line bg-surface px-2 py-1 text-xs disabled:opacity-50"
+        />
+      </label>
+
+      {/*
+        The captions that exist, as things to press.
+
+        This was one field with a datalist behind it, on the theory that a group
+        *is* its name and there is nothing to pick from until somebody types
+        one. True on the first afternoon and wrong on every one after it: by
+        then the captions are a small fixed set, the whole job is putting this
+        room in one of them, and a datalist is a list you have to know is there
+        - it opens on a keystroke, into a dropdown that looks like a browser's
+        rather than like this rail.
+
+        So the ones in use are chips, and typing a new one is a chip too. `None`
+        leads because taking a room out of a group is a thing people do and had
+        no control at all: it was clearing a field, which is not an action
+        anybody expects to have to discover.
+      */}
+      <div className="text-[11px] text-ink-muted">
+        <span className="block pb-1">{t.groupLabel}</span>
+        <div className="flex flex-wrap gap-1">
+          <GroupChip
+            active={room.group === null}
+            label={t.groupNone}
+            onClick={() => onGroupPick(null)}
+            pending={pending}
+          />
+          {groups.map((name) => (
+            <GroupChip
+              key={name}
+              active={room.group === name}
+              label={name}
+              onClick={() => onGroupPick(name)}
+              pending={pending}
+            />
+          ))}
+          {groupDraft === null && (
+            <GroupChip
+              label={`+ ${t.groupNew}`}
+              onClick={() => onGroupType('')}
+              pending={pending}
+            />
+          )}
+        </div>
+
+        {groupDraft !== null && (
+          <input
+            value={groupDraft}
+            autoFocus
+            onChange={(event) => onGroupType(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                event.currentTarget.blur()
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                onGroupCancel()
+              }
+            }}
+            // Same bargain as the name above: leaving commits, because there is
+            // no Save button beside it.
+            onBlur={onGroupDone}
+            maxLength={ROOM_GROUP_MAX}
+            placeholder={t.groupPlaceholder}
+            disabled={pending}
+            aria-label={t.groupNew}
+            className="mt-1 w-full rounded-lg border border-accent/60 bg-surface px-2 py-1 text-xs disabled:opacity-50"
+          />
+        )}
+
+        <span className="block pt-1 text-ink-muted/70">{t.groupNote}</span>
+      </div>
+
       <label className="flex items-start gap-2 text-[11px] text-ink-muted">
         <input
           type="checkbox"
@@ -1089,47 +1232,6 @@ function RoomFace({
           {t.pinForEveryone}
           <span className="block text-ink-muted/70">{t.pinNote}</span>
         </span>
-      </label>
-
-      {/*
-        A field rather than a picker of existing groups, because a group *is*
-        the name: there is no list to pick from until somebody has typed one,
-        and a picker with a "new..." escape hatch is two controls for one
-        string. The datalist is the best of both - the captions already in use
-        are offered, and typing past them makes a new one.
-      */}
-      <label className="block text-[11px] text-ink-muted">
-        <span className="block pb-1">{t.groupLabel}</span>
-        <input
-          value={groupDraft}
-          list={groupsId}
-          onChange={(event) => onGroupType(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              event.currentTarget.blur()
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault()
-              onGroupCancel()
-            }
-          }}
-          // Leaving the field commits, exactly as the rename row does and for
-          // the same reason: there is no Save button beside it, so a blur that
-          // threw the caption away would be a change that silently did not
-          // happen.
-          onBlur={onGroupDone}
-          maxLength={ROOM_GROUP_MAX}
-          placeholder={t.groupPlaceholder}
-          disabled={pending}
-          className="w-full rounded-lg border border-line bg-surface px-2 py-1 text-xs disabled:opacity-50"
-        />
-        <datalist id={groupsId}>
-          {groupNames(rooms).map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-        <span className="block pt-1 text-ink-muted/70">{t.groupNote}</span>
       </label>
 
       {/*
@@ -1214,6 +1316,40 @@ function RoomFace({
   )
 }
 
+/**
+ * One caption, as a thing to press.
+ *
+ * `aria-pressed` rather than a radio group, and the difference is real: a room
+ * belongs to at most one group, but `None` is a state rather than an option
+ * somebody chose, and a radio set with a "none" member says the opposite.
+ */
+function GroupChip({
+  active = false,
+  label,
+  onClick,
+  pending,
+}: {
+  active?: boolean
+  label: string
+  onClick: () => void
+  pending: boolean
+}) {
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rail-chip max-w-full truncate disabled:opacity-50 ${
+        active
+          ? 'border-accent bg-accent/15 text-ink'
+          : 'border-line/60 text-ink-muted hover:border-accent/60 hover:text-ink'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
 
 /**
  * The picker's rows, with the ones made for this room first and marked.

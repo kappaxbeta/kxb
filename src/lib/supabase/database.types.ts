@@ -808,6 +808,63 @@ export type Database = {
         }
         Relationships: []
       }
+      content_reports: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          reason: string
+          reported_by: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          target_id: string
+          tenant_id: string | null
+          title: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          reason: string
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          target_id: string
+          tenant_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          reason?: string
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          target_id?: string
+          tenant_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_reports_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_reports_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       error_reports: {
         Row: {
           created_at: string
@@ -1314,6 +1371,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      hidden_content: {
+        Row: {
+          created_at: string
+          hidden_by: string | null
+          kind: string
+          reason: string
+          target_id: string
+        }
+        Insert: {
+          created_at?: string
+          hidden_by?: string | null
+          kind: string
+          reason: string
+          target_id: string
+        }
+        Update: {
+          created_at?: string
+          hidden_by?: string | null
+          kind?: string
+          reason?: string
+          target_id?: string
+        }
+        Relationships: []
       }
       homestead_ground_read_model: {
         Row: {
@@ -1916,16 +1997,19 @@ export type Database = {
       }
       profile_avatars: {
         Row: {
+          as_dummy: boolean
           model: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          as_dummy?: boolean
           model: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          as_dummy?: boolean
           model?: string
           updated_at?: string
           user_id?: string
@@ -3368,6 +3452,171 @@ export type Database = {
           slug?: string
           updated_at?: string
           version?: number
+        }
+        Relationships: []
+      }
+      thingiverse_blueprints_read_model: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          retired: boolean
+          spec: Json
+          tenant_id: string
+          updated_at: string
+          version: number
+          visibility: string
+        }
+        Insert: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          retired?: boolean
+          spec: Json
+          tenant_id: string
+          updated_at: string
+          version: number
+          visibility?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          retired?: boolean
+          spec?: Json
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+          visibility?: string
+        }
+        Relationships: []
+      }
+      thingiverse_clips_read_model: {
+        Row: {
+          clip: Json
+          created_at: string
+          doc: Json | null
+          id: string
+          name: string
+          owner_id: string
+          retired: boolean
+          skeleton: string
+          tenant_id: string
+          updated_at: string
+          version: number
+          visibility: string
+        }
+        Insert: {
+          clip: Json
+          created_at: string
+          doc?: Json | null
+          id: string
+          name: string
+          owner_id: string
+          retired?: boolean
+          skeleton: string
+          tenant_id: string
+          updated_at: string
+          version: number
+          visibility?: string
+        }
+        Update: {
+          clip?: Json
+          created_at?: string
+          doc?: Json | null
+          id?: string
+          name?: string
+          owner_id?: string
+          retired?: boolean
+          skeleton?: string
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+          visibility?: string
+        }
+        Relationships: []
+      }
+      thingiverse_emotes_read_model: {
+        Row: {
+          by_id: string | null
+          tenant_id: string
+          tree: Json
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          by_id?: string | null
+          tenant_id: string
+          tree?: Json
+          updated_at: string
+          version: number
+        }
+        Update: {
+          by_id?: string | null
+          tenant_id?: string
+          tree?: Json
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      thingiverse_things_read_model: {
+        Row: {
+          blueprint_id: string
+          created_at: string
+          deleted: boolean
+          facing: number
+          id: string
+          keep: boolean
+          placed_by: string | null
+          scale: number
+          tenant_id: string
+          tuning: Json
+          updated_at: string
+          version: number
+          world_id: string
+          x: number
+          y: number
+          z: number
+        }
+        Insert: {
+          blueprint_id: string
+          created_at: string
+          deleted?: boolean
+          facing?: number
+          id: string
+          keep?: boolean
+          placed_by?: string | null
+          scale?: number
+          tenant_id: string
+          tuning?: Json
+          updated_at: string
+          version: number
+          world_id: string
+          x: number
+          y: number
+          z: number
+        }
+        Update: {
+          blueprint_id?: string
+          created_at?: string
+          deleted?: boolean
+          facing?: number
+          id?: string
+          keep?: boolean
+          placed_by?: string | null
+          scale?: number
+          tenant_id?: string
+          tuning?: Json
+          updated_at?: string
+          version?: number
+          world_id?: string
+          x?: number
+          y?: number
+          z?: number
         }
         Relationships: []
       }

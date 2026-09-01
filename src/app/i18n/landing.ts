@@ -29,6 +29,7 @@
  * wants that much detail is already heading.
  */
 import type { Locale } from '@/domain/i18n/locale'
+import { STANCE } from '@/app/i18n/stance'
 
 /** The three doors under the hero. Each one is a page. */
 export type DoorId = 'play' | 'create' | 'share'
@@ -64,6 +65,28 @@ export type ScreenId = 'lounge' | 'level' | 'space' | 'studio'
  * find out in three seconds.
  */
 export type CueId = 'walk' | 'drive' | 'lock' | 'key'
+
+/**
+ * The twelve tiles in the "new in the room" rack.
+ *
+ * A union rather than a positional array, exactly like `RowId` and for the same
+ * reason: the srcs live in `landing.tsx` because they are layout, the words live
+ * here because they are words, and a pair of parallel arrays is a pair that goes
+ * one out of step on the day somebody drops a tile.
+ */
+export type StuffId =
+  | 'fountain'
+  | 'bench'
+  | 'machine'
+  | 'burger'
+  | 'till'
+  | 'crate'
+  | 'target'
+  | 'chest'
+  | 'kart'
+  | 'racer'
+  | 'firetruck'
+  | 'tractor'
 
 /** The three beats of the plan. */
 export type PlanId = 'xo' | 'xp' | 'runtime'
@@ -136,6 +159,30 @@ export interface LandingDict {
   doorsHeader: { tag: string; title: string; body: string }
   doors: Record<DoorId, { name: string; blurb: string; cta: string }>
   rows: Record<RowId, { kicker: string; title: string; body: string; cta: string; alt: string }>
+  /**
+   * The band between the picture rows and the screenshots: what is in the room,
+   * and how you talk to the people in it.
+   *
+   * One box rather than two rows, because the two halves are one claim - the
+   * room stopped being empty and stopped being silent in the same season - and
+   * because both of them already have a whole page behind them. This is the
+   * paragraph that sends somebody to it.
+   */
+  stuff: {
+    tag: string
+    title: string
+    body: string
+    /** Names the rack for anybody who cannot see it. */
+    rackLabel: string
+    /** The label under each tile. */
+    rack: Record<StuffId, string>
+    thingsTitle: string
+    thingsBody: string
+    ctaThings: string
+    talkTitle: string
+    talkBody: string
+    ctaTalk: string
+  }
   /** The band of screenshots. Same five fields as a row - it is the same job. */
   screensHeader: { tag: string; title: string; body: string }
   screens: Record<ScreenId, { kicker: string; title: string; body: string; cta: string; alt: string }>
@@ -206,6 +253,8 @@ export interface LandingDict {
     body: string
     ctaHandbook: string
     ctaGithub: string
+    /** Describes the summon standing beside the words. See `SummonScene`. */
+    summonAlt: string
   }
   closing: {
     title: string
@@ -255,8 +304,8 @@ export const EN: LandingDict = {
     // is news, which belongs in the line news goes on.
     eyebrowOpen: '👾 Closed beta — come in, it’s open',
     eyebrowClosed: '👾 Closed beta — and you’re invited',
-    headlineLead: 'Not here to chat <3',
-    headlineAccent: 'here to play.',
+    headlineLead: STANCE.en.lead,
+    headlineAccent: STANCE.en.accent,
     sub: 'The fastest way to hang out online. A virtual arcade for your crew, game jam, or community. Zero downloads — just drop a link and jump straight into the action in seconds.',
     ctaDemo: 'Come and play — free',
     ctaJoin: 'Join the beta',
@@ -354,6 +403,32 @@ export const EN: LandingDict = {
       cta: 'Links, rooms and members',
       alt: 'A panda, a penguin and a fox standing together on a small grass island, each with an emote over their head',
     },
+  },
+  stuff: {
+    tag: 'New in the room',
+    title: 'There’s furniture in it now, and some of it drives',
+    body: 'A block is ground. Cell (3, 0, 7) is dirt, and that is the whole of what there is to know about it — it cannot fall, it cannot be yours, and it cannot be a fountain. What was missing was everything that stands on the ground. Type a word into the chat box and it turns up in front of you, out of 5,770 models.',
+    rackLabel: 'Things a space can summon',
+    rack: {
+      fountain: 'Fountain',
+      bench: 'Bench',
+      machine: 'Machine',
+      burger: 'Burger',
+      till: 'Till',
+      crate: 'Crate',
+      target: 'Target',
+      chest: 'Chest',
+      kart: 'Kart',
+      racer: 'Racer',
+      firetruck: 'Fire engine',
+      tractor: 'Tractor',
+    },
+    thingsTitle: 'Give it rules, states and a recipe',
+    thingsBody: 'Four things can happen to a thing and eight things it can do about them, set in a panel while you stand next to it. Then it can become something else — raw, cooking, cooked, burnt — and the recipe for that lives on the table it is made at rather than in a book somewhere. Give it an engine and a seat and somebody drives it away.',
+    ctaThings: 'How a thing is made',
+    talkTitle: 'And you can say something out loud',
+    talkBody: 'Hold a key and talk: your voice comes out of where you are standing, full volume up close and gone by the far wall, so one room holds as many conversations as it has corners. Switch your camera on and your face is a disc over your animal’s head. Type instead if you would rather. None of it is a call — nobody sends an invite, and nothing ends when the host leaves.',
+    ctaTalk: 'The three ways to talk',
   },
   screensHeader: {
     tag: 'Inside',
@@ -547,6 +622,8 @@ export const EN: LandingDict = {
     body: 'kxb has a community edition: the same world, as a public repository on GitHub. Host it on your own server, read how it is built, or write a country guide for the handbook. The €20 buys you not having to.',
     ctaHandbook: 'Open the handbook',
     ctaGithub: 'kxb on GitHub',
+    summonAlt:
+      'A fox in a dinosaur costume arriving inside a ring of green light, with a crate, two animal heads and a block of hay turning in the air around it',
   },
   closing: {
     title: 'Come and play. Bring somebody.',
@@ -604,8 +681,8 @@ export const DE: LandingDict = {
   hero: {
     eyebrowOpen: '👾 Closed Beta — komm rein, es ist offen',
     eyebrowClosed: '👾 Closed Beta — und du bist eingeladen',
-    headlineLead: 'Nicht hier zum Reden <3',
-    headlineAccent: 'zum Spielen.',
+    headlineLead: STANCE.de.lead,
+    headlineAccent: STANCE.de.accent,
     sub: 'Der schnellste Weg, online zusammen abzuhängen. Eine virtuelle Spielhalle für deine Crew, deinen Game Jam oder deine Community. Keine Downloads – einfach einen Link schicken und in Sekunden mittendrin sein.',
     ctaDemo: 'Komm spielen – kostenlos',
     ctaJoin: 'Beta beitreten',
@@ -704,6 +781,32 @@ export const DE: LandingDict = {
       cta: 'Links, Räume und Mitglieder',
       alt: 'Ein Panda, ein Pinguin und ein Fuchs stehen zusammen auf einer kleinen Grasinsel, jeder mit einem Emote über dem Kopf',
     },
+  },
+  stuff: {
+    tag: 'Neu im Raum',
+    title: 'Jetzt steht was drin, und manches davon fährt',
+    body: 'Ein Block ist Boden. Zelle (3, 0, 7) ist Erde, und mehr gibt es darüber nicht zu wissen — sie kann nicht fallen, sie kann niemandem gehören, und ein Brunnen kann sie schon gar nicht sein. Was gefehlt hat, war alles, was auf dem Boden steht. Tipp ein Wort in den Chat, und es steht vor dir – aus 5.770 Modellen.',
+    rackLabel: 'Dinge, die ein Space herbeirufen kann',
+    rack: {
+      fountain: 'Brunnen',
+      bench: 'Bank',
+      machine: 'Maschine',
+      burger: 'Burger',
+      till: 'Kasse',
+      crate: 'Kiste',
+      target: 'Zielscheibe',
+      chest: 'Truhe',
+      kart: 'Kart',
+      racer: 'Rennwagen',
+      firetruck: 'Feuerwehr',
+      tractor: 'Traktor',
+    },
+    thingsTitle: 'Gib ihm Regeln, Zustände und ein Rezept',
+    thingsBody: 'Vier Dinge können einem Ding passieren und acht kann es daraufhin tun – eingestellt in einem Panel, während du daneben stehst. Danach kann es etwas anderes werden: roh, brät, gar, verbrannt. Und das Rezept dafür liegt auf dem Tisch, an dem gekocht wird, nicht in irgendeinem Buch. Gib ihm einen Motor und einen Sitz, und jemand fährt damit weg.',
+    ctaThings: 'Wie ein Ding entsteht',
+    talkTitle: 'Und du kannst laut etwas sagen',
+    talkBody: 'Halt eine Taste und sprich: Deine Stimme kommt von dort, wo du stehst – nah bei voller Lautstärke, an der anderen Wand weg. Ein Raum trägt also so viele Gespräche, wie er Ecken hat. Schalt die Kamera ein, und dein Gesicht schwebt als Scheibe über dem Kopf deines Tiers. Oder tipp einfach, wenn dir das lieber ist. Nichts davon ist ein Call – niemand verschickt eine Einladung, und es endet nicht, wenn der Host geht.',
+    ctaTalk: 'Die drei Arten zu reden',
   },
   screensHeader: {
     tag: 'Von innen',
@@ -897,6 +1000,8 @@ export const DE: LandingDict = {
     body: 'kxb gibt es als Community Edition: dieselbe Welt, als öffentliches Repository auf GitHub. Betreib sie auf deinem eigenen Server, lies nach, wie sie gebaut ist, oder schreib einen Länderguide fürs Handbuch. Die 20 € kaufen dir, das nicht zu müssen.',
     ctaHandbook: 'Zum Handbuch',
     ctaGithub: 'kxb auf GitHub',
+    summonAlt:
+      'Ein Fuchs im Dinokostüm erscheint in einem Ring aus grünem Licht, um ihn kreisen eine Kiste, zwei Tierköpfe und ein Block Heu',
   },
   closing: {
     title: 'Komm spielen. Bring jemanden mit.',
@@ -958,8 +1063,8 @@ export const BG: LandingDict = {
   hero: {
     eyebrowOpen: '👾 Затворена бета — влизай, отворено е',
     eyebrowClosed: '👾 Затворена бета — и си поканен',
-    headlineLead: 'Не сме тук да си говорим <3',
-    headlineAccent: 'тук сме да играем.',
+    headlineLead: STANCE.bg.lead,
+    headlineAccent: STANCE.bg.accent,
     sub: 'Най-бързият начин да се съберете онлайн. Виртуална зала за твоята компания, game jam или общност. Нула сваляне — просто пускаш линк и скачаш право в действието за секунди.',
     ctaDemo: 'Ела да играеш — безплатно',
     ctaJoin: 'Влез в бетата',
@@ -1057,6 +1162,32 @@ export const BG: LandingDict = {
       cta: 'Линкове, стаи и членове',
       alt: 'Панда, пингвин и лисица стоят заедно на малък тревист остров, всеки с жест над главата си',
     },
+  },
+  stuff: {
+    tag: 'Ново в стаята',
+    title: 'Вече има мебели, а някои от тях се карат',
+    body: 'Блокът е земя. Клетка (3, 0, 7) е пръст, и това е всичко, което има да се знае за нея — не може да падне, не може да е нечия и със сигурност не може да е фонтан. Липсваше всичко, което стои върху земята. Напиши дума в чата и то се появява пред теб — от 5770 модела.',
+    rackLabel: 'Неща, които един спейс може да призове',
+    rack: {
+      fountain: 'Фонтан',
+      bench: 'Пейка',
+      machine: 'Машина',
+      burger: 'Бургер',
+      till: 'Каса',
+      crate: 'Щайга',
+      target: 'Мишена',
+      chest: 'Сандък',
+      kart: 'Карт',
+      racer: 'Болид',
+      firetruck: 'Пожарна',
+      tractor: 'Трактор',
+    },
+    thingsTitle: 'Дай му правила, състояния и рецепта',
+    thingsBody: 'Четири неща могат да се случат на едно нещо и осем неща то може да направи по въпроса — настройваш ги в панел, докато стоиш до него. После може да стане нещо друго: сурово, пече се, готово, изгоряло. А рецептата за това стои върху масата, на която се готви, а не в някаква книга. Дай му двигател и седалка, и някой ще го подкара.',
+    ctaThings: 'Как се прави едно нещо',
+    talkTitle: 'И можеш да кажеш нещо на глас',
+    talkBody: 'Задръж клавиш и говори: гласът ти излиза оттам, където стоиш — плътен отблизо, изчезнал до отсрещната стена. Така една стая носи толкова разговора, колкото ъгъла има. Пусни камерата и лицето ти е кръг над главата на животното ти. Или просто пиши, ако така предпочиташ. Нищо от това не е разговор по видео — никой не праща покана и нищо не свършва, когато домакинът излезе.',
+    ctaTalk: 'Трите начина да говориш',
   },
   screensHeader: {
     tag: 'Отвътре',
@@ -1250,6 +1381,8 @@ export const BG: LandingDict = {
     body: 'kxb има community издание: същият свят, като публично хранилище в GitHub. Пусни го на собствен сървър, виж как е направен, или напиши наръчник за твоята страна. Двайсетте евро купуват това да не се налага.',
     ctaHandbook: 'Отвори наръчника',
     ctaGithub: 'kxb в GitHub',
+    summonAlt:
+      'Лисица в динозавърски костюм се появява в пръстен от зелена светлина, а около нея се въртят щайга, две животински глави и блок сено',
   },
   closing: {
     title: 'Ела да играеш. Доведи някого.',

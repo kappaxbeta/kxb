@@ -8,13 +8,16 @@ import {
   NotYet,
   PageHero,
   PageOutro,
+  Rack,
   Shot,
   Spec,
   Traits,
 } from '@/app/components/marketing-shell'
 import { resolveLook } from '@/app/components/look'
+import { MAX_MESSAGE_LENGTH } from '@/domain/chat/events'
 import { AVATARS } from '@/domain/lounge/avatars'
 import { EMOTE_COUNT } from '@/domain/world/emotes'
+import { MAX_FACES } from '@/domain/world/faces'
 
 /**
  * What there is to do, once somebody is standing in the room.
@@ -49,9 +52,9 @@ import { EMOTE_COUNT } from '@/domain/world/emotes'
  */
 
 export const metadata: Metadata = {
-  title: 'Play — football, battles, races, a café and a house',
+  title: 'Play — football, battles, karts, a café and a house',
   description:
-    'Football with real goalposts, five battle modes, races and parkour, tournaments, a café to run and a house to go home to. All in a browser, all with other people, none of it needing an account.',
+    'Football with real goalposts, five battle modes, karts you get into, races and parkour, tournaments, a café to run and a house to go home to. Talk to the room with your voice, your camera or your hands. All in a browser, none of it needing an account.',
 }
 
 /**
@@ -93,11 +96,92 @@ const BALL = [
   },
 ] as const
 
+/**
+ * The vehicles, as they come out of the catalogue.
+ *
+ * Twelve of the fifty in the `cars` pack, and the file names are the whole
+ * check on this section: the page cannot show a fire engine the product does
+ * not ship, because `/xp/thumbs/cars/firetruck.webp` is drawn off the same glTF
+ * a space summons. Labelled by hand rather than off `modelLabel`, because a
+ * catalogue label is a filename tidied up ("Kart Oobi") and these are captions.
+ */
+const CARS = [
+  { src: '/xp/thumbs/cars/kart-oobi.webp', label: 'Kart' },
+  { src: '/xp/thumbs/cars/race-future.webp', label: 'Racer' },
+  { src: '/xp/thumbs/cars/sedan-sports.webp', label: 'Sports' },
+  { src: '/xp/thumbs/cars/taxi.webp', label: 'Taxi' },
+  { src: '/xp/thumbs/cars/police.webp', label: 'Police' },
+  { src: '/xp/thumbs/cars/ambulance.webp', label: 'Ambulance' },
+  { src: '/xp/thumbs/cars/firetruck.webp', label: 'Fire engine' },
+  { src: '/xp/thumbs/cars/garbage-truck.webp', label: 'Bin lorry' },
+  { src: '/xp/thumbs/cars/tractor.webp', label: 'Tractor' },
+  { src: '/xp/thumbs/cars/van.webp', label: 'Van' },
+  { src: '/xp/thumbs/cars/suv-luxury.webp', label: 'SUV' },
+  { src: '/xp/thumbs/cars/truck.webp', label: 'Truck' },
+] as const
+
+/** What being behind the wheel of one is actually like. */
+const DRIVING = [
+  {
+    mark: 'vehicle',
+    title: 'The first seat is the wheel',
+    body: 'Seats are where bodies go, and seat one is the driver’s — a rule rather than a field, so every surface that asks who is driving gets the same answer. Eight aboard at most, and the other seven are along for it.',
+  },
+  {
+    mark: 'momentum',
+    title: 'Top speed is set per vehicle',
+    body: 'In cells a second, floored just above walking pace and capped just under a dashing player. The fastest thing in the room is still somebody who committed to something.',
+  },
+  {
+    mark: 'pieces',
+    title: 'Wheels are attachments',
+    body: 'A model that came with wheels spins them — they are found by name inside the file, nobody has to say so. Anything else takes wheels bolted on at a joint, front ones steering and back ones not, which is how a crate becomes a soapbox.',
+  },
+  {
+    mark: 'home',
+    title: 'A roof hides everyone under it',
+    body: 'A kart carries you out in the open. A car with a roof — or a giant football you are rolling about as — draws nobody aboard at all. Your name and anything you say still float over it, because somebody is obviously still in there.',
+  },
+] as const
+
+/**
+ * The three ways to say something, and the one thing they have in common.
+ *
+ * Ordered by how little they ask of you: your voice needs a key held, your
+ * camera needs switching on, typing needs a sentence, and a face needs nothing
+ * at all. The emote is last rather than first because it is the one everybody
+ * meets on their own within a minute of arriving.
+ */
+const TALKING = [
+  {
+    mark: 'voice',
+    title: 'A voice that falls off with distance',
+    body: 'Hold T and talk. It comes out of where you are standing — full volume up close, gone by the far wall — so one room holds as many conversations as it has corners and the second one is not called interrupting. Open mic is a setting; push-to-talk is the default, because the two ways of getting that wrong are not the same size.',
+  },
+  {
+    mark: 'face',
+    title: 'Your camera, worn as a face',
+    body: 'Switch it on and your picture is a disc floating over your animal’s head, turned toward whoever is looking rather than toward the way you happen to be walking. Nobody dials anybody: both ends work out the same roster and the lower connection id makes the offer, so there is no ringing and nothing to accept.',
+  },
+  {
+    mark: 'chat',
+    title: 'Typed, per room, and kept',
+    body: 'Moving rooms moves the conversation. It is written down — not for the scrollback, but because a sentence that only ever existed in six browser tabs is one nobody can report, and the name on it is the name you had when you said it rather than the one you have now.',
+  },
+  {
+    mark: 'emote',
+    title: 'Or say nothing and pull a face',
+    body: 'The emote wheel is faster than a sentence and reads from the far end of a pitch. Nothing about it is written anywhere: a face lives about three seconds and is then gone for good, which is the right deal for a shrug.',
+  },
+] as const
+
 const NOT_YET = [
   'Nothing ranks anybody, so there is no ladder and no history of who beat whom.',
   'Football has no offside, no fouls and no referee. It has a ball and two goals.',
   'The café’s barista is capable but not clever. If the room makes no sense, neither will they.',
   'Damage in a battle is self-reported by the players’ own browsers. It is a game between people who came to play, not a competitive ranked ladder.',
+  `Cameras are peer to peer and cost every pair a connection, so the room draws ${MAX_FACES} of them at once. Voices are not capped, because distance already is the cap.`,
+  'Chat is per room and it is text. No files, no threads, no replies — the room is the thread.',
 ] as const
 
 export default async function PlayPage({
@@ -223,13 +307,44 @@ export default async function PlayPage({
           <Traits items={BALL} />
         </Band>
 
+        {/* Between the football and the pairs, and full width for one reason:
+            the rack. A row of the actual models is the only picture on this
+            page that could not be faked, and at half width it is three tiles
+            and a scrollbar. */}
+        <Band
+          id="drive"
+          kicker="Vehicles"
+          mark="vehicle"
+          title="Anything on the shelf can be given an engine"
+          hue={195}
+          index={2}
+        >
+          <p>
+            A kart is a bench with an engine. It stands in a cell, it is summoned and dismissed
+            like anything else, and you get into it with the same <strong>E</strong> that sits you
+            on a chair — so driving is not a second game with its own rules, it is one more thing a
+            piece of furniture can be told that it does.
+          </p>
+
+          <Rack label="Vehicles in the catalogue" items={CARS} />
+
+          <Traits items={DRIVING} />
+
+          <p>
+            Which means the interesting part is not the cars. It is that the same three lines that
+            make a kart drive will make a wheelbarrow drive, or a sofa, or the fountain — and
+            somebody in your space is going to find that out on a Tuesday and not tell anybody
+            until it comes round the corner.
+          </p>
+        </Band>
+
         <Band
           id="boardgames"
           kicker="Board games"
           mark="boardgames"
           title="Nothing moves your piece for you"
           hue={75}
-          index={2}
+          index={3}
           span="half"
         >
           <p>
@@ -257,7 +372,7 @@ export default async function PlayPage({
           mark="races"
           title="Start line, finish line, and a route to the top"
           hue={90}
-          index={2}
+          index={3}
           span="half"
         >
           <p>
@@ -279,7 +394,7 @@ export default async function PlayPage({
           mark="tournaments"
           title="A bracket, and nothing that ranks anybody"
           hue={55}
-          index={3}
+          index={4}
           span="half"
         >
           <p>
@@ -343,9 +458,11 @@ export default async function PlayPage({
           peep={{ avatar: 'panda', angle: 'three' }}
         >
           <p>
-            Animals to be, and faces to pull over your head so you can say something without typing
-            it. Chat if you’d rather type — per room, so moving rooms moves the conversation. A radio
-            you can put a track on.
+            Animals to be, faces to pull over your head, a radio you can put a track on, and{' '}
+            <a href="#talk" className="text-accent transition hover:opacity-80">
+              three ways to say something
+            </a>{' '}
+            if a face will not cover it.
           </p>
 
           {/* Counted off the domain rather than written out, because these are
@@ -384,6 +501,57 @@ export default async function PlayPage({
           </p>
           <p>
             The lounge is walkable in a headset today. Same room, same people, no separate app.
+          </p>
+        </Band>
+
+        {/* Last, and after the lounge rather than inside it.
+
+            Chat, voice and video are the three features a stranger is most
+            likely to arrive already believing they understand, because four
+            other products have taught them what those words mean. Putting them
+            at the end means they are read by somebody who has just spent a page
+            learning that this is a room - which is the only context in which
+            "a voice that gets quieter as you walk away" is a feature rather
+            than a bug report. */}
+        <Band
+          id="talk"
+          kicker="Talking"
+          mark="chat"
+          title="Three ways to say something, and none of them is a call"
+          hue={210}
+          index={7}
+          peep={{ avatar: 'parrot', angle: 'front' }}
+        >
+          <p>
+            Nobody sends an invite, nobody joins anything, and nothing ends when the host leaves.
+            You walked into a room, and the people standing in it can hear you.
+          </p>
+
+          <Traits items={TALKING} />
+
+          {/* Both read off the domain, like the two in the lounge band above:
+              these are the numbers on this page a reader is most likely to
+              want to check, and they are one import away from being wrong. */}
+          <Figures
+            items={[
+              {
+                value: String(MAX_FACES),
+                label: 'cameras at once',
+                note: 'per room, peer to peer',
+              },
+              {
+                value: String(MAX_MESSAGE_LENGTH),
+                label: 'characters a message',
+                note: 'four hundred is a paragraph',
+              },
+            ]}
+          />
+
+          <p>
+            The mic switch starts off and stays off until somebody presses it, and the mode is kept
+            per device rather than per account — open mic on headphones at home is not open mic on
+            the laptop in a shared office, and a setting that followed you between the two would be
+            wrong in one of them every time, in the direction that broadcasts your kitchen.
           </p>
         </Band>
 

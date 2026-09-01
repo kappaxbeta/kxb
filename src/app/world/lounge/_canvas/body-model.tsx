@@ -21,6 +21,19 @@ import { type AvatarClip, isSkinLook } from '@/domain/lounge/avatars'
 export function BodyModel(props: {
   look: string
   clip?: AvatarClip
+  /**
+   * A clip the space made, built and handed down ready to play.
+   *
+   * An `AnimationClip` rather than a name, because resolving a name means
+   * knowing which clips this space has - and that is the *scene's* knowledge,
+   * loaded with the world. A body should be handed what to play, not sent
+   * looking for it.
+   *
+   * Wins over `clip` when present: somebody sitting in a chair is not also
+   * walking, and the gait it would otherwise blend with is computed from a
+   * speed that is zero while they are pinned to a seat.
+   */
+  pose?: THREE.AnimationClip | null
   fade?: number
   ignoreRay?: boolean
   rim?: THREE.Color | null

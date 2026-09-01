@@ -2,6 +2,7 @@ import { AuthForm } from '@/app/(auth)/auth-form'
 import { campaignSlug, campaignSource } from '@/domain/analytics/campaign'
 import { isRegistrationOpen } from '@/domain/flags/queries'
 import { readPromoCode } from '@/domain/promo/cookie'
+import { listSignupOffers } from '@/domain/promo/offers'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
@@ -17,11 +18,18 @@ export default async function SignUpPageDe({
   const { invite, error, code, src } = await searchParams
 
   const supabase = await createClient()
-  const open = await isRegistrationOpen(supabase)
+  const [open, offers] = await Promise.all([
+    isRegistrationOpen(supabase),
+    // Codes are language-neutral; only the sentence around them is translated.
+    listSignupOffers(),
+  ])
 
   // The cookie is language-neutral, so a code picked up at /code/CAFE24 is
   // still here for somebody who then switched to the German page.
   const promo = await readPromoCode(code)
+
+  // See the English page: a code in hand always beats the published offer.
+  const applied = promo ?? offers[0]?.code ?? null
 
   return (
     <AuthForm
@@ -29,7 +37,8 @@ export default async function SignUpPageDe({
       errorCode={error}
       registrationOpen={open}
       invite={invite ?? null}
-      code={promo}
+      code={applied}
+      offers={offers}
       src={campaignSlug(campaignSource(src ?? null))}
       locale="de"
     />

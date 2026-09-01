@@ -153,6 +153,31 @@ export interface Surface {
    * until something in the catalogue set one.
    */
   emissive?: [number, number, number]
+  /**
+   * `emissiveTexture`: which *parts* of the surface make that light.
+   *
+   * A flat `emissive` says the whole face glows evenly, which is right for
+   * paint on a floor and wrong for anything whose glow has a shape - the arms
+   * of a galaxy, a lit window, a screen. Without this, such a material draws as
+   * its emissive colour edge to edge and the shape disappears: the cosmos pack
+   * came out as a white lozenge, which read as a broken thumbnail rather than
+   * as the model it is.
+   *
+   * Sampled at the same `TEXCOORD_0` as the base colour, because that is the
+   * only channel this rasterizer reads - a material whose emissive map is on a
+   * second UV set would sample the wrong place, and nothing we ship has one.
+   */
+  emissiveTexture?: Image
+  /**
+   * `KHR_materials_emissive_strength`: how far past white the emissive goes.
+   *
+   * Read rather than ignored because this script's contract is that it draws
+   * what the running scene draws, and three.js honours the extension. The
+   * clamp below means a strength above 1 mostly shows up as the *mid* tones
+   * reaching white sooner, which is what a glow looks like without a bloom
+   * pass - and a bloom pass is what the scene does not have either.
+   */
+  emissiveStrength?: number
 }
 
 export interface Triangle {
@@ -205,6 +230,8 @@ interface Gltf {
       baseColorTexture?: { index: number }
     }
     emissiveFactor?: number[]
+    emissiveTexture?: { index: number }
+    extensions?: { KHR_materials_emissive_strength?: { emissiveStrength?: number } }
   }[]
   textures?: { source: number }[]
   /** A URI beside the model, or a slice of the model's own buffer. */
@@ -396,6 +423,7 @@ export function loadTriangles(file: string, placement: Placement = {}): Triangle
     const image = source === undefined ? undefined : gltf.images?.[source]
     const factor = (pbr?.baseColorFactor ?? [1, 1, 1, 1]) as [number, number, number, number]
     const emissive = entry?.emissiveFactor as [number, number, number] | undefined
+    const emissiveStrength = entry?.extensions?.KHR_materials_emissive_strength?.emissiveStrength
 
     /**
      * Beside the model, or inside it.
@@ -406,16 +434,31 @@ export function loadTriangles(file: string, placement: Placement = {}): Triangle
      * a texture that resolved to `BLANK` and a picture that looked like a
      * lighting bug rather than a missing atlas.
      */
+    const resolve = (index?: number): Image => {
+      if (index === undefined) return BLANK
+      const from = gltf.textures?.[index]?.source
+      const bytes = from === undefined ? undefined : gltf.images?.[from]
+      if (bytes?.uri) return loadTexture(path.join(dir, decodeURIComponent(bytes.uri)))
+      if (bytes?.bufferView !== undefined) {
+        return loadEmbeddedTexture(file, from!, sliceView(gltf, bin, bytes.bufferView))
+      }
+      return BLANK
+    }
+
     const texture = image?.uri
       ? loadTexture(path.join(dir, decodeURIComponent(image.uri)))
       : image?.bufferView !== undefined
         ? loadEmbeddedTexture(file, source!, sliceView(gltf, bin, image.bufferView))
         : BLANK
 
+    const glowIndex = entry?.emissiveTexture?.index
+
     return {
       texture,
       factor,
       ...(emissive && emissive.some((c) => c > 0) ? { emissive } : {}),
+      ...(glowIndex === undefined ? {} : { emissiveTexture: resolve(glowIndex) }),
+      ...(emissiveStrength === undefined ? {} : { emissiveStrength }),
     }
   }
 
@@ -704,10 +747,32 @@ export function render(triangles: Triangle[], options: RenderOptions): Image {
         // Light in linear space, then go back to sRGB — shading a gamma-encoded
         // colour directly turns the shadowed faces muddy.
         const emissive = tri.surface.emissive
+        const glow = tri.surface.emissiveTexture
+        const strength = tri.surface.emissiveStrength ?? 1
+
+        /*
+          Where on the emissive map this pixel is.
+
+          Its own lookup rather than reusing `ti`, because the two images are
+          only the same size by coincidence - a model is free to carry a 1k base
+          colour and a 256px glow map, and reusing the index would read off the
+          end of the smaller one.
+        */
+        let gi = -1
+        if (glow) {
+          const gx = Math.min(glow.width - 1, Math.max(0, Math.floor(u * glow.width)))
+          const gy = Math.min(glow.height - 1, Math.max(0, Math.floor(v * glow.height)))
+          gi = (gy * glow.width + gx) * 4
+        }
+
         for (let c = 0; c < 3; c++) {
           const tone = factorB ? factor[c] + (factorB[c] - factor[c]) * ramp : factor[c]
           const base = toLinear(texture.data[ti + c] / 255) * tone
-          const lit = base * diffuse[c] + spec + (emissive ? emissive[c] : 0)
+          // The map is sRGB like every other colour texture, so it goes to
+          // linear before it is multiplied into light that is already linear.
+          const shaped = gi >= 0 ? toLinear(glow!.data[gi + c] / 255) : 1
+          const emit = emissive ? emissive[c] * shaped * strength : 0
+          const lit = base * diffuse[c] + spec + emit
           colour[at * 4 + c] = Math.min(1, toSrgb(Math.min(1, lit)))
         }
         // Opaque: whatever survived the cutout is, and only the background

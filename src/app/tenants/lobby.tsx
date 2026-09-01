@@ -36,7 +36,7 @@ import { Canvas } from '@react-three/fiber'
 import { AvatarModel } from '@/app/world/lounge/_canvas/avatar-model'
 import { Spinnable, Stage, XpBody } from '@/app/components/character-stage'
 import { PeepPicker } from '@/app/components/peep-picker'
-import { chooseAvatar } from '@/domain/profile/avatar-actions'
+import { chooseAvatar, wearDummy } from '@/domain/profile/avatar-actions'
 import { chooseSkin } from '@/domain/skins/actions'
 import { skinThumbUrl, type ShopView } from '@/domain/skins/application'
 import { fill } from '@/app/i18n/fill'
@@ -63,6 +63,7 @@ export function Lobby({
   archived,
   invitations,
   avatar,
+  asDummy,
   username,
   wardrobe,
   email,
@@ -77,6 +78,14 @@ export function Lobby({
   archived: LobbySpace[]
   invitations: LobbyInvitation[]
   avatar: string
+  /**
+   * Whether the xo half is the plain dummy rather than the animal.
+   *
+   * The third body a room can draw, and the reason it is a flag beside the
+   * animal rather than a value in it: the peep is kept underneath, so taking
+   * the dummy off gives back the one you had. See `wearDummy`.
+   */
+  asDummy: boolean
   username: string
   /** Owned skins, what is worn, and whether the shelf is open. */
   wardrobe: ShopView
@@ -104,6 +113,15 @@ export function Lobby({
    */
   const [skin, setSkin] = useState<string | null>(wardrobe.chosen)
   const ownedSkins = wardrobe.skins.filter((entry) => wardrobe.owned[entry.id])
+  /**
+   * And whether the xo half is the dummy rather than the animal.
+   *
+   * Held here for the reason the skin is - the figure on the stage has to
+   * change on the click - and separate from the skin because these are two
+   * different bodies in two different worlds that happen to look alike: the
+   * dummy standing in the lounge is not the dummy standing in the games.
+   */
+  const [dummy, setDummy] = useState(asDummy)
   const [codeHelpOpen, setCodeHelpOpen] = useState(false)
   const [query, setQuery] = useState('')
   const selectedSpace = spaces.find((s) => s.slug === selected) ?? null
@@ -129,13 +147,36 @@ export function Lobby({
   const [shown, showOptimistically] = useOptimistic(saved)
 
   function choose(model: string) {
-    if (model === shown) return
+    if (model === shown && !dummy) return
     setError(null)
+    // Picking an animal is taking the dummy off - `chooseAvatar` clears the
+    // flag in the same write, and the stage should not wait to show it.
+    setDummy(false)
     startTransition(async () => {
       showOptimistically(model)
       const result = await chooseAvatar(model)
       if (result.ok) setSaved(result.model)
       else setError(refusal(result.error))
+    })
+  }
+
+  /**
+   * Standing in the dummy in the rooms, instead of the animal.
+   *
+   * The peep is kept either way, which is what makes this a switch rather than
+   * a twenty-fifth face in the grid: taking it off hands back the animal you
+   * already had, and the grid still shows which one that is.
+   */
+  function wearAsDummy(next: boolean) {
+    if (next === dummy) return
+    setError(null)
+    setDummy(next)
+    startTransition(async () => {
+      const result = await wearDummy(next)
+      if (!result.ok) {
+        setDummy(!next)
+        setError(refusal(result.error))
+      }
     })
   }
 
@@ -227,11 +268,21 @@ export function Lobby({
                     <XpBody key={skin ?? 'dummy'} model={skin} />
                   </Spinnable>
                   {/* Your xo self: the animal, at its xp twin's side — half
-                      its height, a companion rather than a colleague. */}
+                      its height, a companion rather than a colleague. Or the
+                      dummy, when that is what the rooms are drawing: the
+                      stage's job is to show what is standing in them, and a
+                      peep here beside a dummy in the lounge would be the
+                      locker lying about the room. */}
                   <Spinnable position={[-0.75, 0, 0.1]} base={0.45}>
-                    <group key={shown} scale={0.6}>
-                      <AvatarModel model={shown} clip="idle" />
-                    </group>
+                    {dummy ? (
+                      <group key="dummy" scale={0.6}>
+                        <XpBody model={null} />
+                      </group>
+                    ) : (
+                      <group key={shown} scale={0.6}>
+                        <AvatarModel model={shown} clip="idle" />
+                      </group>
+                    )}
                   </Spinnable>
                 </group>
               </Suspense>
@@ -243,7 +294,7 @@ export function Lobby({
             <p className="flex items-baseline gap-2 text-sm font-medium text-ink">
               {username}
               <span className="font-mono text-xs text-ink-muted">
-                xo · <span className="capitalize">{shown}</span>
+                xo · <span className="capitalize">{dummy ? 'dummy' : shown}</span>
               </span>
               <span className="font-mono text-xs text-ink-muted">
                 xp · {wardrobe.skins.find((entry) => entry.id === skin)?.name ?? 'dummy'}
@@ -284,7 +335,37 @@ export function Lobby({
               <p className="mb-1.5 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-accent-2">
                 xo · the lounge
               </p>
+              {/* The animal stays lit while the dummy is on: it is not what you
+                  are standing in, it is what you get back. */}
               <PeepPicker selected={shown} onSelect={choose} disabled={isPending} />
+
+              {/*
+                The dummy, under the roster rather than in it.
+
+                Not a twenty-fifth face, because it is not an animal and the
+                grid is the pack: it is the body you stand in when you are
+                nobody, which is what a visitor with no account is already
+                standing in and what the rooms' own wardrobe now offers at the
+                mirror. A switch keeps the peep underneath it, so turning it
+                off gives back the animal still lit in the grid above.
+              */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={dummy}
+                disabled={isPending}
+                onClick={() => wearAsDummy(!dummy)}
+                className={`mt-1.5 flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs transition disabled:opacity-60 ${
+                  dummy
+                    ? 'border-accent bg-accent/15 font-semibold text-accent'
+                    : 'border-line/60 text-ink-muted hover:border-accent/60'
+                }`}
+              >
+                <span>{t.lobby.dummy}</span>
+                <span aria-hidden className="font-mono">
+                  {dummy ? '✓' : ''}
+                </span>
+              </button>
 
               {/*
                 The other half of you. The peep is who you are in the lounge and

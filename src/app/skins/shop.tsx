@@ -46,10 +46,24 @@ export function Shop({
   view,
   bundles,
   checkout,
+  back,
 }: {
   view: ShopView
   bundles: BuckBundle[]
   checkout: string | null
+  /**
+   * Where the way out goes, and what it is called.
+   *
+   * Passed in rather than decided here, because this component is mounted on
+   * three routes and only the route knows which door you came through. It was
+   * hard-coded to the lobby on the argument that the lobby is right from all
+   * three - and it is not: opening the shop from inside a space and landing in
+   * a list of your spaces is being put outside the building you were in. The
+   * one link cost somebody their place every time.
+   *
+   * Absent falls back to the lobby, which keeps the standalone `/skins` right.
+   */
+  back?: { href: string; label: string }
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
@@ -96,18 +110,27 @@ export function Shop({
       {/*
         The way back, above the title rather than beside it.
 
-        This page is reached from three places - the rail in a space, the
-        lobby's locker, and a link somebody was sent - and none of them is a
-        tab you can close to get back. Pointing at the lobby rather than at
-        `history.back()` because it is the one destination that is right from
-        all three: it is where your spaces are, and it is where the other half
-        of the wardrobe lives.
+        This page is reached from three places - inside a space, the lobby's
+        locker, and a link somebody was sent - and none of them is a tab you can
+        close to get back.
+
+        It used to point at the lobby from all three, on the argument that the
+        lobby is where your spaces are and so is right from anywhere. It is not:
+        opening the shop from the thingiverse and landing in a list of spaces is
+        being put outside the building you were standing in, and the trip back
+        is three navigations. So the route says where it came from, and the
+        lobby is only the fallback - see `back`.
+
+        Still a link rather than `history.back()`, which would be right for the
+        two cases that navigated here and wrong for the third: somebody who
+        opened a sent link has nothing behind them, and a back button that does
+        nothing is worse than one that goes somewhere sensible.
       */}
       <Link
-        href="/tenants"
+        href={back?.href ?? '/tenants'}
         className="-mb-2 inline-flex w-fit items-center gap-1.5 text-xs text-ink-muted transition-colors hover:text-ink"
       >
-        <span aria-hidden>←</span> Back to your spaces
+        <span aria-hidden>←</span> {back?.label ?? 'Back to your spaces'}
       </Link>
 
       <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">

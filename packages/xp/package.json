@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./format": "./src/document/format.ts",
     "./engine": "./src/world/engine.ts",
+    "./blueprints": "./src/document/blueprints.ts",
     "./catalogue": "./src/assets/catalogue.ts",
     "./packs": "./src/assets/packs.ts",
     "./sounds": "./src/assets/sounds.ts",

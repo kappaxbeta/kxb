@@ -17,7 +17,17 @@ import { type Locale, publicLocale, type PublicLocale } from '@/domain/i18n/loca
 export interface AuthDict {
   signInTitle: string
   signUpTitle: string
-  blurb: string
+  /**
+   * The line under the title, and one per door rather than one shared.
+   *
+   * They were the same sentence, and it was the sentence about the event log -
+   * true, and an answer to a question nobody standing at a sign-in form is
+   * asking. Someone arriving already has an account and wants to know they are
+   * in the right place; someone signing up wants to know what it costs. Those
+   * are two different sentences.
+   */
+  blurbSignIn: string
+  blurbSignUp: string
   google: string
   or: string
   emailLabel: string
@@ -52,6 +62,22 @@ export interface AuthDict {
   codeLabel: string
   codeHint: string
   codeApplied: string
+  /**
+   * The standing offers, read off the codes named `SIGNUP…`.
+   *
+   * `offerDays` and `offerForever` are the whole headline of an offer, so they
+   * carry the plan name in them - "30 days of xo, free" says the two things
+   * that decide it, and a separate tier badge beside a generic "free month"
+   * would say them twice.
+   */
+  offerDays: string
+  offerForever: string
+  offerNote: string
+  offerSpaces: string
+  offerRemaining: string
+  offerCloses: string
+  offerUse: string
+  offerApplied: string
   gatedLead: string
   gatedStrong: string
   gatedMid: string
@@ -86,7 +112,8 @@ export interface AuthDict {
 export const AUTH_EN: AuthDict = {
   signInTitle: 'Sign in',
   signUpTitle: 'Create an account',
-  blurb: 'Events are recorded per account, so each user gets their own log.',
+  blurbSignIn: 'Your spaces are where you left them.',
+  blurbSignUp: 'Free, and it comes with a space of your own.',
   google: 'Continue with Google',
   or: 'or',
   emailLabel: 'Email',
@@ -114,6 +141,14 @@ export const AUTH_EN: AuthDict = {
   codeLabel: 'Code (optional)',
   codeHint: 'Got a code? It gets you a month free — no card needed.',
   codeApplied: 'Your code is ready. Create the account and the free month starts.',
+  offerDays: '{n} days of {tier}, free',
+  offerForever: '{tier}, free, with no end',
+  offerNote: 'No card, and nothing is charged when it runs out.',
+  offerSpaces: 'Covers {n} of your spaces.',
+  offerRemaining: '{n} left',
+  offerCloses: 'Until {date}',
+  offerUse: 'Use it',
+  offerApplied: 'Applied',
   gatedLead: 'Sign-up is ',
   gatedStrong: 'by invitation',
   gatedMid: ' at the moment. ',
@@ -141,7 +176,8 @@ export const AUTH_EN: AuthDict = {
 export const AUTH_DE: AuthDict = {
   signInTitle: 'Anmelden',
   signUpTitle: 'Konto anlegen',
-  blurb: 'Ereignisse werden pro Konto aufgezeichnet, jede Person bekommt also ihr eigenes Log.',
+  blurbSignIn: 'Ihre Räume sind da, wo Sie sie gelassen haben.',
+  blurbSignUp: 'Kostenlos, mit einem eigenen Raum dazu.',
   google: 'Weiter mit Google',
   or: 'oder',
   emailLabel: 'E-Mail',
@@ -171,6 +207,14 @@ export const AUTH_DE: AuthDict = {
   codeHint: 'Sie haben einen Code? Damit ist der erste Monat frei — ohne Karte.',
   codeApplied:
     'Ihr Code liegt bereit. Legen Sie das Konto an, dann startet der Gratismonat.',
+  offerDays: '{n} Tage {tier}, gratis',
+  offerForever: '{tier}, gratis, ohne Ende',
+  offerNote: 'Ohne Karte, und am Ende wird nichts abgebucht.',
+  offerSpaces: 'Gilt für {n} Ihrer Räume.',
+  offerRemaining: 'noch {n}',
+  offerCloses: 'Bis {date}',
+  offerUse: 'Nehmen',
+  offerApplied: 'Übernommen',
   gatedLead: 'Die Anmeldung läuft zurzeit ',
   gatedStrong: 'über Einladungen',
   gatedMid: '. ',

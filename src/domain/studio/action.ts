@@ -41,6 +41,8 @@ export type ActionKind =
   | 'hit'
   | 'shake'
   | 'dance'
+  | 'pose'
+  | 'hide'
   | 'talk'
   | 'emote'
 
@@ -65,6 +67,18 @@ export type Action =
   /** Wobble on the spot, for a no or a shiver. */
   | (Beat & { kind: 'shake' })
   | (Beat & { kind: 'dance' })
+  /**
+   * Play the actor's authored clip - the one keyed in the animator.
+   *
+   * Payload-free like `dance`, and for the same reason: the verb names *when*,
+   * and the actor owns *what*. The clip itself lives on the actor (`Actor.pose`
+   * in `@/domain/studio/shot`), so every pose beat on a row plays the same
+   * performance - a second clip is a second actor, until somebody needs
+   * otherwise.
+   */
+  | (Beat & { kind: 'pose' })
+  /** Not drawn at all, for as long as the beat runs. */
+  | (Beat & { kind: 'hide' })
   /** A line, in a bubble over the head - and out loud, if the voice is on. */
   | (Beat & { kind: 'talk'; text: string })
   | (Beat & { kind: 'emote'; emote: number })
@@ -166,6 +180,32 @@ export const ACTION_META: Record<ActionKind, ActionMeta> = {
     tone: 'bg-fuchsia-500/70 border-fuchsia-300/60',
     icon: 'Music',
   },
+  pose: {
+    kind: 'pose',
+    label: 'Pose',
+    // The clip has its own length and loops to fill the beat, so stretching
+    // the beat is more of the performance rather than a slower one.
+    resizable: true,
+    tone: 'bg-indigo-500/70 border-indigo-300/60',
+    icon: 'PersonStanding',
+  },
+  hide: {
+    kind: 'hide',
+    label: 'Hide',
+    /*
+     * Resizable, because the length *is* the point: a hide beat is the stretch
+     * of the shot somebody is not in, and both ends of it are a decision.
+     *
+     * A cut rather than a dissolve, and deliberately. A body that faded would
+     * need its materials made transparent - a clone per body, re-sorted every
+     * frame - and would still cast a solid shadow the whole way down, which
+     * reads as a bug rather than as a fade. Somebody who wants an arrival can
+     * key `scale` instead, which is what a prop already does.
+     */
+    resizable: true,
+    tone: 'bg-slate-500/70 border-slate-300/60',
+    icon: 'EyeOff',
+  },
   talk: {
     kind: 'talk',
     label: 'Talk',
@@ -200,6 +240,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'hit',
   'shake',
   'dance',
+  'pose',
   'talk',
   'emote',
 ]
@@ -234,6 +275,10 @@ export function newAction(
       return { kind, t, duration: SHAKE_CYCLE * 3 }
     case 'dance':
       return { kind, t, duration: 3 }
+    case 'hide':
+      return { kind, t, duration: 2 }
+    case 'pose':
+      return { kind, t, duration: 2 }
     case 'talk':
       return { kind, t, duration: talkDuration('Hello!'), text: 'Hello!' }
     case 'emote':
@@ -315,6 +360,10 @@ export function parseAction(value: unknown): Action | null {
       return { kind: 'shake', t, duration }
     case 'dance':
       return { kind: 'dance', t, duration }
+    case 'pose':
+      return { kind: 'pose', t, duration }
+    case 'hide':
+      return { kind: 'hide', t, duration }
     case 'talk': {
       const text = typeof raw.text === 'string' ? raw.text.slice(0, MAX_LINE) : ''
       // A line with nothing in it draws an empty bubble and says nothing out

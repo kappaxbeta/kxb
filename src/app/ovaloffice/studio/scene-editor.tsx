@@ -11,6 +11,9 @@ import {
   SceneControls,
 } from '@/app/ovaloffice/studio/scene-controls'
 import { SceneStage } from '@/app/ovaloffice/studio/scene-stage'
+import { PosePanel } from '@/app/ovaloffice/studio/pose-panel'
+import type { RigHandle } from '@/app/ovaloffice/animator/posing'
+import { type Pose, trimPose } from '@/domain/animator/clip'
 import {
   DEFAULT_SCENE,
   encodeScene,
@@ -179,6 +182,41 @@ export function SceneEditor({
   const [locked, setLocked] = useState(false)
 
   /**
+   * Which body has handles on it, which bone is lit, and the live rig.
+   *
+   * The same three the video studio keeps, and kept here for the same reason:
+   * a pose is made by dragging a body that is already in the scene, so the
+   * thing being posed is a *selection in the picture* rather than a row in the
+   * panel. Clicking a peep is how you get hold of one - there is nothing else
+   * a click on a body could mean in this editor.
+   */
+  const [posing, setPosing] = useState<number | null>(null)
+  const [bone, setBone] = useState<string | null>(null)
+  const [poseRig, setPoseRig] = useState<RigHandle | null>(null)
+
+  /**
+   * A drag, written on to the peep being posed.
+   *
+   * Straight on to the document, unlike the shot - which has a clock and turns
+   * the same gesture into a key at the playhead. A still has one instant, so
+   * where the bones are *is* the document.
+   *
+   * `trimPose` because this ends up in the address bar: see the note on it.
+   */
+  const onPosed = useCallback(
+    (pose: Pose) => {
+      if (posing === null) return
+      setScene((current) => ({
+        ...current,
+        peeps: current.peeps.map((peep, index) =>
+          index === posing ? { ...peep, pose: trimPose(pose) } : peep,
+        ),
+      }))
+    },
+    [posing],
+  )
+
+  /**
    * A press of "Back to framing", carrying the framing to go back to.
    *
    * The framing travels *with* the request rather than being read inside the
@@ -342,7 +380,25 @@ export function SceneEditor({
             <OrbitControls makeDefault target={initial.camera.target} enableDamping={false} />
             <CameraReporter onCamera={onCamera} />
             <Reframe request={restore} />
-            <SceneStage scene={scene} onReady={onReady} />
+            <SceneStage
+              scene={scene}
+              onReady={onReady}
+              posing={{
+                onPick: (index) => {
+                  setPosing(index)
+                  setBone(null)
+                },
+                index: posing,
+                bone,
+                onBone: setBone,
+                onRig: setPoseRig,
+                onPose: onPosed,
+                // The camera has the left button while the view is locked, so
+                // the handles let go of it - otherwise looking around grabs
+                // whatever dot is under the pointer.
+                grabbable: !locked,
+              }}
+            />
           </Canvas>
 
           {/*
@@ -494,6 +550,29 @@ export function SceneEditor({
       </div>
 
       <aside className="min-w-0 md:sticky md:top-4 md:max-h-[calc(100dvh-2rem)] md:self-start md:overflow-y-auto md:pr-1">
+        {/*
+          The bone you have hold of, above everything else in the panel.
+
+          Only once a body is picked, because until then it would be a section
+          about nothing - and at the top, because it is about the thing you
+          just clicked and everything below it is about the scene.
+        */}
+        {posing !== null && scene.peeps[posing] && (
+          <div className="mb-2">
+            <PosePanel
+              rig={poseRig}
+              look={scene.peeps[posing].avatar}
+              bone={bone}
+              pose={scene.peeps[posing].pose ?? null}
+              onBone={setBone}
+              onPose={onPosed}
+              onDone={() => {
+                setPosing(null)
+                setBone(null)
+              }}
+            />
+          </div>
+        )}
         <SceneControls scene={scene} onChange={setScene} worlds={worlds} />
       </aside>
     </div>

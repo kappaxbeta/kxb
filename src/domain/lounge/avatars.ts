@@ -73,6 +73,21 @@ export function isSkinLook(look: string): boolean {
 }
 
 /**
+ * The plain dummy: the body a player is before they are anybody.
+ *
+ * A qualified catalogue id like any skin, so every seam already handles it -
+ * `isSkinLook` says yes, `BodyModel` draws it down the skinned path, and the
+ * presence channel carries it as it carries a Knight. What makes it worth a
+ * name is that it is not bought and therefore is not on the shelf: it is what
+ * an account with no skin already wears in the games, and what somebody with
+ * no account at all stands in here.
+ *
+ * Client-safe on purpose. `GUEST_LOOK` in domain/skins/queries.ts is this
+ * constant under the server's name for it.
+ */
+export const DUMMY_LOOK = 'dummy/Dummy'
+
+/**
  * Is this a look anything can draw - either roster animal or skin?
  *
  * The presence channel's guard. It used to be `isKnownAvatar`, which answered

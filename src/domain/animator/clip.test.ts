@@ -7,6 +7,7 @@ import {
   emptyDoc,
   keyAt,
   moveKey,
+  parseAnyDoc,
   parseDoc,
   putKey,
   removeKey,
@@ -17,7 +18,9 @@ import {
   setFps,
   slerp,
   snapTime,
+  trimPose,
 } from '@/domain/animator/clip'
+import { ALL_SPECS, groupsIn, isPartial } from '@/domain/animator/rig'
 
 const REST: Pose = {
   root: [0, 0, 0],
@@ -257,5 +260,180 @@ describe('the file', () => {
   test('the duration never ends up shorter than the last key it kept', () => {
     const parsed = parseDoc({ duration: 0.5, fps: 24, keys: [{ time: 3, pose: { root: [0, 0, 0], bones: {} } }] }, REST)
     expect(parsed.duration).toBe(3)
+  })
+})
+
+/**
+ * What decides whether a clip plays *over* the walk or replaces it.
+ *
+ * Reported as "walk and dance is not working together", and the machinery is
+ * right - which is exactly why it is worth pinning here. A clip layers when it
+ * leaves a whole group of the body alone, and `bake` is what decides that: a
+ * bone whose rotation never changes is dropped, so a wave arrives with no leg
+ * tracks and the mixer has nothing to fight the gait with. Key a single hip
+ * sway into the same clip and it touches all three groups, at which point it is
+ * a whole-body animation and correctly replaces the walk.
+ *
+ * The rule is read off the tracks rather than off a switch on purpose - a clip
+ * with no leg tracks cannot drive the legs whatever anybody ticked - so this is
+ * the test that says an author can still reach both behaviours.
+ */
+describe('what makes a clip layer', () => {
+  /*
+    Loaded names, not the ones the GLB spells. three sanitises a node name on
+    the way in - `upperarm.r` becomes `upperarmr` - and `boneKey` exists to say
+    the same thing, so a pose, a track and a spec all agree. Writing the dotted
+    names here looks right and matches nothing, which is worth a comment
+    because it is a mistake this test made first.
+  */
+  const FULL: Pose = {
+    root: [0, 0, 0],
+    bones: {
+      hips: [0, 0, 0, 1],
+      upperarmr: [0, 0, 0, 1],
+      upperlegl: [0, 0, 0, 1],
+    },
+  }
+
+  const two = (second: Pose): AnimationDoc => {
+    const doc = emptyDoc(FULL)
+    return putKey({ ...doc, duration: 1 }, 1, second)
+  }
+
+  test('a clip that only moves an arm arrives with only that arm', () => {
+    const baked = bake(two({ ...FULL, bones: { ...FULL.bones, upperarmr: TURNED } }), FULL)
+
+    expect(Object.keys(baked.bones)).toEqual(['upperarmr'])
+    expect([...groupsIn(Object.keys(baked.bones), ALL_SPECS)]).toEqual(['arms'])
+    expect(isPartial(groupsIn(Object.keys(baked.bones), ALL_SPECS))).toBe(true)
+  })
+
+  test('arms and torso together still layer - two groups is not three', () => {
+    const baked = bake(
+      two({ ...FULL, bones: { ...FULL.bones, upperarmr: TURNED, hips: TURNED } }),
+      FULL,
+    )
+
+    expect(isPartial(groupsIn(Object.keys(baked.bones), ALL_SPECS))).toBe(true)
+  })
+
+  test('but one keyed leg makes it a whole-body clip that replaces the gait', () => {
+    const baked = bake(
+      two({
+        ...FULL,
+        bones: { ...FULL.bones, upperarmr: TURNED, hips: TURNED, upperlegl: TURNED },
+      }),
+      FULL,
+    )
+
+    expect(isPartial(groupsIn(Object.keys(baked.bones), ALL_SPECS))).toBe(false)
+  })
+
+  test('a bone held still through every key is not a track at all', () => {
+    const baked = bake(two({ ...FULL, bones: { ...FULL.bones, upperarmr: TURNED } }), FULL)
+
+    expect(baked.bones.hips).toBeUndefined()
+    expect(baked.bones.upperlegl).toBeUndefined()
+  })
+})
+
+describe('a document parsed with no rig to hold it against', () => {
+  const TURNED: Quat = [0, 0.7071, 0, 0.7071]
+
+  test('keeps exactly the bones the file names', () => {
+    const doc = parseAnyDoc({
+      name: 'wave',
+      fps: 24,
+      duration: 2,
+      loop: false,
+      keys: [{ time: 0, ease: 'hold', pose: { root: [0, 1, 0], bones: { head: TURNED } } }],
+    })
+    expect(doc?.name).toBe('wave')
+    expect(doc?.loop).toBe(false)
+    expect(Object.keys(doc?.keys[0].pose.bones ?? {})).toEqual(['head'])
+    expect(doc?.keys[0].pose.root).toEqual([0, 1, 0])
+  })
+
+  test('is null for anything without a usable key, rather than a default', () => {
+    expect(parseAnyDoc(null)).toBeNull()
+    expect(parseAnyDoc('wave')).toBeNull()
+    expect(parseAnyDoc({ keys: [] })).toBeNull()
+    expect(parseAnyDoc({ keys: [{ time: 0 }] })).toBeNull()
+  })
+
+  test('the duration never ends before the last key', () => {
+    const doc = parseAnyDoc({
+      duration: 1,
+      keys: [{ time: 3, pose: { root: [0, 0, 0], bones: {} } }],
+    })
+    expect(doc?.duration).toBe(3)
+  })
+
+  test('a degenerate rotation becomes identity rather than NaN', () => {
+    const doc = parseAnyDoc({
+      keys: [{ time: 0, pose: { root: [0, 0, 0], bones: { head: [0, 0, 0, 0] } } }],
+    })
+    expect(doc?.keys[0].pose.bones.head).toEqual([0, 0, 0, 1])
+  })
+
+  test('what it returns is what samplePose already understands', () => {
+    const doc = parseAnyDoc({
+      fps: 24,
+      duration: 1,
+      keys: [
+        { time: 0, ease: 'linear', pose: { root: [0, 0, 0], bones: { head: [0, 0, 0, 1] } } },
+        { time: 1, ease: 'linear', pose: { root: [0, 1, 0], bones: { head: TURNED } } },
+      ],
+    })
+    expect(doc).not.toBeNull()
+    expect(samplePose(doc as AnimationDoc, 0.5).root[1]).toBeCloseTo(0.5)
+  })
+})
+
+describe('trimming a pose for the address bar', () => {
+  test('rounds to four places, which is finer than a hand can drag', () => {
+    const trimmed = trimPose({
+      root: [0.123456789, 1, 0],
+      bones: { head: [0.7071067811865476, 0, 0, 0.7071067811865476] },
+    })
+    expect(trimmed.root[0]).toBe(0.1235)
+    expect(trimmed.bones.head[0]).toBe(0.7071)
+  })
+
+  test('shortens what a link has to carry', () => {
+    const pose = { root: [0.123456789, 0, 0] as [number, number, number], bones: {} }
+    expect(JSON.stringify(trimPose(pose)).length).toBeLessThan(JSON.stringify(pose).length)
+  })
+})
+
+describe('a bone that is posed and then held', () => {
+  /** Rolled a quarter turn about Z, and never moved from there. */
+  const ROLLED: Quat = [0, 0, 0.7071, 0.7071]
+  const REST_HEAD: Pose = { root: [0, 0, 0], bones: { head: [0, 0, 0, 1], hips: [0, 0, 0, 1] } }
+
+  const held: AnimationDoc = {
+    version: 1,
+    name: 'held',
+    fps: 24,
+    duration: 1,
+    loop: false,
+    keys: [
+      { time: 0, ease: 'linear', pose: { root: [0, 0, 0], bones: { head: ROLLED, hips: [0, 0, 0, 1] } } },
+      { time: 1, ease: 'linear', pose: { root: [0, 0, 0], bones: { head: ROLLED, hips: [0, 0, 0, 1] } } },
+    ],
+  }
+
+  test('survives the bake, because a held pose is still a pose', () => {
+    // Dropping it leaves the player with nothing to bind, so the bone stays at
+    // the model's own rest - which is not where it was put.
+    const baked = bake(held, REST_HEAD)
+    expect(baked.bones.head).toBeDefined()
+    expect(baked.bones.head[2]).toBeCloseTo(0.7071)
+  })
+
+  test('a bone left at rest for the whole clip is still dropped', () => {
+    // The optimisation this protects: 20 of 23 tracks go on a clip that only
+    // waves, and a bone nothing touched is a bone the model already places.
+    expect(bake(held, REST_HEAD).bones.hips).toBeUndefined()
   })
 })

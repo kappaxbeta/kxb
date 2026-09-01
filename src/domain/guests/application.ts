@@ -461,8 +461,26 @@ export type GuestLandingKind = 'lounge' | 'room' | 'match'
 
 export interface GuestLanding {
   kind: GuestLandingKind
-  /** Which room, when it is one. Null for the other two kinds. */
-  room: string | null
+  /**
+   * Which one, as the destination names it: a room's slug, a match's id, and
+   * null for the lounge, of which a space has exactly one.
+   *
+   * The address rather than the name, because that is all a string can be read
+   * for. Turning it into something a person called it is a query, which is
+   * `listGuestLinks`'s job and lands in `name` below.
+   */
+  ref: string | null
+  /**
+   * What it is called, once somebody has looked it up. Null until then.
+   *
+   * Two fields rather than one that changes meaning halfway - this used to be a
+   * single `room` holding a slug on the way out of here and a name by the time
+   * it was drawn, which worked and read as a bug every time anybody followed
+   * it. Null is also a real answer and not only "not asked": a room that has
+   * been closed and a match that has ended still have links pointing at them,
+   * and the row then falls back to the category word.
+   */
+  name: string | null
 }
 
 /**
@@ -481,9 +499,10 @@ export interface GuestLanding {
  * rather than as whatever it claims to say. A row must describe the walk the
  * visitor takes, not the string somebody typed.
  *
- * A match is named as a kind and not by its id, deliberately: an id tells the
- * reader nothing, and matches are short-lived - by the time a host is scanning
- * this list, "a match" is the whole of what is worth saying.
+ * A match carries its id here for the same reason a room carries its slug: it
+ * is the handle the name is looked up by. The id is never drawn - `A match`
+ * three times over is exactly the wall of identical rows this function exists
+ * to break up, and a uuid instead of it would be the same wall in hex.
  */
 export function guestLandingSpot(
   destination: string | null | undefined,
@@ -492,20 +511,28 @@ export function guestLandingSpot(
   const path = guestArrival(destination, slug)
 
   const room = guestRoomSlug(path, slug)
-  if (room) return { kind: 'room', room }
+  if (room) return { kind: 'room', ref: room, name: null }
 
-  if (path.startsWith(`/t/${slug}/battle/`)) return { kind: 'match', room: null }
+  const prefix = `/t/${slug}/battle/`
+  if (path.startsWith(prefix)) {
+    // Whatever the first segment after the prefix is, and nothing else: a
+    // battle's own sub-pages are still that battle, and an empty tail is a
+    // match link with no match in it, which has no name to look up.
+    const battle = path.slice(prefix.length).split('/')[0]
+    return { kind: 'match', ref: battle ? battle : null, name: null }
+  }
 
-  return { kind: 'lounge', room: null }
+  return { kind: 'lounge', ref: null, name: null }
 }
 
 /**
  * The same answer as a phrase, so two lists cannot word it differently.
  *
- * Takes the room's own name when there is one and adds nothing to it - "into
- * the room Workshop" is a label written by somebody who has never had to scan
- * forty of them. The other two kinds get an article because they are categories
- * rather than names, which is the whole difference the reader needs.
+ * Takes the thing's own name when one has been looked up and adds nothing to it
+ * - "into the room Workshop" is a label written by somebody who has never had
+ * to scan forty of them. Without a name it falls back to the category word,
+ * which gets an article because it is a category rather than a name, and that
+ * is the whole difference the reader needs.
  *
  * The three category words are passed in rather than written here, because one
  * of the two lists that draws this is inside a space and a space now has a
@@ -529,8 +556,8 @@ export function guestLandingLabel(
   landing: GuestLanding,
   words: GuestLandingWords = LANDING_EN,
 ): string {
-  if (landing.kind === 'room') return landing.room ?? words.room
-  return landing.kind === 'match' ? words.match : words.lounge
+  if (landing.kind === 'lounge') return words.lounge
+  return landing.name ?? (landing.kind === 'room' ? words.room : words.match)
 }
 
 /**

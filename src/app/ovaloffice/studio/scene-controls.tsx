@@ -11,7 +11,6 @@ import {
   Sun,
   Users,
 } from 'lucide-react'
-import { avatarShotUrl } from '@/domain/lounge/avatars'
 import { FORMATS } from '@/domain/studio/formats'
 import { framingFor } from '@/domain/scenes/world-import'
 import {
@@ -22,13 +21,16 @@ import {
 import {
   Add,
   EmoteSwatch,
+  hasClip,
   Num,
   Pick,
+  PickCast,
   PickGroups,
   Remove,
   Row,
   Section,
   Slide,
+  Tint,
 } from '@/app/ovaloffice/studio/parts'
 import { EmoteGrid } from '@/app/world/_hud/emote-grid'
 import { TERRAIN_BLOCKS } from '@/domain/lounge/palette'
@@ -41,6 +43,8 @@ import {
   DEFAULT_PEEP,
   DEFAULT_SCENE,
   type GoalSpec,
+  lookLabel,
+  lookShotUrl,
   type PeepSpec,
   STUDIO_AVATARS,
   STUDIO_CLIPS,
@@ -303,7 +307,7 @@ function PeepRow({
 
   return (
     <Row
-      title={peep.avatar}
+      title={lookLabel(peep.avatar)}
       detail={peep.say ? `“${peep.say.slice(0, 18)}”` : undefined}
       lead={
         /* The animal, rather than its name in a list. The whole panel is words
@@ -312,7 +316,7 @@ function PeepRow({
            an <img> rather than a canvas. */
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={avatarShotUrl(peep.avatar)}
+          src={lookShotUrl(peep.avatar)}
           alt=""
           className="size-8 shrink-0 rounded-lg border border-line/40 bg-surface-raised/60 object-contain"
         />
@@ -321,7 +325,7 @@ function PeepRow({
     >
       <div className="flex flex-col gap-1.5">
         <div className="grid grid-cols-2 gap-2">
-          <Pick label="Animal" value={peep.avatar} options={STUDIO_AVATARS} onChange={(avatar) => onChange({ avatar })} />
+          <PickCast label="Body" value={peep.avatar} onChange={(avatar) => onChange({ avatar })} />
           <Pick label="Clip" value={peep.clip} options={STUDIO_CLIPS} onChange={(clip) => onChange({ clip: clip as PeepSpec['clip'] })} />
         </div>
         {/* The clip never plays - it is posed at one moment and left there -
@@ -473,6 +477,16 @@ function Blocks({ scene, patch }: { scene: StudioScene; patch: Patch }) {
                   talks about it: "top 1" is a block sitting on the floor. */}
               <Slide label="Top at" value={block.top} min={-4} max={16} step={1} onChange={(top) => set(index, { top })} />
               <Slide label="Turn" value={block.rotation} min={-180} max={180} step={5} unit="°" onChange={(rotation) => set(index, { rotation })} />
+              <Slide label="Pitch" value={block.pitch} min={-180} max={180} step={5} unit="°" onChange={(pitch) => set(index, { pitch })} />
+              <Slide label="Roll" value={block.roll} min={-180} max={180} step={5} unit="°" onChange={(roll) => set(index, { roll })} />
+              <Slide label="Size" value={block.scale} min={0.1} max={12} step={0.05} onChange={(scale) => set(index, { scale })} />
+              {/* Only the models that carry a clip have anywhere to put this,
+                  and a phase on a crate is a slider that does nothing - so it
+                  is shown when there is something for it to move. */}
+              {hasClip(block.model) && (
+                <Slide label="Phase" value={block.time} min={0} max={24} step={0.1} unit="s" onChange={(time) => set(index, { time })} />
+              )}
+              <Tint value={block.tint} onChange={(tint) => set(index, { tint })} />
               <Remove onClick={() => patch({ blocks: scene.blocks.filter((_, i) => i !== index) })}>
                 Remove block
               </Remove>
@@ -484,7 +498,7 @@ function Blocks({ scene, patch }: { scene: StudioScene; patch: Patch }) {
         label="Add a block"
         disabled={scene.blocks.length >= 120}
         onClick={() =>
-          patch({ blocks: [...scene.blocks, { model: 'crate', x: 0, top: 1, z: -3, rotation: 0 }] })
+          patch({ blocks: [...scene.blocks, { model: 'crate', x: 0, top: 1, z: -3, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0 }] })
         }
       />
     </Section>

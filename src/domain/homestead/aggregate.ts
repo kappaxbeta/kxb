@@ -5,6 +5,7 @@ import {
   type DoorMode,
   HOMESTEAD_STREAM_TYPE,
   type HomesteadEvent,
+  MAX_TRANSFER,
   type PlaceId,
 } from '@/domain/homestead/events'
 import {
@@ -15,6 +16,7 @@ import {
   topperOf,
 } from '@/domain/homestead/pricing'
 import type { HomesteadCommand } from '@/domain/homestead/commands'
+import { MAX_PRICE } from '@/domain/thingiverse/craft'
 import { DomainError } from '@/es/errors'
 import type { Decider } from '@/es/types'
 
@@ -164,6 +166,18 @@ export function evolve(
           return { ...current, props }
         }),
       }
+    }
+
+    case 'CoinsSpent': {
+      return { ...state, coins: state.coins - event.data.cost }
+    }
+
+    case 'CoinsSent': {
+      return { ...state, coins: state.coins - event.data.amount }
+    }
+
+    case 'CoinsReceived': {
+      return { ...state, coins: state.coins + event.data.amount }
     }
 
     case 'GroundBought': {
@@ -349,6 +363,79 @@ export function decide(
       requireAffordable(state, cost)
 
       return [{ type: 'GroundBought', data: { place, tiles: fresh, cost } }]
+    }
+
+    /**
+     * Handing coins to somebody else.
+     *
+     * Only the debit. The credit is a second command against the *recipient's*
+     * stream, issued by the same action - see `CoinsSent`, which argues why the
+     * two cannot be one write and why the debit goes first.
+     *
+     * Who it is going to is not checked here and cannot be: this aggregate
+     * knows a balance, not whose stream it is on, so "you cannot pay yourself"
+     * is the action's rule. What is checked is the pair that protects the
+     * purse - a plausible amount, and having it.
+     */
+    case 'SendCoins': {
+      requireFounded(state)
+      const { to, amount, transfer } = command
+
+      if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_TRANSFER) {
+        throw new DomainError('That is not an amount you can send', 'homestead_bad_amount')
+      }
+
+      requireAffordable(state, amount)
+
+      return [{ type: 'CoinsSent', data: { to, amount, transfer } }]
+    }
+
+    /**
+     * The other half, on the other purse.
+     *
+     * Deliberately does *not* call `requireFounded`. A member who has never
+     * opened a café has no homestead stream, and refusing the credit would make
+     * them unable to be paid - which is a strange rule and a confusing one, and
+     * would push every sender into checking first. The credit founds nothing;
+     * it simply lands, and the balance is correct whenever they do open one.
+     */
+    case 'ReceiveCoins': {
+      const { from, amount, transfer } = command
+
+      if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_TRANSFER) {
+        throw new DomainError('That is not an amount you can receive', 'homestead_bad_amount')
+      }
+
+      return [{ type: 'CoinsReceived', data: { from, amount, transfer } }]
+    }
+
+    /**
+     * Spending on something this aggregate cannot see.
+     *
+     * The mirror of `ServeCustomer`: the exact number comes from outside,
+     * because the price lives on a thingiverse blueprint and importing the
+     * whole shelf here would be this aggregate absorbing another game. What is
+     * kept is what `BuyGround` is really protecting - **no browser names a
+     * price.** The command is issued by a server action that read the blueprint
+     * row itself, and no browser-facing schema accepts a cost at all.
+     *
+     * Two guards, and they are the two that matter for a purse that only goes
+     * down: a cost has to be a plausible number, and you have to have it.
+     */
+    case 'SpendCoins': {
+      requireFounded(state)
+      const { cost, on, what } = command
+
+      if (!Number.isInteger(cost) || cost < 0 || cost > MAX_PRICE) {
+        throw new DomainError('That is not a plausible price', 'homestead_bad_price')
+      }
+      // Nothing to record. A free thing is free, and an event saying so would
+      // be a row per summon in a log that already has one.
+      if (cost === 0) return []
+
+      requireAffordable(state, cost)
+
+      return [{ type: 'CoinsSpent', data: { on, what, cost } }]
     }
 
     /**

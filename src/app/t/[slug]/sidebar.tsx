@@ -100,6 +100,23 @@ export interface SidebarFeatures {
    * see" the scenes flag warns about.
    */
   skinShop: boolean
+  /**
+   * Does this space have the thingiverse?
+   *
+   * The platform flag *and* the tier, resolved together in the layout - a shelf
+   * of blueprints is world-building, which is what the xo tier is. One boolean
+   * here rather than two, because the rail has only one thing to decide with
+   * it: whether the tab exists.
+   */
+  thingiverse: boolean
+  /**
+   * Does running cost anything here?
+   *
+   * The space's own switch rather than a flag - see the `stamina` capability -
+   * and it reaches the rail because that is where an owner flips it, standing
+   * in the room it changes.
+   */
+  stamina: boolean
 }
 
 /**
@@ -281,6 +298,25 @@ export function Sidebar(props: {
    * which is the standard fix and a bigger change than this is worth today.
    */
   const t = railDict(useLocale())
+
+  /**
+   * Who is in the room, for the count on the switch below.
+   *
+   * Read here as well as inside `<People>`, which is not a duplicate source of
+   * truth: both read the one store, and the number on the way in is a different
+   * question from the list you get when you arrive.
+   */
+  const here = useHere()
+
+  /**
+   * Which half of the folded panel is showing.
+   *
+   * Only meaningful below `xl`, where the two rails have become one - above it
+   * both halves are on screen and nothing reads this. Not persisted, like the
+   * fold above it: coming back to a space should show you where you can go,
+   * which is the half somebody arrives wanting.
+   */
+  const [showingPeople, setShowingPeople] = useState(false)
 
   const fold = (closed: boolean) => {
     const root = document.documentElement
@@ -531,8 +567,46 @@ export function Sidebar(props: {
               column silently squashes its items to fit instead of overflowing,
               and a squashed item whose own contents have a fixed height spills
               out of its box and over the next one. */}
+          {/*
+            The two halves of this panel, as one switch.
+            ---------------------------------------------------------------
+            From a laptop up there are two panels: where to go on the left,
+            who is here and what you can do on the right. Below that there is
+            one, and the right-hand half used to be *appended* to it - so
+            reaching the chat, or the shelf, or the room's switches meant
+            scrolling past the whole of the navigation every time.
+
+            A switch rather than a disclosure that pushes: opening one half
+            hides the other, so neither ever has to be scrolled past to reach
+            the other. It is the same move the account menu at the foot of this
+            panel makes - a control that swaps what the panel is showing - and
+            it is drawn only below `xl`, because above it both halves are
+            already on screen and a switch between two visible things is a
+            control with nothing to do.
+          */}
+          <div className="mt-4 shrink-0 xl:hidden">
+            <button
+              type="button"
+              onClick={() => setShowingPeople((current) => !current)}
+              aria-expanded={showingPeople}
+              className="flex w-full items-center justify-between gap-2 rounded-xl border border-line/60 px-3 py-2 text-left transition hover:border-accent/60 hover:bg-surface-raised"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+                {showingPeople ? t.bands.backToPlaces : t.bands.peopleTools}
+              </span>
+              {/*
+                How many people are in here, on the way *in* only. It is the one
+                thing somebody wants to know before deciding to look, and on the
+                way back the panel they are returning to has nothing to count.
+              */}
+              <span className="font-mono text-[10px] text-ink-muted">
+                {showingPeople ? '←' : here.people.length + 1}
+              </span>
+            </button>
+          </div>
+
           <div className="rail-scroll mt-5 flex min-h-0 flex-1 flex-col gap-5">
-            <div className="shrink-0">
+            <div className={showingPeople ? 'hidden xl:block' : 'shrink-0'}>
               <Surfaces {...props} />
             </div>
             {/* Above everything, and not behind a tab. While a match is on,
@@ -546,16 +620,28 @@ export function Sidebar(props: {
                 without it both copies draw at once and the match card appears
                 twice on one screen. Below `xl` there is no right-hand panel, so
                 this is the only copy and must stay. */}
-            <div className="shrink-0 xl:hidden">
+            <div className={showingPeople ? 'hidden' : 'shrink-0 xl:hidden'}>
               <MatchBlock />
             </div>
-            <div className="shrink-0">
+            <div className={showingPeople ? 'hidden xl:block' : 'shrink-0'}>
               <Places {...props} />
             </div>
             {/* On a laptop these have their own panel across the page. Rendered
                 in both, hidden in one, because the two copies read the same
                 store and neither is the source of truth. */}
-            <div className="flex shrink-0 flex-col gap-5 xl:hidden">
+            {/*
+              The right-hand half, when the switch above has asked for it.
+
+              `flex-1` rather than `shrink-0` now: it is the whole of the panel
+              while it is showing, so the tabs below take the height and scroll
+              inside themselves instead of lengthening a column - which is the
+              scrolling this switch exists to remove.
+            */}
+            <div
+              className={`flex min-h-0 flex-col gap-5 xl:hidden ${
+                showingPeople ? 'flex-1' : 'hidden'
+              }`}
+            >
               <People {...props} />
               {/* Folded away above `xl` exactly like the roster, and beside it
                   for the same reason: on a laptop the tools belong with the
@@ -568,6 +654,8 @@ export function Sidebar(props: {
                 role={props.role}
                 guestAccess={props.guestAccess}
                 hasChat={props.chat !== null}
+                hasThings={props.features.thingiverse}
+                stamina={props.features.stamina}
                 hasPlay={props.canPlayXp}
                 hasRadio={props.radio !== null}
                 rooms={props.rooms}
@@ -575,7 +663,13 @@ export function Sidebar(props: {
                 avatar={props.avatar}
                 hereOnly={props.hereOnly}
                 hasSkinShop={props.features.skinShop}
-                fill={false}
+                /*
+                  Filling, now that this half *is* the panel when it is on
+                  screen. It was false when these sat at the bottom of one
+                  scrolling column and `flex-1` inside a scroller resolves
+                  against nothing.
+                */
+                fill
               />
             </div>
           </div>
@@ -638,6 +732,8 @@ export function Sidebar(props: {
             role={props.role}
             guestAccess={props.guestAccess}
             hasChat={props.chat !== null}
+            hasThings={props.features.thingiverse}
+            stamina={props.features.stamina}
             hasPlay={props.canPlayXp}
             hasRadio={props.radio !== null}
             rooms={props.rooms}
@@ -909,6 +1005,19 @@ function Surfaces({
     tierAtLeast(tier, 'xo')
       ? { href: `/t/${slug}/browse`, label: t.surfaces.browse, icon: 'world', show: features.worlds }
       : { href: `/t/${slug}/worlds`, label: t.surfaces.worlds, icon: 'world', show: features.worlds },
+    /*
+      No Thingiverse row, and its absence is the decision.
+
+      It had one, directly under the worlds, and it did not earn a permanent
+      line in a six-item list: what is behind it is a shelf and a model browser,
+      which is the same kind of answer to "what is this space made of" that the
+      magazine and the store are - so it is the first tab of Browse now, and the
+      row above is the way in. See `ThingiverseWorkbench`.
+
+      The thing somebody actually reaches for mid-session was never this row
+      anyway. It is the green door in the rail, which summons into the room they
+      are standing in without leaving it.
+    */
     // Where videos and pictures get made. Under Worlds rather than above it,
     // because you usually build the place before you shoot in it.
     { href: `/t/${slug}/studio`, label: t.surfaces.studio, icon: 'studio', show: features.scenes },
@@ -1393,7 +1502,7 @@ function RoomRow({
       <Link
         href={`/t/${slug}/rooms/${room.slug}`}
         aria-current={active ? 'page' : undefined}
-        className="rail-link min-w-0 flex-1"
+        className={`rail-link min-w-0 flex-1 ${pinned === 'none' ? '' : 'rail-link-marked'}`}
       >
         <span aria-hidden className={`rail-link-icon ${tintClass(room.tint)}`}>
           <RoomGlyph name={room.icon} />
@@ -1408,9 +1517,21 @@ function RoomRow({
           It gives up its slot to the pin control on hover - two pills and a
           glyph in a 15rem row is a row nobody can read - which is why this is
           `group-hover/room:opacity-0` rather than a second element beside it.
+
+          Taking turns only works while the pin is the thing that arrives on
+          hover. A room pinned by the space, or by you, draws its mark
+          permanently and drew it straight through the `P` - so a marked row
+          reserves the road instead (`.rail-link-marked`) and the pill keeps
+          its opacity: both facts are true at once, and both are worth saying.
         */}
         {room.xpRef && (
-          <span className="xp-tag transition group-hover/room:opacity-0">XP</span>
+          <span
+            className={`xp-tag transition ${
+              pinned === 'none' ? 'group-hover/room:opacity-0' : ''
+            }`}
+          >
+            XP
+          </span>
         )}
       </Link>
 
@@ -1835,6 +1956,24 @@ function Account({
     // the space's. They used to be one column of cards where a member could
     // change the top half and only read the bottom.
     { href: `/t/${slug}/settings/profile`, label: t.account.profile, icon: 'profile', show: role !== 'guest' },
+    /*
+      Your shelf of things, beside your profile rather than only in the nav.
+
+      Browse, whose first tab is the shelf, and this is the only row that names
+      it: what you have *made* is a fact about you, and the menu with your name
+      on it is where somebody looks for their own work. The navigation above
+      answers "what can this space do" and has a Browse row for that; this one
+      answers "where is my stuff" and says the word somebody is thinking.
+
+      Not for a visitor, like the two rows around it: a guest owns no blueprints
+      and the page refuses them at `requireTenant`.
+    */
+    {
+      href: `/t/${slug}/browse`,
+      label: t.surfaces.thingiverse,
+      icon: 'thing',
+      show: features.thingiverse && role !== 'guest',
+    },
     { href: `/t/${slug}/settings/space`, label: t.account.spaceSettings, icon: 'settings', show: role !== 'guest' },
     // Not for a visitor: there is nothing to switch to. A guest belongs to one
     // space, by a link, and the picker on the other end of this row has no list

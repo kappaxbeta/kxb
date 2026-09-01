@@ -65,7 +65,11 @@ export function Timeline({
 
       <div
         ref={strip}
-        className="relative h-16 cursor-pointer touch-none rounded-xl border border-border bg-secondary/40"
+        /* Shorter on a phone, where every band between the body and the strip
+           is height the viewport does not get. The diamonds sit on the bottom
+           edge and the second marks run full height, so the strip loses only
+           empty middle. */
+        className="relative h-12 cursor-pointer touch-none rounded-xl border border-border bg-secondary/40 sm:h-16"
         onPointerDown={(event) => {
           if (event.button !== 0) return
           event.currentTarget.setPointerCapture(event.pointerId)

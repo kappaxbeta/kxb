@@ -5,6 +5,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { BodyModel } from '@/app/world/lounge/_canvas/body-model'
+import { PeerVehicle } from '@/app/world/lounge/_canvas/vehicle-rig'
 import {
   type DashRuntime,
   dashConnects,
@@ -42,6 +43,8 @@ import {
   watchStuck,
 } from '@/app/world/lounge/_sim/football'
 import { EYE_HEIGHT, type SolidTest } from '@/app/world/lounge/_sim/physics'
+import { ridePosition, seatDelta } from '@/app/world/lounge/_sim/seats'
+import { useThingiverse } from '@/app/world/_stores/thing-store'
 import { useSceneRefs } from '@/app/world/lounge/_scene/scene-refs'
 import { AvatarPlaceholder } from '@/app/world/_canvas/rainbow'
 import type { Goal, GoalTeam } from '@/domain/lounge/goal-events'
@@ -88,7 +91,7 @@ import {
   record,
   sample,
 } from '@/app/world/_presence/peer-motion'
-import { type AvatarClip, DEFAULT_AVATAR, isKnownAvatar } from '@/domain/lounge/avatars'
+import { type AvatarClip, DEFAULT_AVATAR, isKnownLook } from '@/domain/lounge/avatars'
 import { type EmoteId, isEmote } from '@/domain/world/emotes'
 import {
   createInbox,
@@ -188,6 +191,27 @@ interface MoveMessage {
    * last legs. One extra small integer at 12Hz is not worth a second channel.
    */
   h: number
+  /**
+   * The thing being driven, if any.
+   *
+   * Rides with movement for the same self-healing reason health does: somebody
+   * who joins mid-drive learns to draw the kart under this body from the very
+   * next packet, instead of needing a one-shot they were not there for.
+   * Absent for a client that predates vehicles, which reads as on foot -
+   * exactly what such a client is.
+   */
+  v?: string
+  /**
+   * Which seat of `v`, when it is not the wheel.
+   *
+   * Absent means the driver's - the first seat, which is the wheel by the
+   * blueprint's own rule (see `drivable`). A passenger names theirs so every
+   * client can *glue* their body to the vehicle instead of trusting packets:
+   * a rider's position is derived from the driver's interpolated pose on the
+   * receiving side, and drawing them from their own packets would hang them
+   * one interpolation delay behind a fast kart.
+   */
+  s?: number
 }
 
 /**
@@ -401,6 +425,10 @@ export interface PeerTransform {
   target: { x: number; y: number; z: number; yaw: number }
   current: { x: number; y: number; z: number; yaw: number }
   dancing: boolean
+  /** The thing they are aboard, or null on foot. See `MoveMessage.v`. */
+  driving: string | null
+  /** Which seat of it. Zero is the wheel; meaningless while `driving` is null. */
+  seat: number
   /** Last health we were told about. Drives their bar and whether they can be hit. */
   health: number
   /** Set on the first packet, so a joiner appears where they are, not at origin. */
@@ -498,6 +526,8 @@ export function Multiplayer({
   name,
   avatar,
   dancing,
+  aboard = null,
+  onDriving,
   health,
   roomRef,
   onRoom,
@@ -536,6 +566,24 @@ export function Multiplayer({
   party?: boolean
   partyHost?: string | null
   dancing: boolean
+  /**
+   * The vehicle seat we are in, or null on foot.
+   *
+   * Seat zero is the wheel; anything else is riding along. A prop like
+   * `dancing` rather than a ref, because it changes when a person gets in or
+   * out - a rare, render-worthy event - and the send loop mirrors it into a
+   * ref itself, exactly as it does the dance.
+   */
+  aboard?: { thing: string; seat: number } | null
+  /**
+   * A peer took or left a wheel.
+   *
+   * Lifted out of the frame path because the scene renders from it: the thing
+   * a peer is driving must stop being drawn parked. Called only on change,
+   * and with null when the peer goes, so a driver who closes the tab does not
+   * leave an invisible kart in the room.
+   */
+  onDriving?: (userId: string, thingId: string | null) => void
   /** Our own health, 0..100. Owned by the scene; broadcast from here. */
   health: number
   /**
@@ -674,6 +722,12 @@ export function Multiplayer({
   useEffect(() => {
     healthRef.current = health
   }, [health])
+
+  /** And for the seat: getting into a kart must not reopen the channel either. */
+  const aboardRef = useRef(aboard)
+  useEffect(() => {
+    aboardRef.current = aboard
+  }, [aboard])
 
   /**
    * The football runtime, behind a ref for the same reason the callbacks are.
@@ -878,6 +932,12 @@ export function Multiplayer({
    * build it again mid-fight, losing every packet in between.
    */
   const handlers = useRef({ onDamaged, onHitLanded, onPushed })
+
+  /** Same shape for the wheel report: read from socket handlers, never a dep. */
+  const onDrivingRef = useRef(onDriving)
+  useEffect(() => {
+    onDrivingRef.current = onDriving
+  }, [onDriving])
   useEffect(() => {
     handlers.current = { onDamaged, onHitLanded, onPushed }
   }, [onDamaged, onHitLanded, onPushed])
@@ -1168,8 +1228,17 @@ export function Multiplayer({
             next.push({
               userId: entry.userId,
               name: entry.name || 'Someone',
-              // An avatar we no longer ship must not become a 404 mid-scene.
-              avatar: isKnownAvatar(entry.avatar) ? entry.avatar : DEFAULT_AVATAR,
+              /**
+               * A look we no longer ship must not become a 404 mid-scene - and
+               * `isKnownLook`, not `isKnownAvatar`, because a look is now one
+               * of two things. The animal roster answers "no" to every skin, so
+               * this guard was replacing `adventurers/Knight` with the default
+               * penguin: you switched to your XP body, the wire carried it, and
+               * every other person in the lounge watched you turn back into
+               * somebody else. The rooms' presence (`_presence/room-presence`)
+               * was fixed for exactly this and the lounge's copy was not.
+               */
+              avatar: isKnownLook(entry.avatar) ? entry.avatar : DEFAULT_AVATAR,
             })
           }
         }
@@ -1223,7 +1292,14 @@ export function Multiplayer({
         // the session.
         const present = new Set(next.map((peer) => peer.userId))
         for (const key of transforms.current.keys()) {
-          if (!present.has(key)) transforms.current.delete(key)
+          if (!present.has(key)) {
+            // Their kart stops being theirs the moment they are gone - the
+            // parked row (or the loan sweep) is the truth from here. Only a
+            // driver was hiding anything; a passenger's leaving hid nothing.
+            const gone = transforms.current.get(key)
+            if (gone?.driving && gone.seat === 0) onDrivingRef.current?.(key, null)
+            transforms.current.delete(key)
+          }
         }
         for (const key of emotes.current.keys()) {
           if (!present.has(key)) emotes.current.delete(key)
@@ -1290,9 +1366,23 @@ export function Multiplayer({
         // them disagreeing by a microsecond.
         countReceived('move', arrived)
 
+        const wheeled = message.v ?? null
+        const seat = message.s ?? 0
+        /**
+         * Only the wheel makes a thing *driven* - a passenger of a parked kart
+         * is aboard it, and hiding the kart from its cell over that would make
+         * it vanish under whoever sat down in it.
+         */
+        const drives = wheeled && seat === 0 ? wheeled : null
+
         if (existing) {
+          const drove =
+            existing.driving && existing.seat === 0 ? existing.driving : null
+          if (drove !== drives) onDrivingRef.current?.(message.u, drives)
           existing.target = target
           existing.dancing = message.d
+          existing.driving = wheeled
+          existing.seat = seat
           existing.health = health
           record(existing.motion, target, message.t ?? null, arrived)
         } else {
@@ -1304,10 +1394,13 @@ export function Multiplayer({
             // peer does not visibly slide in from the middle of the world.
             current: { ...target },
             dancing: message.d,
+            driving: wheeled,
+            seat,
             health,
             seeded: true,
             motion,
           })
+          if (drives) onDrivingRef.current?.(message.u, drives)
         }
       })
       .on('broadcast', { event: 'hit' }, ({ payload }) => {
@@ -1728,13 +1821,25 @@ export function Multiplayer({
   }, [faces, cameraOn, userId, name, avatar, conn, measuring])
 
   // --- outbound ------------------------------------------------------------
-  const lastSent = useRef({
+  const lastSent = useRef<{
+    at: number
+    x: number
+    y: number
+    z: number
+    yaw: number
+    dancing: boolean
+    driving: string | null
+    seat: number
+    health: number
+  }>({
     at: 0,
     x: NaN,
     y: NaN,
     z: NaN,
     yaw: NaN,
     dancing: false,
+    driving: null,
+    seat: 0,
     health: NaN,
   })
 
@@ -1807,6 +1912,10 @@ export function Multiplayer({
       Math.abs(player.z - lastSent.current.z) > POSITION_EPSILON ||
       Math.abs(angleDelta(lastSent.current.yaw, yaw)) > YAW_EPSILON ||
       lastSent.current.dancing !== dancingRef.current ||
+      // So do the wheels: a packet is what tells the room the kart under you
+      // appeared or went away, and the keepalive is two seconds of ghost car.
+      lastSent.current.driving !== (aboardRef.current?.thing ?? null) ||
+      lastSent.current.seat !== (aboardRef.current?.seat ?? 0) ||
       // Health counts as movement for the purposes of "is this worth a packet".
       // Waiting out the keepalive would leave a bar two seconds stale, which in
       // a fight that lasts four hits is most of the fight.
@@ -1821,6 +1930,8 @@ export function Multiplayer({
       z: player.z,
       yaw,
       dancing: dancingRef.current,
+      driving: aboardRef.current?.thing ?? null,
+      seat: aboardRef.current?.seat ?? 0,
       health: healthRef.current,
     }
 
@@ -1838,6 +1949,12 @@ export function Multiplayer({
         r: +yaw.toFixed(3),
         d: dancingRef.current,
         h: healthRef.current,
+        // Absent rather than null on foot, and the seat absent at the wheel -
+        // the fields cost nothing until somebody is actually aboard something.
+        ...(aboardRef.current ? { v: aboardRef.current.thing } : {}),
+        ...(aboardRef.current && aboardRef.current.seat !== 0
+          ? { s: aboardRef.current.seat }
+          : {}),
         // Whole milliseconds: the receiver interpolates over ~125ms spans, so a
         // fractional millisecond is below anything it could draw.
         t: Math.round(now),
@@ -1912,6 +2029,7 @@ export function Multiplayer({
           key={peer.userId}
           peer={peer}
           transforms={transforms}
+          aboardRef={aboardRef}
           emotes={emotes}
           saids={saids}
           tone={toneOf?.(peer.userId)}
@@ -2705,6 +2823,7 @@ function judgeKick({
 function RemoteAvatar({
   peer,
   transforms,
+  aboardRef,
   emotes,
   saids,
   tone,
@@ -2713,6 +2832,13 @@ function RemoteAvatar({
 }: {
   peer: Peer
   transforms: React.RefObject<Map<string, PeerTransform>>
+  /**
+   * The seat *we* are in, if any, for the one case a peer's body hangs off
+   * ours: their driver is this client. A rider is drawn glued to the
+   * driver's pose, and when the driver is us the freshest pose is the player
+   * ref, not our own packets coming back around.
+   */
+  aboardRef: React.RefObject<{ thing: string; seat: number } | null>
   emotes: React.RefObject<Map<string, EmoteState>>
   saids: React.RefObject<Map<string, SaidState>>
   /** Ally or enemy, in a match with sides. Undefined everywhere else. */
@@ -2748,6 +2874,71 @@ function RemoteAvatar({
   // <SelfAvatar>.
   const partyColour = usePartyColour(peer.userId, partyHost)
   const [clip, setClip] = useState<AvatarClip>('idle')
+
+  /**
+   * What they are driving, mirrored out of the frame loop.
+   *
+   * State rather than a per-frame read because mounting a vehicle model is a
+   * render, and the fact changes the way `clip` does: rarely, at the moment
+   * somebody gets in or out. The frame loop below spots the change exactly as
+   * it spots a gait change.
+   */
+  const [peerDriving, setPeerDriving] = useState<string | null>(null)
+
+  /**
+   * And the seat they are merely *in*, when it is not the wheel.
+   *
+   * Split from `peerDriving` because the two facts do different work: the
+   * wheel mounts a vehicle under them, and a passenger seat glues their body
+   * to somebody else's vehicle - see the frame loop below.
+   */
+  const [peerRiding, setPeerRiding] = useState<{ thing: string; seat: number } | null>(
+    null,
+  )
+
+  /**
+   * How fast their kart is going, for its wheels.
+   *
+   * Fed from the same differenced speed the gait uses, so the wheels of a
+   * peer's vehicle turn at the speed the vehicle is actually drawn moving -
+   * matched to the interpolation, like the legs it replaces.
+   */
+  const peerMotion = useRef({ speed: 0, steer: 0 })
+
+  const { playerRef, headingRef } = useSceneRefs()
+
+  /**
+   * Where their seat is relative to their driver's, in cells, when riding.
+   *
+   * Derived from the room's own furniture list - the blueprint's seats never
+   * change mid-drive, so this is a render-time fact, and the frame loop below
+   * only has to add it to the driver's pose. Null until the thing is known,
+   * which draws the rider from their own packets for a moment - late, not
+   * wrong.
+   */
+  const room = useThingiverse()
+  const glue = useMemo(() => {
+    if (!peerRiding) return null
+    const thing = room?.things.find((one) => one.id === peerRiding.thing)
+    const spec = thing?.blueprint?.spec
+    if (!thing || !spec?.use) return null
+    return seatDelta(spec, thing.scale, peerRiding.seat)
+  }, [peerRiding, room])
+
+  /**
+   * Whether the vehicle they are aboard swallows them.
+   *
+   * The blueprint's `hideDriver`: a car with a roof, a football somebody is
+   * rolling about as. The body is not drawn - the vehicle is what moves - and
+   * everything that names the person (plate, bar, bubbles) stays, because a
+   * person is still there.
+   */
+  const cloaked = useMemo(() => {
+    const aboardThing = peerDriving ?? peerRiding?.thing ?? null
+    if (!aboardThing) return false
+    const spec = room?.things.find((one) => one.id === aboardThing)?.blueprint?.spec
+    return Boolean(spec?.vehicle?.hideDriver)
+  }, [peerDriving, peerRiding, room])
 
   /**
    * This peer's emote slot, created on first render rather than on first
@@ -2813,15 +3004,73 @@ function RemoteAvatar({
 
     const down = isDown(state.health)
 
+    const drives = state.driving && state.seat === 0 ? state.driving : null
+    if (drives !== peerDriving) setPeerDriving(drives)
+
+    const riding = state.driving && state.seat > 0 ? state.driving : null
+    if (
+      (peerRiding?.thing ?? null) !== riding ||
+      (riding !== null && peerRiding?.seat !== state.seat)
+    ) {
+      setPeerRiding(riding ? { thing: riding, seat: state.seat } : null)
+    }
+
+    peerMotion.current.speed = speed
+
+    /**
+     * A rider is glued to their driver, not to their own packets.
+     *
+     * Their packets are a copy of the driver's pose taken one interpolation
+     * delay ago, so drawing from them hangs the passenger off the back of a
+     * fast kart. The driver's *drawn* pose is on this client already - in the
+     * transform map, or in the player ref when the driver is us - and the
+     * seat difference is a constant of the blueprint. Their own yaw is kept:
+     * a passenger still turns their head.
+     */
+    if (glue && peerRiding) {
+      let driver: { x: number; y: number; z: number; yaw: number } | null = null
+
+      const mine = aboardRef.current
+      if (mine?.thing === peerRiding.thing && mine.seat === 0) {
+        const own = playerRef.current
+        driver = {
+          x: own.x,
+          y: own.y,
+          z: own.z,
+          yaw: Math.atan2(headingRef.current.x, headingRef.current.z),
+        }
+      } else {
+        for (const other of transforms.current?.values() ?? []) {
+          if (other.driving === peerRiding.thing && other.seat === 0) {
+            driver = other.current
+            break
+          }
+        }
+      }
+
+      if (driver) {
+        const spot = ridePosition(driver, glue)
+        node.position.set(spot.x, spot.y, spot.z)
+      }
+    }
+
+    /**
+     * A driven body sits; it does not jog. The gait reads drawn speed, and a
+     * kart at full tilt would otherwise put its driver into a sprint animation
+     * while seated - the one case where how fast the body moves says nothing
+     * about what its legs are doing.
+     */
     const next: AvatarClip = down
       ? 'idle'
-      : state.dancing
-        ? 'dance'
-        : speed > RUN_SPEED
-          ? 'run'
-          : speed > WALK_SPEED
-            ? 'walk'
-            : 'idle'
+      : state.driving
+        ? 'idle'
+        : state.dancing
+          ? 'dance'
+          : speed > RUN_SPEED
+            ? 'run'
+            : speed > WALK_SPEED
+              ? 'walk'
+              : 'idle'
     if (next !== clip) setClip(next)
 
     /**
@@ -2848,18 +3097,25 @@ function RemoteAvatar({
         {/* A ghost while their animal downloads. Their name, bar and bubbles
             are already drawn above this point, and a label hanging over an
             empty patch of floor is worse than a placeholder under it. */}
-        <Suspense fallback={<AvatarPlaceholder />}>
-          {/* Other people are not obstacles to the crosshair. Being unable to
-              build because a colleague is standing where you were aiming would be
-              a worse problem than clipping through each other. */}
-          <BodyModel
-            look={peer.avatar}
-            clip={clip}
-            ignoreRay
-            rim={party ? partyColour : null}
-          />
-        </Suspense>
+        {!cloaked && (
+          <Suspense fallback={<AvatarPlaceholder />}>
+            {/* Other people are not obstacles to the crosshair. Being unable to
+                build because a colleague is standing where you were aiming would be
+                a worse problem than clipping through each other. */}
+            <BodyModel
+              look={peer.avatar}
+              clip={clip}
+              ignoreRay
+              rim={party ? partyColour : null}
+            />
+          </Suspense>
+        )}
       </group>
+
+      {/* Their vehicle, when the packets say they are in one. Inside the
+          outer group so it turns with their yaw, outside <body> so a knocked
+          driver tips over without taking the kart with them. */}
+      {peerDriving && <PeerVehicle thingId={peerDriving} motion={peerMotion} />}
 
       {/* Above the head and outside <body>, so it stays upright and readable
           when they are lying on the floor. */}

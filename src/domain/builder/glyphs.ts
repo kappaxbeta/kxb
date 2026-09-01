@@ -187,6 +187,82 @@ export function stampText(text: string, origin: Cell, options: TextOptions = {})
 }
 
 /**
+ * The word as a flat grid of lit and unlit cells, reading top-to-bottom.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is here rather than in the script that draws pictures
+ * ---------------------------------------------------------------------------
+ * Because there is one alphabet, and the moment a second thing wants to draw
+ * with it the letters have to come from the same place or the two drift. The
+ * builder stamps this font into a world as blocks; a render script draws it
+ * into a PNG as pixels. Those are two *renderers*, and the thing they share is
+ * the shape of a letter - so the shape is what this returns, and neither side
+ * has an opinion about the other's units.
+ *
+ * Top-to-bottom, unlike `stampText`, and the difference is not an oversight:
+ * that one is placing blocks in a world where y counts upwards, and this one is
+ * filling an image where rows count downwards. Both flip from the same source
+ * art, each towards its own axis, which is the only arrangement where neither
+ * caller has to remember to flip anything.
+ *
+ * An unknown character leaves its space blank rather than collapsing the word,
+ * exactly as `stampText` does, so the two lay a line out identically.
+ */
+export function textBitmap(
+  text: string,
+  options: TextOptions = {},
+): { width: number; height: number; cells: boolean[] } {
+  const tracking = Math.max(0, Math.floor(options.tracking ?? 1))
+  const scale = Math.max(1, Math.floor(options.scale ?? 1))
+  const { width, height } = textExtent(text, options)
+  const cells = new Array<boolean>(Math.max(0, width * height)).fill(false)
+
+  let cursor = 0
+  for (const character of text.toUpperCase()) {
+    const glyph = GLYPHS[character]
+    if (glyph) {
+      for (let row = 0; row < GLYPH_HEIGHT; row += 1) {
+        for (let column = 0; column < GLYPH_WIDTH; column += 1) {
+          if (glyph[row][column] !== '#') continue
+          for (let sy = 0; sy < scale; sy += 1) {
+            for (let sx = 0; sx < scale; sx += 1) {
+              const x = cursor + column * scale + sx
+              const y = row * scale + sy
+              if (x < width && y < height) cells[y * width + x] = true
+            }
+          }
+        }
+      }
+    }
+    cursor += (GLYPH_WIDTH + tracking) * scale
+  }
+
+  return { width, height, cells }
+}
+
+/**
+ * Where each letter starts and how wide it is, in the same grid.
+ *
+ * What a per-letter animation needs and cannot work out for itself: "the third
+ * letter" is a range of columns, and which columns depends on the tracking, the
+ * scale and how many characters came before it. Returned for every character
+ * including the unknown ones and the spaces, so an index into this list is an
+ * index into the string.
+ */
+export function letterColumns(
+  text: string,
+  options: TextOptions = {},
+): { from: number; width: number }[] {
+  const tracking = Math.max(0, Math.floor(options.tracking ?? 1))
+  const scale = Math.max(1, Math.floor(options.scale ?? 1))
+
+  return [...text].map((_, index) => ({
+    from: index * (GLYPH_WIDTH + tracking) * scale,
+    width: GLYPH_WIDTH * scale,
+  }))
+}
+
+/**
  * How wide and tall a word will be before it is drawn.
  *
  * The editor shows this next to the input, because "will this fit on the wall I

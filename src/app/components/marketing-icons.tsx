@@ -65,6 +65,17 @@ export type MarkName =
   | 'knock'
   | 'window'
   | 'catalogue'
+  // the thingiverse, on /create
+  | 'thing'
+  | 'machine'
+  | 'craft'
+  | 'clip'
+  // the room's own voices, on /play
+  | 'vehicle'
+  | 'chat'
+  | 'voice'
+  | 'face'
+  | 'emote'
   // furniture
   | 'notYet'
 
@@ -324,6 +335,135 @@ const MARKS: Record<MarkName, React.ReactElement> = {
       <rect x="6.4" y="2.2" width="4" height="8" rx="0.9" />
       <path d="M11.4 3.4l3 .9-1.9 6.4" />
       <path d="M1.4 13.4h13.2" />
+    </svg>
+  ),
+
+  /**
+   * A block standing on a plinth, and the spark it arrived on.
+   *
+   * Not the shelf - `catalogue` is already a shelf and means "the whole list of
+   * them". This one is the other half of the noun: *one* of them, here, now,
+   * put down in front of you. The plinth is what stops it reading as `pieces`,
+   * which is the same cube being dragged into an editor.
+   */
+  thing: (
+    <svg {...ICON}>
+      <path d="M8 2.4 12.4 5v4L8 11.6 3.6 9V5L8 2.4Z" />
+      <path d="M3.6 5 8 7.6 12.4 5M8 7.6v4" />
+      <path d="M2.2 13.6h11.6" />
+    </svg>
+  ),
+
+  /**
+   * Two states and the arrow between them: the thing became something else.
+   *
+   * A circle and a square rather than two circles, because the point of the
+   * machine is that the thing is not the same afterwards - two of one shape
+   * with an arrow between them draws a loop, which is `spin`.
+   */
+  machine: (
+    <svg {...ICON}>
+      <circle cx="4" cy="8" r="2.6" />
+      <rect x="9.4" y="5.4" width="5.2" height="5.2" rx="1" />
+      <path d="M6.8 8h1.6M7.6 6.9 8.9 8 7.6 9.1" />
+    </svg>
+  ),
+
+  /**
+   * A pan, and two things going into it.
+   *
+   * The recipe lives on the table it is made at, so the drawing is the table
+   * rather than a book: whatever is falling in is the ingredients, and the
+   * handle is what makes it a pan and not a bowl of soup.
+   */
+  craft: (
+    <svg {...ICON}>
+      <path d="M1.8 8.6h9.4v1.6a2.8 2.8 0 0 1-2.8 2.8H4.6a2.8 2.8 0 0 1-2.8-2.8V8.6Z" />
+      <path d="M11.2 9.4h3" />
+      <path d="M5 6.6V3.4M8.2 6.6V4.8" />
+    </svg>
+  ),
+
+  /**
+   * Three keys on a rule: a clip is a list of poses, not a curve.
+   *
+   * Diamonds because that is what a key is drawn as in every timeline anybody
+   * reading this has used, and unevenly spaced because the gaps are the timing
+   * - three at equal intervals is a ruler.
+   */
+  clip: (
+    <svg {...ICON}>
+      <path d="M1.4 8h13.2" />
+      <path d="m3.4 5.9 1.5 2.1-1.5 2.1L1.9 8Z" />
+      <path d="m7.6 5.9 1.5 2.1-1.5 2.1L6.1 8Z" />
+      <path d="m13.1 5.9 1.5 2.1-1.5 2.1L11.6 8Z" />
+    </svg>
+  ),
+
+  /** A car in profile: a cabin, a bonnet and two wheels. */
+  vehicle: (
+    <svg {...ICON}>
+      <path d="M1.4 10.2V8.4l1.8-.4 1.9-2.6h4.6l2.1 2.6 2.8.5v1.7" />
+      <path d="M3.4 10.2h1M6.6 10.2h2.8M12.6 10.2h1.6" />
+      <circle cx="5" cy="10.6" r="1.6" />
+      <circle cx="11.4" cy="10.6" r="1.6" />
+    </svg>
+  ),
+
+  /**
+   * A bubble with a tail, and the tail points down-left.
+   *
+   * Two lines inside rather than three dots: three dots is the "typing"
+   * indicator every messenger uses and would say the wrong thing about a
+   * channel whose whole promise is that what was said stays said.
+   */
+  chat: (
+    <svg {...ICON}>
+      <path d="M2 4.2a1.6 1.6 0 0 1 1.6-1.6h8.8A1.6 1.6 0 0 1 14 4.2v5a1.6 1.6 0 0 1-1.6 1.6H6.2l-3.1 2.6a.4.4 0 0 1-.65-.31V10.8H3.6A1.6 1.6 0 0 1 2 9.2V4.2Z" />
+      <path d="M4.8 5.6h6.4M4.8 8h4" />
+    </svg>
+  ),
+
+  /**
+   * A microphone in its arc. The mic is push-to-talk, so the capsule is drawn
+   * held rather than on a desk stand.
+   */
+  voice: (
+    <svg {...ICON}>
+      <rect x="5.8" y="1.4" width="4.4" height="7.6" rx="2.2" />
+      <path d="M3.2 7.4a4.8 4.8 0 0 0 9.6 0" />
+      <path d="M8 12.2v2.2M5.8 14.4h4.4" />
+    </svg>
+  ),
+
+  /**
+   * A face, drawn as a face.
+   *
+   * The one place in the set where the literal drawing is right: an emote *is*
+   * a face somebody pulls, so the icon for it is not a metaphor for the feature,
+   * it is a small picture of the feature. Off-centre eyes and a lopsided mouth
+   * rather than a smiley - the wheel has two dozen of these on it and most of
+   * them are not smiling.
+   */
+  emote: (
+    <svg {...ICON}>
+      <circle cx="8" cy="8" r="6.3" />
+      <path d="M5.8 6.4v.6M10.2 6.4v.6" />
+      <path d="M5.4 10c1.6 1.3 3.8 1.2 5.2-.4" />
+    </svg>
+  ),
+
+  /**
+   * A camera: the body, and the lens barrel off one side.
+   *
+   * Not a circle with a face in it, which is what the feature actually looks
+   * like in the room - at 16px a face inside a disc is two dots and a smudge,
+   * and the drawing has to survive being 15 pixels wide beside a word.
+   */
+  face: (
+    <svg {...ICON}>
+      <rect x="1.4" y="4" width="9" height="8" rx="1.6" />
+      <path d="m10.4 8.6 4.2 2.5V4.9L10.4 7.4v1.2Z" />
     </svg>
   ),
 

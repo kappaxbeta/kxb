@@ -117,6 +117,17 @@ export interface SceneRefs {
    * Written by <PlayerControls>, read by <SelfAvatar>.
    */
   kickLungeRef: React.RefObject<number>
+  /**
+   * How much sprint is left, 0..1, when the space charges for it.
+   *
+   * A ref rather than state because it changes every frame while somebody is
+   * running, and the only thing that reads it is a bar that draws itself. See
+   * `../_sim/stamina` for the rule and `../_hud/stamina-bar` for the drawing.
+   *
+   * Full when the space does not charge, so anything reading it without asking
+   * first sees a player who is never tired.
+   */
+  staminaRef: React.RefObject<number>
 
   /**
    * A shove somebody else landed on us, waiting to be walked off.
@@ -341,6 +352,7 @@ export function useCreateSceneRefs(spawn: [number, number, number]): SceneRefs {
   const playerRef = useRef(new THREE.Vector3(...spawn))
   const headingRef = useRef(new THREE.Vector3(0, 0, -1))
   const kickLungeRef = useRef(KICK_LUNGE_DURATION)
+  const staminaRef = useRef(1)
   const knockRef = useRef<Knockback>(createKnockback())
   const teleportedRef = useRef(false)
 
@@ -402,6 +414,7 @@ export function useCreateSceneRefs(spawn: [number, number, number]): SceneRefs {
       playerRef,
       headingRef,
       kickLungeRef,
+      staminaRef,
       knockRef,
       teleportedRef,
       healthRef,

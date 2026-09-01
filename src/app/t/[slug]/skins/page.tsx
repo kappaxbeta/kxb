@@ -47,6 +47,17 @@ export default async function SpaceSkinsPage({
         view={await shopFor(supabase, shopper)}
         bundles={[...BUCK_BUNDLES]}
         checkout={null}
+        /*
+          Back into the space, not out to the lobby.
+
+          This route exists precisely so that buying a hat does not read as
+          leaving the building, and the one hard-coded link at the top of the
+          shop was undoing that - reported as landing in spaces with no way back
+          to where you were. `/browse` because that is the surface the shop is
+          reached from: the thingiverse's own front, where the body it dresses
+          is the first thing on the page.
+        */
+        back={{ href: `/t/${slug}/browse`, label: 'Back to the thingiverse' }}
       />
     </div>
   )

@@ -101,6 +101,11 @@ export const TEMPLATES: readonly Template[] = [
           top: 1,
           z: 1.2,
           rotation: 0,
+          time: 0,
+          scale: 1,
+          tint: null,
+          pitch: 0,
+          roll: 0,
           // A wobble, not a launch. The rock is heavy and the joke is that it
           // does not care - so it rocks a few degrees and settles, and the
           // hold at the end is what stops it drifting for the rest of the shot.
@@ -156,7 +161,7 @@ export const TEMPLATES: readonly Template[] = [
           ],
         }),
       ],
-      blocks: [{ model: 'melon', x: 0, top: 1, z: -2.4, rotation: 0, tracks: {} }],
+      blocks: [{ model: 'melon', x: 0, top: 1, z: -2.4, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} }],
       camera: [
         { t: 0, position: [0.4, 6.4, 11], target: [0, 1.2, 0], fov: 40 },
         { t: 10, position: [0.2, 2.2, 5.2], target: [0, 1.2, 0], fov: 28 },
@@ -198,7 +203,7 @@ export const TEMPLATES: readonly Template[] = [
           ],
         }),
       ],
-      blocks: [{ model: 'hay_bale', x: -3.6, top: 1, z: -3, rotation: 0, tracks: {} }],
+      blocks: [{ model: 'hay_bale', x: -3.6, top: 1, z: -3, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} }],
       camera: [{ t: 0, position: [1.4, 3.6, 10.4], target: [0, 1.2, 0], fov: 38 }],
     }),
   },
@@ -279,6 +284,11 @@ export const TEMPLATES: readonly Template[] = [
           top: 2.4,
           z: 0.6,
           rotation: 0,
+          time: 0,
+          scale: 1,
+          tint: null,
+          pitch: 0,
+          roll: 0,
           // Rides along above the beaver's head for the length of the walk, then
           // is put down. Two tracks doing what one move does for an actor, which
           // is the honest cost of a prop having no verbs of its own.
@@ -310,9 +320,9 @@ export const TEMPLATES: readonly Template[] = [
         actor('chick', { x: 3.6, z: -2.4, rotation: -150, actions: [{ kind: 'jump', t: 5.4, duration: jumpLength(false), air: false }] }),
       ],
       blocks: [
-        { model: 'tree', x: -6, top: 1, z: -4, rotation: 0, tracks: {} },
-        { model: 'tree', x: 6.5, top: 1, z: -5, rotation: 0, tracks: {} },
-        { model: 'barrel', x: 2, top: 1, z: 4, rotation: 0, tracks: {} },
+        { model: 'tree', x: -6, top: 1, z: -4, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} },
+        { model: 'tree', x: 6.5, top: 1, z: -5, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} },
+        { model: 'barrel', x: 2, top: 1, z: 4, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} },
       ],
       camera: [
         { t: 0, position: [-13, 2.2, 12], target: [0, 1.2, 0], fov: 42 },
@@ -396,7 +406,7 @@ export const TEMPLATES: readonly Template[] = [
           ],
         }),
       ],
-      blocks: [{ model: 'vault', x: 2.4, top: 1, z: 0, rotation: 0, tracks: {} }],
+      blocks: [{ model: 'vault', x: 2.4, top: 1, z: 0, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} }],
       camera: [{ t: 0, position: [-1.4, 3, 8.6], target: [-1.4, 1.1, 0], fov: 40 }],
     }),
   },
@@ -457,8 +467,8 @@ export const TEMPLATES: readonly Template[] = [
         }),
       ],
       blocks: [
-        { model: 'computer', x: 3, top: 1, z: -1, rotation: 0, tracks: {} },
-        { model: 'trashcan', x: -3.4, top: 1, z: -2, rotation: 0, tracks: {} },
+        { model: 'computer', x: 3, top: 1, z: -1, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} },
+        { model: 'trashcan', x: -3.4, top: 1, z: -2, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} },
       ],
       light: {
         ...DEFAULT_LIGHT,

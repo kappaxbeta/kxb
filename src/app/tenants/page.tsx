@@ -18,7 +18,7 @@ import { readGrant } from '@/domain/promo/queries'
 import { mayRedeem } from '@/domain/promo/redeem'
 import { mayClaimFreeMonth } from '@/domain/promo/winback'
 import { landingPath } from '@/domain/tenants/last-space'
-import { readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { readAsDummy, readProfileAvatar } from '@/domain/profile/avatar-queries'
 import { shopFor } from '@/domain/skins/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -106,6 +106,7 @@ export default async function TenantsPage({
     avatar,
     username,
     wardrobe,
+    asDummy,
   ] = await Promise.all([
     listMyTenants(supabase, user.id),
     listMyInvitations(supabase),
@@ -124,6 +125,9 @@ export default async function TenantsPage({
     // The wardrobe, for the locker on the stage: what is owned, what is worn,
     // and whether the shelf is even open. The same read the shop page runs.
     shopFor(supabase, user.id),
+    // And whether the xo half is the plain dummy rather than the animal. A
+    // third body, so the locker has to be able to say which of the three.
+    readAsDummy(supabase, user.id),
   ])
 
   // Has to agree with the gate in createTenant, which skips its Stripe check on
@@ -220,6 +224,7 @@ export default async function TenantsPage({
         role,
       }))}
       avatar={avatar}
+      asDummy={asDummy}
       username={username}
       wardrobe={wardrobe}
       email={user.email ?? ''}

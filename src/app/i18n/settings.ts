@@ -430,6 +430,7 @@ export const SETTINGS_EN: SettingsDict = {
       battle: 'Matches',
       agents: 'Creatures',
       perf_display: 'Performance readout',
+      stamina: 'Stamina',
     },
   },
 
@@ -513,7 +514,7 @@ export const SETTINGS_EN: SettingsDict = {
     notUsable: ' (not usable)',
     linkWarning:
       'Anybody who opens the page can use this link. Give it a use limit or an expiry in the guest panel if that is not what you want — revoking it closes the button immediately.',
-    alsoFeatured: ' This event is also on the front page.',
+    alsoFeatured: ' This event is also on the kxb.team front page.',
     pickAnother: ' The page will say there is no open door until you pick another one.',
     noBanner: 'No banner — just the text',
     noBanners:
@@ -688,6 +689,7 @@ export const SETTINGS_DE: SettingsDict = {
       battle: 'Matches',
       agents: 'Tiere',
       perf_display: 'Leistungsanzeige',
+      stamina: 'Ausdauer',
     },
   },
 
@@ -772,7 +774,7 @@ export const SETTINGS_DE: SettingsDict = {
     notUsable: ' (nicht nutzbar)',
     linkWarning:
       'Alle, die die Seite öffnen, können diesen Link benutzen. Geben Sie ihm im Gastbereich ein Nutzungslimit oder ein Ablaufdatum, wenn Sie das nicht wollen — Zurückziehen schließt den Knopf sofort.',
-    alsoFeatured: ' Dieses Event steht außerdem auf der Startseite.',
+    alsoFeatured: ' Dieses Event steht außerdem auf der Startseite von kxb.team.',
     pickAnother:
       ' Die Seite sagt, dass es keine offene Tür gibt, bis Sie einen anderen wählen.',
     noBanner: 'Kein Banner — nur der Text',
@@ -947,6 +949,7 @@ export const SETTINGS_BG: SettingsDict = {
       battle: 'Мачове',
       agents: 'Животни',
       perf_display: 'Показател за производителност',
+      stamina: 'Издръжливост',
     },
   },
 
@@ -1030,7 +1033,7 @@ export const SETTINGS_BG: SettingsDict = {
     notUsable: ' (не може да се ползва)',
     linkWarning:
       'Всеки, който отвори страницата, може да ползва този линк. Дайте му лимит на употребите или срок в панела за гости, ако не искате това — оттеглянето затваря бутона веднага.',
-    alsoFeatured: ' Това събитие стои и на началната страница.',
+    alsoFeatured: ' Това събитие стои и на началната страница на kxb.team.',
     pickAnother: ' Страницата ще казва, че няма отворена врата, докато не изберете друг.',
     noBanner: 'Без банер — само текстът',
     noBanners:

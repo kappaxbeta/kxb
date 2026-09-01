@@ -8,16 +8,21 @@ import { ChatRail } from '@/app/t/[slug]/chat-rail'
 import { GuestRail } from '@/app/t/[slug]/guest-rail'
 import { KnockRail } from '@/app/t/[slug]/knock-rail'
 import { PlayRail } from '@/app/t/[slug]/play-rail'
+import { PurseRail } from '@/app/t/[slug]/purse-rail'
 import { Face } from '@/app/t/[slug]/rail-bits'
+import { MusicButton } from '@/app/components/audio/music-button'
 import { RadioRail } from '@/app/t/[slug]/radio-rail'
 // Type-only, so it is erased before the bundler ever sees a cycle back to the
 // file that renders this one.
 import { AvatarRail } from '@/app/t/[slug]/avatar-rail'
 import { RoomsRail } from '@/app/t/[slug]/rooms-rail'
+import { ThingsRail } from '@/app/t/[slug]/things-rail'
 import type { SidebarGuestAccess } from '@/app/t/[slug]/sidebar'
 import { doorActions, useDoor } from '@/app/world/_stores/door-store'
+import { useThingiverse } from '@/app/world/_stores/thing-store'
 import { FrontDoorControls } from '@/app/world/_canvas/room-door'
 import { useParty } from '@/app/world/_stores/party-store'
+import { StaminaSwitch } from '@/app/t/[slug]/stamina-switch'
 import { useRainbowSwitch } from '@/app/world/_stores/rainbow-store'
 import { useStuck } from '@/lib/stuck-store'
 import type { Knock } from '@/app/world/_presence/room-presence'
@@ -52,6 +57,8 @@ export function RailTabs({
   role,
   guestAccess,
   hasChat,
+  hasThings,
+  stamina,
   hasPlay,
   hasRadio,
   rooms,
@@ -73,6 +80,18 @@ export function RailTabs({
   role: TenantRoleName
   guestAccess: SidebarGuestAccess | null
   hasChat: boolean
+  /**
+   * Whether this space has a thingiverse.
+   *
+   * The flag alone, resolved in the layout - not "is a world on screen", which
+   * this component cannot know and which changes as somebody walks about. A tab
+   * that came and went with the scene would be a tab people learn not to look
+   * for; one that is always there and says "walk into a world" when there is
+   * none is a tab that answers the question.
+   */
+  hasThings: boolean
+  /** Whether this space charges for running. See `StaminaSwitch`. */
+  stamina: boolean
   /**
    * Can this space open an XP where it stands?
    *
@@ -112,6 +131,25 @@ export function RailTabs({
    * Only needed to answer whether a guest gets the tab at all - see below.
    */
   const stuck = useStuck()
+
+  /**
+   * Whether the world on screen is one you can put anything into.
+   *
+   * Null when there is no scene at all, which is most of the workspace, and
+   * that distinction is the whole rule: the door is drawn unless we *know* we
+   * are standing somewhere that refuses to build. In battle mode `canBuild` is
+   * false and every control behind this door is refused - the shelf cannot
+   * summon, the search cannot summon, and the panel's own line says to switch
+   * to creative - which makes it a door onto a room of dead buttons, the same
+   * thing it is for a guest and hidden for the same reason.
+   *
+   * It is deliberately *not* hidden when there is no world. That would be a
+   * door that came and went as somebody walked about, which is a control people
+   * learn not to look for - the argument `hasThings` makes one screen up. With
+   * no scene the panel says "walk into a world" and that is a useful answer.
+   */
+  const things = useThingiverse()
+  const buildable = things === null || things.canBuild
 
   // A guest answers no doors and hands out no links - see the note in KnockRail
   // about why the second is deliberately wider than the first.
@@ -172,10 +210,60 @@ export function RailTabs({
    * rail is a fixed-height flex box, and a list of levels *under* three tabs
    * would have been two scrollers fighting over the same height.
    */
-  const [playing, setPlaying] = useState(false)
+  /**
+   * Which door is open, if either.
+   *
+   * Not tabs, and the distinction is the one `playing` was written for: the
+   * tabs are tools you switch between with the panel staying put, and these are
+   * doors *out* - one into a level, one into the shelf of things this space can
+   * summon. Both take the panel while they are open, because the rail is a
+   * fixed-height flex column and a list under three tabs would be two scrollers
+   * fighting over one height.
+   *
+   * One value rather than two flags, so opening one closes the other without
+   * anybody having to remember to.
+   *
+   * Called `drawer` and not `door`, which is taken in here: `door` is the front
+   * door of somebody's own place, read out of the running scene. Two things
+   * called the same word in one component is how the wrong one gets read.
+   */
+  const [drawer, setDrawer] = useState<'play' | 'things' | null>(null)
+  const playing = drawer === 'play'
+
+  /**
+   * Where the shelf opens: in place, or over the panel.
+   *
+   * Taking the panel is right in the right-hand rail, which is a fixed-height
+   * flex column - a list *under* three tabs there would be two scrollers
+   * fighting over one height, which is the whole argument the doors were built
+   * on.
+   *
+   * The phone and tablet drawer is not that column. It is one scrolling page,
+   * `fill` is false precisely because there is no height to divide, and a door
+   * that replaces the panel there replaces nothing: the tab you were reading
+   * silently disappears and the shelf turns up wherever the scroll happened to
+   * be. So down there this one *expands* - the button stays put, the shelf
+   * unfolds under it, and the tabs are left alone.
+   *
+   * Only this one. Play keeps taking the panel on both, because what is behind
+   * it is a way out of the space rather than a drawer inside it.
+   */
+  const thingsInline = !fill && drawer === 'things'
+  const tabsOn = drawer === null || thingsInline
 
   // Nothing to draw at all: no tools, and no door either.
-  if (at === undefined && !hasPlay) return null
+  if (at === undefined && !hasPlay && !hasThings) return null
+
+
+  const thingsDoor =
+    hasThings && member && buildable ? (
+      <ThingsDoor
+        label={drawer === 'things' ? t.close : t.thingiverse.heading}
+        hint={drawer === 'things' ? '\u00d7' : t.thingiverse.hint2}
+        open={drawer === 'things'}
+        onToggle={() => setDrawer((was) => (was === 'things' ? null : 'things'))}
+      />
+    ) : null
 
   return (
     <div
@@ -190,27 +278,72 @@ export function RailTabs({
         visitor at an event who cannot start the level everybody came to play is
         a visitor waiting for a member to press a button.
       */}
-      {hasPlay && (
-        <div className="shrink-0 px-2 pb-2">
-          <button
-            type="button"
-            onClick={() => setPlaying((open) => !open)}
-            aria-expanded={playing}
-            className="rail-play"
-          >
-            <span className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-ink">
-                {playing ? t.close : t.play}
+      {(hasPlay || thingsDoor !== null) && (
+        <div className="flex shrink-0 flex-col gap-2 px-2 pb-2">
+          {/*
+            The purse, above the doors.
+
+            Here rather than in a tab because it is a *number you glance at*
+            rather than a tool you switch to - and the two doors under it are
+            both places you spend it, which is the order somebody reads them in.
+
+            Members only, for the reason the shelf is: a guest has no homestead
+            and so no purse, and a row that always says nothing is a promise of
+            a feature they do not have.
+          */}
+          {member && <PurseRail slug={slug} />}
+
+          {hasPlay && (
+            <button
+              type="button"
+              onClick={() => setDrawer((open) => (open === 'play' ? null : 'play'))}
+              aria-expanded={playing}
+              className="rail-play"
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-ink">
+                  {playing ? t.close : t.play}
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+                  {playing ? '×' : t.playHint}
+                </span>
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-                {playing ? '×' : t.playHint}
-              </span>
-            </span>
-          </button>
+            </button>
+          )}
+
+          {/*
+            The shelf, as a door rather than a tab.
+
+            It was a fourth tab and it was wrong there twice over: a strip sized
+            for three squeezed to fit a fourth, and - worse - the thing behind it
+            is a *list you scroll*, which is what the doors are for.
+
+            It does **not** wear Play's coat, though it did at first. Two
+            fuchsia-outlined pills the same width and height, stacked, with the
+            same shimmer crossing both, are two doors you have to read to tell
+            apart - see `.rail-things`, which paints this one green and turns it
+            rainbow while it is open.
+
+            Members only. A guest may look at what has been summoned - the world
+            draws it either way - but summoning writes to the log and the action
+            refuses them, and a door whose every button is refused is a promise
+            of a feature they do not have.
+          */}
+          {thingsDoor}
+
+          {/*
+            And on the drawer, the shelf itself, directly under the button that
+            opened it. See `thingsInline`.
+          */}
+          {thingsInline && (
+            <div className="max-h-[26rem] overflow-y-auto overscroll-contain rounded-xl border border-line/60 py-2">
+              <ThingsRail />
+            </div>
+          )}
         </div>
       )}
 
-      {at !== undefined && !playing && (
+      {at !== undefined && tabsOn && (
       <div role="tablist" aria-label={t.toolsLabel} className="flex shrink-0 gap-1 px-2">
         {tabs.map((tab) => (
           <button
@@ -245,8 +378,11 @@ export function RailTabs({
         nothing in the strip is selecting.
       */}
       <div
-        {...(playing
-          ? { role: 'region', 'aria-label': t.levels }
+        {...(!tabsOn
+          ? {
+              role: 'region',
+              'aria-label': drawer === 'play' ? t.levels : t.thingiverse.heading,
+            }
           : { role: 'tabpanel', 'aria-label': at ? t[at] : undefined })}
         /*
           A floor and a ceiling on the filling one.
@@ -277,9 +413,13 @@ export function RailTabs({
       >
         {playing && <PlayRail slug={slug} canKeepRooms={canManageRooms} />}
 
-        {!playing && at === 'chat' && <ChatRail />}
+        {/* Only where it takes the panel. On the drawer it has already been
+            drawn under its own button - see `thingsInline`. */}
+        {drawer === 'things' && !thingsInline && <ThingsRail />}
 
-        {!playing && at === 'room' && (
+        {tabsOn && at === 'chat' && <ChatRail />}
+
+        {tabsOn && at === 'room' && (
           <div className="space-y-4 pb-2">
             {/*
               Rooms above the front door, because they are the commons and it is
@@ -288,6 +428,19 @@ export function RailTabs({
               not even be standing in.
             */}
             <RoomsRail slug={slug} rooms={rooms} canManage={canManageRooms} />
+            {/*
+              And the shelf, under the places rather than only at the top of the
+              rail.
+
+              The same button, not a second control: it toggles the same
+              `drawer`, so pressing either closes the other. Here because of what
+              this tab is - the room you are standing in and everything that is
+              true of it - and furnishing it is the next thing anybody does after
+              opening it. Somebody halfway down this tab arranging a room should
+              not have to scroll back past the roster to reach the things they
+              are arranging it with.
+            */}
+            {thingsDoor && <div className="px-1">{thingsDoor}</div>}
             {/*
               The radio, directly under the places and above the switches.
 
@@ -300,10 +453,26 @@ export function RailTabs({
               opened it.
             */}
             <RadioRail />
+            {/*
+              And the music, which is not the radio.
+
+              Two different sounds with two different owners: the radio is one
+              track playing for everybody in the space, and this is the loop the
+              app plays for *you*. They sit together because from where somebody
+              is standing they are both "what am I listening to", and because
+              the button has nowhere else to be in here - it lives in the screen
+              corner everywhere else, and in a world that corner is over the
+              canvas. See `CornerMusic`.
+            */}
+            <div className="flex items-center justify-between gap-2 px-1">
+              <span className="text-xs text-ink-muted">{t.music}</span>
+              <MusicButton className="rail-music" />
+            </div>
             {/* Above the door, because it applies to wherever the person
                 reading it is standing right now, and the door below may well
                 belong to a house they are nowhere near. */}
             <PartySwitch />
+            <StaminaSwitch slug={slug} on={stamina} canSet={canManageRooms} />
             {/*
               And which animal you are, offered to guests as well as members.
 
@@ -327,7 +496,7 @@ export function RailTabs({
           </div>
         )}
 
-        {!playing && at === 'visitors' && (
+        {tabsOn && at === 'visitors' && (
           <div className="space-y-3 pb-2">
             {/* Above the links, because somebody standing at the door is
                 waiting on an answer and a link is a thing you write once. */}
@@ -350,6 +519,53 @@ export function RailTabs({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * The green door.
+ *
+ * Its own component because it is drawn twice - at the top of the block with
+ * Play, and again inside the Room tab - and the two must stay one control. A
+ * second `<button>` written out where it was wanted would be a second thing to
+ * remember when the label changes, and the first time somebody forgot, the rail
+ * would say "Thingiverse" in one place and "Close" in the other.
+ *
+ * No `text-ink` on the label, and that is not an omission: `.rail-things` is a
+ * *painted* button and sets its own ink, dark, against a lit green - and a
+ * near-white label written over that is the one combination in the rail that
+ * cannot be read. The hint dims by opacity for the same reason: `text-ink-muted`
+ * is a colour picked to sit on the dark surface, and there is no dark surface
+ * here.
+ *
+ * `whitespace-nowrap` on both, and it is what this looked like without it:
+ * "Thingiverse" is nine characters wider than "Play" at the same tracking, so
+ * the hint beside it wrapped to a second line and the door stood a third taller
+ * than the one above it. Two doors of different heights for no reason anybody
+ * can see.
+ */
+function ThingsDoor({
+  label,
+  hint,
+  open,
+  onToggle,
+}: {
+  label: string
+  hint: string
+  open: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={open} className="rail-things">
+      <span className="flex items-center justify-between gap-2">
+        <span className="truncate whitespace-nowrap text-xs font-semibold uppercase tracking-[0.16em]">
+          {label}
+        </span>
+        <span className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.14em] opacity-70">
+          {hint}
+        </span>
+      </span>
+    </button>
   )
 }
 

@@ -304,13 +304,17 @@ export interface XpEditorDict {
     playerMarksBlurb: string
     wears: string
     /** The four things a player may wear. */
-    looks: Record<'dummy' | 'profile' | 'random', string>
+    looks: Record<'dummy' | 'profile' | 'random' | 'peep' | 'xp' | 'choose', string>
     theBodyAbove: string
     builtInDummy: string
     wearsProfile: string
     wearsRandom: string
     wearsBody: string
     wearsDummy: string
+    /** The three that name one of a player's two bodies. */
+    wearsPeep: string
+    wearsXp: string
+    wearsChoose: string
 
     /** How the level moves underfoot - the six numbers and the warning. */
     movement: string
@@ -1504,7 +1508,14 @@ export const XP_EDITOR_EN: XpEditorDict = {
     playerMarksBlurb:
       'Where a person arrives when no spawn mark says otherwise — this level has {marks}, so they win. Click the body to select the first of them.',
     wears: 'wears',
-    looks: { dummy: 'dummy', profile: 'their own animal', random: 'a random animal' },
+    looks: {
+      dummy: 'dummy',
+      profile: 'their own animal',
+      random: 'a random animal',
+      peep: 'their peep',
+      xp: 'their XP body',
+      choose: 'whichever they chose',
+    },
     theBodyAbove: 'the body above',
     builtInDummy: 'the built-in dummy',
     wearsProfile:
@@ -1513,6 +1524,12 @@ export const XP_EDITOR_EN: XpEditorDict = {
       'An animal each, from their own id - so it is the same one on every screen and the same one tomorrow.',
     wearsBody: 'The body above, exactly as it is drawn.',
     wearsDummy: 'The prototype dummy, which is what a level that says nothing gets.',
+    wearsPeep:
+      'Their animal, whatever else they own - so a room full of animals stays one when somebody buys a body.',
+    wearsXp:
+      'The body they take into the games. Anybody without one is the dummy, which is what a player already is before they are anybody.',
+    wearsChoose:
+      'Neither: whichever of their two bodies they picked for themselves. The right answer for most levels.',
 
     movement: 'Movement',
     moveSpeed: 'walk',
@@ -2755,7 +2772,14 @@ export const XP_EDITOR_DE: XpEditorDict = {
     playerMarksBlurb:
       'Wo eine Person ankommt, wenn keine Startmarkierung etwas anderes sagt — dieses Level hat {marks}, also gewinnen die. Klicken Sie den Körper an, um den ersten davon auszuwählen.',
     wears: 'trägt',
-    looks: { dummy: 'Puppe', profile: 'das eigene Tier', random: 'ein zufälliges Tier' },
+    looks: {
+      dummy: 'Puppe',
+      profile: 'das eigene Tier',
+      random: 'ein zufälliges Tier',
+      peep: 'der eigene Peep',
+      xp: 'der eigene XP-Körper',
+      choose: 'was sie gewählt haben',
+    },
     theBodyAbove: 'den Körper oben',
     builtInDummy: 'die eingebaute Puppe',
     wearsProfile:
@@ -2764,6 +2788,12 @@ export const XP_EDITOR_DE: XpEditorDict = {
       'Je ein Tier, aus der eigenen Kennung - also auf jedem Bildschirm dasselbe und morgen wieder dasselbe.',
     wearsBody: 'Den Körper oben, genau so, wie er gezeichnet ist.',
     wearsDummy: 'Die Prototyp-Puppe, die ein Level bekommt, das nichts sagt.',
+    wearsPeep:
+      'Das eigene Tier, egal was sonst noch gekauft wurde - ein Raum voller Tiere bleibt einer.',
+    wearsXp:
+      'Der Körper, den sie in die Spiele mitnehmen. Wer keinen hat, ist die Puppe - das, was man vorher ohnehin ist.',
+    wearsChoose:
+      'Keins von beiden: der Körper, den sie selbst gewählt haben. Für die meisten Level die richtige Antwort.',
 
     movement: 'Bewegung',
     moveSpeed: 'Gehen',
@@ -4013,7 +4043,14 @@ export const XP_EDITOR_BG: XpEditorDict = {
     playerMarksBlurb:
       'Където пристига човек, когато никой начален знак не казва друго — това ниво има {marks}, така че те печелят. Щракнете тялото, за да изберете първия от тях.',
     wears: 'носи',
-    looks: { dummy: 'манекен', profile: 'своето собствено животно', random: 'случайно животно' },
+    looks: {
+      dummy: 'манекен',
+      profile: 'своето собствено животно',
+      random: 'случайно животно',
+      peep: 'своя пийп',
+      xp: 'своето XP тяло',
+      choose: 'каквото са избрали',
+    },
     theBodyAbove: 'тялото отгоре',
     builtInDummy: 'вграденият манекен',
     wearsProfile:
@@ -4022,6 +4059,12 @@ export const XP_EDITOR_BG: XpEditorDict = {
       'По едно животно на човек, от собственото му id - така е същото на всеки екран и същото утре.',
     wearsBody: 'Тялото отгоре, точно както е нарисувано.',
     wearsDummy: 'Прототипният манекен, което получава ниво, което не казва нищо.',
+    wearsPeep:
+      'Своето животно, каквото и друго да притежават - стая, пълна с животни, си остава такава.',
+    wearsXp:
+      'Тялото, с което влизат в игрите. Който няма, е манекенът - това, което играчът вече е.',
+    wearsChoose:
+      'Нито едното: тялото, което сами са избрали. За повечето нива това е верният отговор.',
 
     movement: 'Движение',
     moveSpeed: 'ходене',

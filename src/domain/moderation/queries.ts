@@ -1,5 +1,6 @@
 import 'server-only'
 import type { Client } from '@/es/store'
+import type { ReportKind } from '@/domain/moderation/content'
 
 export interface WorldReportView {
   id: string
@@ -263,3 +264,102 @@ export async function listMessageReports(
     }
   })
 }
+
+/**
+ * One report about something somebody made.
+ *
+ * `title` is whatever the shelf was showing when it was reported, not a join -
+ * see the note on the column. `hidden` is the current verdict on the *thing*
+ * rather than on this row, which is the difference that matters in a queue: two
+ * people can report one blueprint, and once it is down the second report is
+ * about something already dealt with.
+ */
+export interface ContentReportView {
+  id: string
+  kind: ReportKind
+  targetId: string
+  title: string | null
+  reason: string
+  status: 'open' | 'upheld' | 'dismissed'
+  createdAt: string
+  reportedBy: string | null
+  /** The space the reporter was standing in. */
+  spaceName: string | null
+  spaceSlug: string | null
+  /** Whether the thing itself is currently down, and why. */
+  hidden: boolean
+  hiddenReason: string | null
+}
+
+/**
+ * The content moderation queue.
+ *
+ * Takes an admin client for the reason `listWorldReports` does: it reads across
+ * every space. The caller is expected to have passed `requireBackofficeSection`
+ * first; that is the guard, not this.
+ *
+ * Two follow-up queries rather than joins, and both are `in (...)` over the
+ * page's own rows: the reports table has no foreign key to anything (see the
+ * migration), so there is nothing to join *on* - and the spaces lookup is the
+ * same shape `listWorldReports` already uses.
+ */
+export async function listContentReports(
+  admin: Client,
+  status: 'open' | 'upheld' | 'dismissed' | 'all' = 'open',
+  limit = 50,
+): Promise<ContentReportView[]> {
+  let query = admin
+    .from('content_reports')
+    .select('id, kind, target_id, title, reason, status, created_at, reported_by, tenant_id')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (status !== 'all') query = query.eq('status', status)
+
+  const { data, error } = await query
+  if (error) throw new Error(`Failed to load reports: ${error.message}`)
+
+  const rows = data ?? []
+  if (rows.length === 0) return []
+
+  const spaceIds = [...new Set(rows.map((row) => row.tenant_id).filter(Boolean))] as string[]
+  const targetIds = [...new Set(rows.map((row) => row.target_id))]
+
+  const [spaces, hidden] = await Promise.all([
+    admin
+      .from('tenants_read_model')
+      .select('id, name, slug')
+      .in('id', spaceIds.length > 0 ? spaceIds : [NOBODY]),
+    admin.from('hidden_content').select('target_id, reason').in('target_id', targetIds),
+  ])
+
+  const spaceById = new Map((spaces.data ?? []).map((row) => [row.id, row]))
+  const downBy = new Map((hidden.data ?? []).map((row) => [row.target_id, row.reason]))
+
+  return rows.map((row) => {
+    const space = row.tenant_id ? spaceById.get(row.tenant_id) : undefined
+    return {
+      id: row.id,
+      kind: row.kind as ReportKind,
+      targetId: row.target_id,
+      title: row.title,
+      reason: row.reason,
+      status: row.status as 'open' | 'upheld' | 'dismissed',
+      createdAt: row.created_at,
+      reportedBy: row.reported_by,
+      spaceName: space?.name ?? null,
+      spaceSlug: space?.slug ?? null,
+      hidden: downBy.has(row.target_id),
+      hiddenReason: downBy.get(row.target_id) ?? null,
+    }
+  })
+}
+
+/**
+ * A uuid nothing has, for an `in ()` that must match nothing.
+ *
+ * PostgREST refuses an empty `in` list, so a page whose reports all came from
+ * deleted spaces would throw rather than return rows with no space name. The
+ * same trick `listWorldReports` uses a few lines up.
+ */
+const NOBODY = '00000000-0000-0000-0000-000000000000'

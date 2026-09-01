@@ -8,7 +8,7 @@ import {
   grantTierToAccount,
   revokePromoCode,
 } from '@/domain/promo/actions'
-import type { RedeemSource } from '@/domain/promo/application'
+import { isSignupOffer, SIGNUP_OFFER_PREFIX, type RedeemSource } from '@/domain/promo/application'
 import type { PromoCodeView } from '@/domain/promo/queries'
 import { asTier, isPaidTier, PAID_TIERS, tierPrice } from '@/domain/billing/tiers'
 import { ErrorNote } from '@/app/components/error-note'
@@ -294,7 +294,7 @@ export function PromoList({ codes }: { codes: PromoCodeView[] }) {
       >
         <input
           name="code"
-          placeholder="CAFE24 (blank = generate)"
+          placeholder="CAFE24, or SIGNUP50 (blank = generate)"
           aria-label="The code itself"
           maxLength={40}
           className={`${FIELD} min-w-44 flex-1 font-mono uppercase`}
@@ -380,6 +380,22 @@ export function PromoList({ codes }: { codes: PromoCodeView[] }) {
           fortnight still promises a full month to whoever reads it on the last
           day. Leave uses or valid days at 0 for no limit.
         </p>
+        {/*
+          The naming convention, said on the form rather than in a handbook.
+
+          It is the one thing here that changes who can see the code, so it
+          belongs next to the box you type the name into - and the rows below
+          badge the codes it caught, so an operator can check they got what they
+          meant rather than having to go and look at /signup.
+        */}
+        <p className="w-full text-xs text-muted-foreground">
+          Name it{' '}
+          <strong className="font-mono font-medium">{SIGNUP_OFFER_PREFIX}…</strong>{' '}
+          and it becomes a standing offer: the sign-up form shows it to everyone
+          and fills it in for them. Anything else is private to whoever you hand
+          it to. The best offer wins the top slot — higher plan first, then the
+          longer run.
+        </p>
       </form>
 
       {codes.length === 0 ? (
@@ -426,6 +442,20 @@ export function PromoList({ codes }: { codes: PromoCodeView[] }) {
               >
                 {code.tier}
               </span>
+
+              {/*
+                Named to be published. Cyan rather than the accent: this says
+                what the code *is*, not what an admin can do to it, and the
+                buttons at the end of the row are the actions.
+              */}
+              {isSignupOffer(code.code) && (
+                <span
+                  className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-xs text-cyan-400"
+                  title="Shown on the sign-up form to anyone who reaches it"
+                >
+                  on sign-up
+                </span>
+              )}
 
               <span className="min-w-0 flex-1">
                 {code.label && <span className="truncate">{code.label}</span>}

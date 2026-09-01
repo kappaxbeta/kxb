@@ -4,9 +4,13 @@ import {
   ArrowBigUp,
   Boxes,
   Camera as CameraIcon,
+  EyeOff,
+  FolderOpen,
   Footprints,
   Frame,
+  Grid3x3,
   Gamepad2,
+  ImagePlus,
   MousePointerClick,
   Sun,
   Users,
@@ -14,6 +18,7 @@ import {
   MessageCircle,
   Music,
   Palette,
+  PersonStanding,
   RotateCw,
   Smile,
   Sparkles,
@@ -21,18 +26,25 @@ import {
   Wind,
   Zap,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Add,
   EmoteSwatch,
+  ModelField,
   Num,
   Pad,
   Pick,
+  PickCast,
   PickGroups,
   Remove,
   Section,
   Slide,
+  Tint,
 } from '@/app/ovaloffice/studio/parts'
+import { PosePanel } from '@/app/ovaloffice/studio/pose-panel'
+import type { BlueprintChoice } from '@/app/ovaloffice/studio/scene-stage'
+import type { RigHandle } from '@/app/ovaloffice/animator/posing'
+import type { Pose } from '@/domain/animator/clip'
 import {
   type NodeRef,
   type Selected,
@@ -40,7 +52,8 @@ import {
   writeTracks,
 } from '@/app/ovaloffice/studio/timeline'
 import { EmoteGrid } from '@/app/world/_hud/emote-grid'
-import { avatarShotUrl } from '@/domain/lounge/avatars'
+import { parseAnyDoc } from '@/domain/animator/clip'
+import { TERRAIN_BLOCKS } from '@/domain/lounge/palette'
 import { FORMATS } from '@/domain/studio/formats'
 import { framingFor } from '@/domain/scenes/world-import'
 import {
@@ -74,7 +87,7 @@ import {
   type Tracks,
   at,
 } from '@/domain/studio/keys'
-import { DEFAULT_LIGHT, STUDIO_AVATARS } from '@/domain/studio/scene'
+import { DEFAULT_LIGHT, lookLabel, lookShotUrl } from '@/domain/studio/scene'
 import { atStart, placeActor, turnActor } from '@/domain/studio/staging'
 import {
   type Actor,
@@ -114,7 +127,13 @@ export function ShotControls({
   selected,
   onSelect,
   onDrive,
+  posing: posingIndex,
+  onPosing,
+  poseRig,
+  localImage = null,
+  onLocalImage,
   worlds = [],
+  blueprints = [],
 }: {
   shot: ShotSpec
   onChange: (next: ShotSpec) => void
@@ -125,14 +144,53 @@ export function ShotControls({
   onSelect: (selection: Selected) => void
   /** Hands an actor to the keyboard. Absent where performing is not offered. */
   onDrive?: (index: number) => void
+  /** Which cast member has handles on it in the viewport, or null. */
+  posing?: number | null
+  /** Turning posing on for one of them, or off with null. */
+  onPosing?: (index: number | null) => void
+  /** The live rig of the posed body, and which bone the panel is showing. */
+  poseRig?: PoseRig
+  /** A picture chosen from this machine, held by the editor and never saved. */
+  localImage?: { url: string; name: string } | null
+  onLocalImage?: (picture: { url: string; name: string } | null) => void
   /** Worlds that can be pulled in as a set. Empty is simply no picker. */
   worlds?: ImportableWorld[]
+  /** The space's shelf, for props that are things. Empty in the backoffice. */
+  blueprints?: BlueprintChoice[]
 }) {
   const patch = (fields: Partial<ShotSpec>) => onChange({ ...shot, ...fields })
 
+  /**
+   * The inspector, brought into view when the selection changes.
+   *
+   * Picking a body in the scene chooses what this panel edits, and the panel is
+   * a long column - on a phone, where it sits under the viewport, the controls
+   * for what you just tapped were reliably a screen and a half away. So the
+   * selection scrolls its own editor into view: same gesture, same place to
+   * look. `nearest` rather than `center`, so a selection made while the
+   * inspector is already on screen does not jerk the page to re-centre it.
+   *
+   * Keyed on the node rather than on the whole selection, because choosing a
+   * different *action* on the same body is a move within the panel you are
+   * already reading.
+   */
+  const inspector = useRef<HTMLDivElement>(null)
+  const node = selected?.node
+  const at = node ? `${node.kind}:${node.index}` : null
+  useEffect(() => {
+    if (!at) return
+    inspector.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [at])
+
   return (
     <div className="flex flex-col gap-2">
-      <Output shot={shot} patch={patch} />
+      <Output
+        shot={shot}
+        patch={patch}
+        localImage={localImage}
+        onLocalImage={onLocalImage}
+      />
+      <div ref={inspector} className="scroll-mt-2">
       <Inspector
         shot={shot}
         onChange={onChange}
@@ -141,9 +199,20 @@ export function ShotControls({
         selected={selected}
         onSelect={onSelect}
         onDrive={onDrive}
+        posing={posingIndex}
+        onPosing={onPosing}
+        poseRig={poseRig}
       />
+      </div>
       <Cast shot={shot} patch={patch} selected={selected} onSelect={onSelect} />
-      <Props shot={shot} patch={patch} selected={selected} onSelect={onSelect} />
+      <Props
+        shot={shot}
+        patch={patch}
+        selected={selected}
+        onSelect={onSelect}
+        blueprints={blueprints}
+      />
+      <Ground shot={shot} patch={patch} />
       {worlds.length > 0 && (
         <WorldPicker
           worlds={worlds}
@@ -185,6 +254,20 @@ export function ShotControls({
 }
 
 type Patch = (fields: Partial<ShotSpec>) => void
+
+/**
+ * What the panel needs to drive the body the viewport is drawing.
+ *
+ * The rig is the editor's, not this panel's: it comes from the stage, because
+ * the stage is what drew the body. All the panel does with it is read angles
+ * off it and write angles back - the same two things a handle does.
+ */
+export interface PoseRig {
+  rig: RigHandle | null
+  bone: string | null
+  onBone: (bone: string) => void
+  onPose: (pose: Pose) => void
+}
 
 /**
  * The world as rainbow glass, over the length of a shot.
@@ -259,6 +342,131 @@ function RainbowSection({ shot, patch }: { shot: ShotSpec; patch: Patch }) {
 }
 
 /**
+ * The same node without one optional field.
+ *
+ * Deleting rather than setting `undefined`, because this document is compared
+ * by its encoding: a prop that has been a blueprint and been set back to a
+ * plain model has to encode exactly as one that never was, or the address bar
+ * changes for a change nobody made.
+ */
+function without<T extends object, K extends keyof T>(node: T, key: K): Omit<T, K> {
+  const copy = { ...node }
+  delete copy[key]
+  return copy
+}
+
+/**
+ * What a chosen thing will actually do in the shot, in a sentence.
+ *
+ * A blueprint's deeds are a list of pairs somebody set on another page, and the
+ * question here is narrower than that page's: of the things this can do, which
+ * will happen in a recording where nobody is standing? Answering it in the
+ * panel is what stops the checkbox above being a switch you flip to see what
+ * happens.
+ */
+function whatItDoes(choice: BlueprintChoice | undefined, triggered: boolean): string {
+  if (!choice) return 'That thing is not on this shelf any more — the prop draws its model instead.'
+
+  const running = (choice.spec.actions ?? []).filter(
+    (action) => action.when === 'always' || triggered,
+  )
+  const waiting = (choice.spec.actions ?? []).filter((action) => action.when !== 'always')
+
+  if (running.length === 0) {
+    return waiting.length > 0
+      ? `It only acts when touched or used. Tick the box and it will ${list(waiting.map((a) => a.deed))} for the whole shot.`
+      : 'It stands still — this one has nothing it does on its own.'
+  }
+  return `It will ${list(running.map((action) => action.deed))}.`
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function list(words: string[]): string {
+  const seen = [...new Set(words)]
+  if (seen.length <= 1) return seen[0] ?? 'do nothing'
+  return `${seen.slice(0, -1).join(', ')} and ${seen[seen.length - 1]}`
+}
+
+/**
+ * The floor, including having none.
+ *
+ * The still studio has had this since it had a floor; the video studio never
+ * did, so a shot inherited whatever ground the still it was lifted from
+ * carried and there was no way to take it off. Asked for as opening on an
+ * empty ground in the video editor.
+ *
+ * Off is a real answer, not an empty size: `null` rather than a nought-by-
+ * nought patch, so "there is no floor" and "there is a floor of no size" stay
+ * different things - the first is what you want when a world is standing in as
+ * the set, or when the shot is a body against a flat backdrop.
+ */
+function Ground({ shot, patch }: { shot: ShotSpec; patch: Patch }) {
+  const ground = shot.ground
+
+  return (
+    <Section
+      title="Ground"
+      summary={ground ? `${ground.cols} × ${ground.rows}` : 'empty'}
+      icon={Grid3x3}
+    >
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={ground !== null}
+          onChange={(event) =>
+            patch({
+              ground: event.target.checked
+                ? (DEFAULT_SHOT.ground ?? { cols: 13, rows: 11, top: 'dirt_with_grass', rounded: true })
+                : null,
+            })
+          }
+        />
+        Lay a floor
+      </label>
+      {ground ? (
+        <>
+          <Slide
+            label="Across"
+            value={ground.cols}
+            min={1}
+            max={41}
+            step={2}
+            onChange={(cols) => patch({ ground: { ...ground, cols } })}
+          />
+          <Slide
+            label="Deep"
+            value={ground.rows}
+            min={1}
+            max={41}
+            step={2}
+            onChange={(rows) => patch({ ground: { ...ground, rows } })}
+          />
+          <Pick
+            label="Top layer"
+            value={ground.top}
+            options={TERRAIN_BLOCKS}
+            onChange={(top) => patch({ ground: { ...ground, top } })}
+          />
+          <label className="mt-1 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={ground.rounded}
+              onChange={(event) => patch({ ground: { ...ground, rounded: event.target.checked } })}
+            />
+            Nibble the corners
+          </label>
+        </>
+      ) : (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Nothing underfoot. What is behind the cast is the backdrop above —
+          or a world, if one is standing in as the set.
+        </p>
+      )}
+    </Section>
+  )
+}
+
+/**
  * The verbs' icons, resolved from the names in `ACTION_META`.
  *
  * A map here rather than components in the domain module, so nothing the
@@ -267,9 +475,11 @@ function RainbowSection({ shot, patch }: { shot: ShotSpec; patch: Patch }) {
  */
 const ICONS: Record<string, LucideIcon> = {
   ArrowBigUp,
+  EyeOff,
   Footprints,
   MessageCircle,
   Music,
+  PersonStanding,
   RotateCw,
   Smile,
   Sparkles,
@@ -285,7 +495,17 @@ function ActionIcon({ kind, className }: { kind: ActionKind; className?: string 
 
 // ---------------------------------------------------------------------------
 
-function Output({ shot, patch }: { shot: ShotSpec; patch: Patch }) {
+function Output({
+  shot,
+  patch,
+  localImage = null,
+  onLocalImage,
+}: {
+  shot: ShotSpec
+  patch: Patch
+  localImage?: { url: string; name: string } | null
+  onLocalImage?: (picture: { url: string; name: string } | null) => void
+}) {
   return (
     <Section
       title="Output"
@@ -365,10 +585,55 @@ function Output({ shot, patch }: { shot: ShotSpec; patch: Patch }) {
           <span className="sr-only">Use the app backdrop</span>
         </button>
       </div>
+      {/*
+        A picture off this machine, for the length of this tab.
+
+        Separate from the two buttons above, and the label says why: those set
+        a field on the document, which travels in the link and is stored when
+        the shot is saved. This one is held by the editor, drawn behind the
+        scene and recorded into the export - and then it is gone. A file the
+        browser reads locally is same-origin, so unlike an image from another
+        site it does not taint the canvas and the recording still works.
+      */}
+      {onLocalImage && (
+        <div className="mt-1 flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground transition hover:border-accent/60 hover:text-foreground">
+              <ImagePlus className="size-3.5" aria-hidden />
+              {localImage ? 'Change picture' : 'Use a picture from this device'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) onLocalImage({ url: URL.createObjectURL(file), name: file.name })
+                  event.target.value = ''
+                }}
+              />
+            </label>
+            {localImage && (
+              <button
+                type="button"
+                onClick={() => onLocalImage(null)}
+                className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground transition hover:border-accent/60 hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {localImage && (
+            <p className="truncate font-mono text-[10px] text-muted-foreground">
+              {localImage.name}
+            </p>
+          )}
+        </div>
+      )}
       <p className="text-xs leading-relaxed text-muted-foreground">
         Video has no transparency — unlike a still, a shot is composited over
-        this. A picture has to be ours: an image from another site taints the
-        canvas, and a tainted canvas records nothing at all.
+        this. A picture from this device stays in this tab: it records into the
+        file, and it is not uploaded, not in the link, and gone on reload. The
+        app backdrop above is the one that travels with a saved shot.
       </p>
       <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
         <input
@@ -424,11 +689,11 @@ function Cast({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={avatarShotUrl(actor.avatar)}
+            src={lookShotUrl(actor.avatar)}
             alt=""
             className="size-7 shrink-0 rounded-lg border border-line/40 object-contain"
           />
-          <span className="flex-1 truncate capitalize">{actor.name || actor.avatar}</span>
+          <span className="flex-1 truncate capitalize">{actor.name || lookLabel(actor.avatar)}</span>
           <span className="font-mono opacity-60">{actor.actions.length}</span>
         </button>
       ))}
@@ -470,38 +735,235 @@ function Props({
   patch,
   selected,
   onSelect,
+  blueprints = [],
 }: {
   shot: ShotSpec
   patch: Patch
   selected: Selected | null
   onSelect: (selection: Selected) => void
+  /** The space's shelf. Empty in the backoffice, which has none. */
+  blueprints?: BlueprintChoice[]
 }) {
   const [model, setModel] = useState('stone')
 
   return (
     <Section title="Props" summary={`${shot.blocks.length}`} icon={Boxes} open>
-      {shot.blocks.map((block, index) => (
-        <button
-          key={index}
-          type="button"
-          onClick={() => onSelect({ node: { kind: 'block', index }, action: null })}
-          className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 text-left text-xs transition ${
-            selected && sameNode(selected.node, { kind: 'block', index })
-              ? 'border-accent/60 bg-surface-raised/60 text-ink'
-              : 'border-line/40 text-ink-muted hover:border-line'
-          }`}
-        >
-          <Boxes className="size-3.5 shrink-0" aria-hidden />
-          <span className="flex-1 truncate">{block.model}</span>
-          <span className="font-mono opacity-60">
-            {keyedProperties(block.tracks).length > 0
-              ? `${keyedProperties(block.tracks).length} keyed`
-              : ''}
-          </span>
-        </button>
-      ))}
+      {shot.blocks.map((block, index) => {
+        const isSelected = Boolean(selected && sameNode(selected.node, { kind: 'block', index }))
+        return (
+          <div key={index} className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => onSelect({ node: { kind: 'block', index }, action: null })}
+              className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 text-left text-xs transition ${
+                isSelected
+                  ? 'border-accent/60 bg-surface-raised/60 text-ink'
+                  : 'border-line/40 text-ink-muted hover:border-line'
+              }`}
+            >
+              <Boxes className="size-3.5 shrink-0" aria-hidden />
+              <span className="flex-1 truncate">
+                {(block.blueprint &&
+                  blueprints.find((one) => one.id === block.blueprint)?.name) ||
+                  block.model}
+              </span>
+              <span className="font-mono opacity-60">
+                {keyedProperties(block.tracks).length > 0
+                  ? `${keyedProperties(block.tracks).length} keyed`
+                  : ''}
+              </span>
+            </button>
+            {/*
+              What this prop *is*, changeable after the fact.
 
-      <PickGroups label="" value={model} onChange={setModel} />
+              The picker below the Add button chooses what the next prop will
+              be, and for a long time that was the only one here - so a prop
+              added as a stone was a stone forever, and the way to get a galaxy
+              was to delete it and add another. Which is not what a picker
+              sitting in the panel looks like it does. Shown only for the
+              selected prop, because ten always-open selects is a panel nobody
+              can find the timeline under.
+            */}
+            {isSelected && (
+              <div className="flex flex-col gap-1 pl-2">
+                <PickGroups
+                  label="Is a"
+                  value={block.model}
+                  onChange={(model) =>
+                    patch({
+                      blocks: shot.blocks.map((one, i) => (i === index ? { ...one, model } : one)),
+                    })
+                  }
+                />
+                {/*
+                  Or typed, for the rest of the catalogue.
+
+                  The select above offers the palette and a couple of packs on
+                  purpose - fourteen hundred options is a control nobody can
+                  find anything in - but "we ship it and you cannot pick it" is
+                  the wrong end of that trade to land on. So the id is also a
+                  field: `cosmos/galaxy`, `park/fountain`, anything
+                  `isBuildable` says yes to. A name that is not one is left in
+                  the box rather than thrown away mid-word, and simply does not
+                  draw until it is finished - the same promise the model field
+                  makes everywhere else in this product.
+                */}
+                <ModelField
+                  value={block.model}
+                  onChange={(model) =>
+                    patch({
+                      blocks: shot.blocks.map((one, i) => (i === index ? { ...one, model } : one)),
+                    })
+                  }
+                />
+
+                {/*
+                  Or a whole thing off the shelf, rather than one model.
+
+                  Only where there is a shelf: in the backoffice this list is
+                  empty and the control does not appear, because the backoffice
+                  is not a space and has no blueprints to offer. A blueprint
+                  brings its parts, its own scale and whatever it does with
+                  itself - see `BlueprintProp` - so picking one supersedes the
+                  model above rather than sitting beside it. "None" gives the
+                  model back.
+                */}
+                {blueprints.length > 0 && (
+                  <>
+                    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      Or a thing
+                      <select
+                        value={block.blueprint ?? ''}
+                        onChange={(event) => {
+                          const id = event.target.value
+                          patch({
+                            blocks: shot.blocks.map((one, i) =>
+                              i === index
+                                ? id
+                                  ? { ...one, blueprint: id }
+                                  : // Dropped rather than set to undefined, so a
+                                    // prop that is a plain model again encodes
+                                    // exactly as one that never was.
+                                    without(one, 'blueprint')
+                                : one,
+                            ),
+                          })
+                        }}
+                        className="rounded-lg border border-border bg-secondary px-2 py-1 text-sm text-foreground"
+                      >
+                        <option value="">None — just the model</option>
+                        {blueprints.map((one) => (
+                          <option key={one.id} value={one.id}>
+                            {one.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {block.blueprint && (
+                      <>
+                        {/*
+                          A thing says when it acts, and a shot has nobody to
+                          do the acting. This is the author standing in for
+                          them - see `BlockSpec.triggered`.
+                        */}
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={block.triggered ?? false}
+                            onChange={(event) =>
+                              patch({
+                                blocks: shot.blocks.map((one, i) =>
+                                  i === index
+                                    ? event.target.checked
+                                      ? { ...one, triggered: true }
+                                      : without(one, 'triggered')
+                                    : one,
+                                ),
+                              })
+                            }
+                            className="accent-accent"
+                          />
+                          Act as if somebody touched it
+                        </label>
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                          {whatItDoes(blueprints.find((one) => one.id === block.blueprint), block.triggered ?? false)}
+                        </p>
+                      </>
+                    )}
+                  </>
+                )}
+                <Slide
+                  label="Pitch"
+                  value={block.pitch}
+                  min={-180}
+                  max={180}
+                  step={5}
+                  unit="°"
+                  onChange={(pitch) =>
+                    patch({
+                      blocks: shot.blocks.map((one, i) => (i === index ? { ...one, pitch } : one)),
+                    })
+                  }
+                />
+                <Slide
+                  label="Roll"
+                  value={block.roll}
+                  min={-180}
+                  max={180}
+                  step={5}
+                  unit="°"
+                  onChange={(roll) =>
+                    patch({
+                      blocks: shot.blocks.map((one, i) => (i === index ? { ...one, roll } : one)),
+                    })
+                  }
+                />
+                <Slide
+                  label="Size"
+                  value={block.scale}
+                  min={0.1}
+                  max={12}
+                  step={0.05}
+                  onChange={(scale) =>
+                    patch({
+                      blocks: shot.blocks.map((one, i) => (i === index ? { ...one, scale } : one)),
+                    })
+                  }
+                />
+                <Tint
+                  value={block.tint}
+                  onChange={(tint) =>
+                    patch({
+                      blocks: shot.blocks.map((one, i) => (i === index ? { ...one, tint } : one)),
+                    })
+                  }
+                />
+                {/*
+                  And a way back out.
+
+                  The section has had an Add since it existed and never a
+                  Remove, so a prop dropped in by a misclick was in the shot for
+                  good - the only way out was the link, by hand. Selection is
+                  moved to the camera first: an index into a list that is about
+                  to be one shorter points at a different prop a frame later,
+                  and at nothing at all when the one removed was the last.
+                */}
+                <Remove
+                  onClick={() => {
+                    onSelect({ node: { kind: 'camera', index: 0 }, action: null })
+                    patch({ blocks: shot.blocks.filter((_, i) => i !== index) })
+                  }}
+                >
+                  Remove prop
+                </Remove>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      <PickGroups label="Add" value={model} onChange={setModel} />
       <Add
         label="Add a prop"
         disabled={shot.blocks.length >= 120}
@@ -510,7 +972,7 @@ function Props({
           // clever: the first thing anybody does is drag it, and a prop that
           // lands off-camera reads as a button that did nothing.
           patch({
-            blocks: [...shot.blocks, { model, x: 0, top: 1, z: 0, rotation: 0, tracks: {} }],
+            blocks: [...shot.blocks, { model, x: 0, top: 1, z: 0, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} }],
           })
           onSelect({ node: { kind: 'block', index: shot.blocks.length }, action: null })
         }}
@@ -536,6 +998,9 @@ function Inspector({
   selected,
   onSelect,
   onDrive,
+  posing: posingIndex,
+  onPosing,
+  poseRig,
 }: {
   shot: ShotSpec
   onChange: (next: ShotSpec) => void
@@ -544,6 +1009,12 @@ function Inspector({
   selected: Selected | null
   onSelect: (selection: Selected) => void
   onDrive?: (index: number) => void
+  /** Which cast member has handles on it in the viewport, or null. */
+  posing?: number | null
+  /** Turning posing on for one of them, or off with null. */
+  onPosing?: (index: number | null) => void
+  /** The live rig of the posed body, and which bone the panel is showing. */
+  poseRig?: PoseRig
 }) {
   if (!selected) {
     return (
@@ -576,6 +1047,9 @@ function Inspector({
         actor={actor}
         index={node.index}
         onDrive={onDrive}
+        posing={posingIndex}
+        onPosing={onPosing}
+        poseRig={poseRig}
       />
     )
   }
@@ -595,6 +1069,9 @@ function ActorInspector({
   actor,
   index,
   onDrive,
+  posing: posingIndex,
+  onPosing,
+  poseRig,
 }: {
   shot: ShotSpec
   onChange: (next: ShotSpec) => void
@@ -605,12 +1082,21 @@ function ActorInspector({
   actor: Actor
   index: number
   onDrive?: (index: number) => void
+  /** Which cast member has handles on it in the viewport, or null. */
+  posing?: number | null
+  /** Turning posing on for one of them, or off with null. */
+  onPosing?: (index: number | null) => void
+  /** The live rig of the posed body, and which bone the panel is showing. */
+  poseRig?: PoseRig
 }) {
   const set = (fields: Partial<Actor>) =>
     onChange({
       ...shot,
       cast: shot.cast.map((existing, i) => (i === index ? { ...existing, ...fields } : existing)),
     })
+
+  /** Whether *this* actor is the one with handles on it. */
+  const posing = posingIndex === index
 
   /** Where they are right now, so a new action starts from there. */
   const here = sceneAt(shot, time).peeps[index] ?? { x: actor.x, z: actor.z, rotation: actor.rotation }
@@ -644,11 +1130,15 @@ function ActorInspector({
     onSelect({ node: selected.node, action: actions.indexOf(action) })
   }
 
+
+  /** Whatever the last clip load said, good or bad. */
+  const [clipNote, setClipNote] = useState<string | null>(null)
+
   const chosen = selected.action === null ? null : actor.actions[selected.action]
 
   return (
     <Section
-      title={actor.name || actor.avatar}
+      title={actor.name || lookLabel(actor.avatar)}
       summary={`${actor.actions.length} actions`}
       icon={Users}
       open
@@ -663,7 +1153,7 @@ function ActorInspector({
           className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         />
       </label>
-      <Pick label="Animal" value={actor.avatar} options={STUDIO_AVATARS} onChange={(avatar) => set({ avatar })} />
+      <PickCast label="Body" value={actor.avatar} onChange={(avatar) => set({ avatar })} />
 
       {/*
         Where they are *now*, which at the top of the shot is where they start.
@@ -824,6 +1314,115 @@ function ActorInspector({
         ))}
       </div>
 
+      {/* The skeleton, posed where it stands. This is where the clip a Pose
+          action plays comes from, so the two sit together. */}
+      <button
+        type="button"
+        onClick={() => onPosing?.(posing ? null : index)}
+        aria-pressed={posing}
+        className={`mt-1 flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-sm transition ${
+          posing
+            ? 'border-accent bg-accent/15 text-foreground'
+            : 'border-accent/60 text-foreground hover:bg-secondary'
+        }`}
+      >
+        <PersonStanding className="size-4" aria-hidden />
+        {posing ? 'Done posing' : 'Pose the skeleton'}
+      </button>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Puts handles on their bones in the viewport. Drag one and it writes a
+        key at the playhead — bones you never touch keep walking, so a wave
+        rides on a stroll. A Pose action on the timeline is what plays it back.
+      </p>
+      {actor.pose && (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-mono">{actor.pose.keys.length}</span> keys over{' '}
+          <span className="font-mono">{actor.pose.duration.toFixed(1)}s</span>.
+        </p>
+      )}
+      {/*
+        A clip off disk, rather than one keyed here.
+
+        The animator's Save work writes exactly this file, in the backoffice
+        and in a space's clip shelf alike, so a performance made once can stand
+        in as many shots as you like - and the two editors stay one tool rather
+        than two that each own their own animations.
+
+        Read with `parseAnyDoc`, which is the rig-free reader: there is no model
+        loaded at this point to say what bones exist, and the honest reading of
+        a file here is the bones it actually names. Anything it cannot make a
+        clip of says so rather than quietly doing nothing.
+      */}
+      <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2 py-1.5 text-xs text-muted-foreground transition hover:border-accent/60 hover:text-foreground">
+        <FolderOpen className="size-3.5" aria-hidden />
+        {actor.pose ? 'Load a different clip' : 'Load a clip'}
+        <input
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (!file) return
+            void file.text().then((text) => {
+              let doc = null
+              try {
+                doc = parseAnyDoc(JSON.parse(text))
+              } catch {
+                doc = null
+              }
+              if (!doc) {
+                setClipNote('That file has no clip in it.')
+                return
+              }
+              /*
+                A beat to play it on, when there is not one already.
+
+                A clip loaded on to an actor with no Pose action is a clip that
+                changes nothing on screen - the commonest way for an import to
+                look broken. One beat at the top, as long as the clip, is the
+                smallest thing that makes it visible; the row is a chip you can
+                drag or delete like any other.
+              */
+              const hasBeat = actor.actions.some((one) => one.kind === 'pose')
+              set({
+                pose: doc,
+                ...(hasBeat
+                  ? {}
+                  : {
+                      actions: ordered([
+                        ...actor.actions,
+                        { kind: 'pose' as const, t: at(time), duration: doc.duration },
+                      ]),
+                    }),
+              })
+              setClipNote(
+                hasBeat
+                  ? `Loaded ${doc.name}.`
+                  : `Loaded ${doc.name}, and dropped a Pose beat at ${at(time).toFixed(1)}s to play it.`,
+              )
+            })
+          }}
+        />
+      </label>
+      {clipNote && <p className="text-xs text-muted-foreground">{clipNote}</p>}
+      {actor.pose && <Remove onClick={() => set({ pose: null })}>Forget the clip</Remove>}
+
+      {/* The bone under the hand, with the pad and the list. Only while this
+          actor is the one being posed - it is a second panel's worth of
+          controls, and drawing it beside a body with no handles on it would be
+          a set of sliders that write to nothing. */}
+      {posing && poseRig && (
+        <PosePanel
+          rig={poseRig.rig}
+          look={actor.avatar}
+          bone={poseRig.bone}
+          pose={here.pose ?? null}
+          onBone={poseRig.onBone}
+          onPose={poseRig.onPose}
+        />
+      )}
+
       {chosen && selected.action !== null && (
         <ActionFields
           action={chosen}
@@ -861,6 +1460,7 @@ function ActorInspector({
       >
         Remove peep
       </Remove>
+
     </Section>
   )
 }
@@ -915,6 +1515,14 @@ function ActionFields({
           unit="s"
           onChange={(duration) => onChange({ duration })}
         />
+      )}
+
+      {action.kind === 'pose' && (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Plays the clip saved on this actor — Animate the skeleton, below, is
+          where one gets made. A clip shorter than this beat loops to fill it;
+          bones it never keys stay with the walk.
+        </p>
       )}
 
       {action.kind === 'move' && (

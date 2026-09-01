@@ -1,7 +1,7 @@
 'use client'
 
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import {
   canDash,
@@ -26,12 +26,27 @@ import {
   step as stepPhysics,
   underfoot,
 } from '@/app/world/lounge/_sim/physics'
+import {
+  BLOCKED_BELOW,
+  type DriveState,
+  type DriveTuning,
+  stepDrive,
+  wallSlow,
+} from '@/app/world/lounge/_sim/drive'
+import { useMediaQuery } from '@/app/world/lounge/_hud/touch-controls'
 import { useSceneRefs } from '@/app/world/lounge/_scene/scene-refs'
+import type { ThingSolids } from '@/app/world/lounge/_sim/thing-solids'
 import { type BlockMap, clamp, MAX_DELTA } from '@/app/world/lounge/_scene/scene-types'
 import { STEER_KEY_TURN_RATE, steerTurn } from '@/lib/controls/steer'
 import { useCameraMode } from '@/lib/controls/use-camera-mode'
 import { isTyping } from '@/app/world/_sim/typing'
 import { blockKey } from '@/domain/lounge/events'
+import {
+  FRESH,
+  STAMINA_FULL,
+  type StaminaState,
+  stepStamina,
+} from '@/app/world/lounge/_sim/stamina'
 import { isBurning } from '@/domain/lounge/palette'
 
 /**
@@ -95,6 +110,54 @@ const MIRROR_DROP = 0.45
 const WALK_PACE = 7
 const SPRINT_PACE = 13
 
+/**
+ * Where the camera stands while something is being placed.
+ *
+ * Far enough back that a bench fits in frame with room around it, high enough
+ * to see the floor it is standing on, and aimed a little above the cell so the
+ * thing sits in the middle of the picture rather than at the bottom of it.
+ */
+const FRAME_BACK = 4
+const FRAME_HEIGHT = 2.4
+const FRAME_LOOK = 0.6
+
+/**
+ * How long the camera takes to travel to the thing being placed, in seconds.
+ *
+ * `--dur-base` from the design system, which is what every other transition in
+ * this product moves at. Long enough to read as a move rather than a cut, short
+ * enough that somebody who pressed E is not waiting to start.
+ */
+const FRAME_EASE = 0.22
+
+/** Scratch, so no vector or quaternion is allocated per frame. */
+const FRAME_AT = new THREE.Vector3()
+const FRAME_POSITION = new THREE.Vector3()
+const FRAME_QUAT = new THREE.Quaternion()
+const FRAME_RIG = new THREE.Quaternion()
+
+/**
+ * Toward a target, at a rate, without overshooting it.
+ *
+ * A step rather than a spring: the blend runs both ways off one number and a
+ * spring would wobble past the pose on arrival, which on a camera reads as the
+ * world rocking.
+ */
+function approach(value: number, target: number, step: number): number {
+  if (value < target) return Math.min(target, value + step)
+  return Math.max(target, value - step)
+}
+
+/**
+ * Ease-out, matching `--ease-out-soft`.
+ *
+ * Nothing in this product starts slowly - the delay reads as lag rather than as
+ * grace - so the blend is fastest at the start and settles into the pose.
+ */
+function eased(t: number): number {
+  return t * (2 - t)
+}
+
 /** Scratch for the camera rig and the entry descent, so no frame allocates. */
 const RIG_POSITION = new THREE.Vector3()
 const ENTRY_DIR = new THREE.Vector3()
@@ -135,6 +198,13 @@ export function PlayerControls({
   mirror,
   fly,
   blocks,
+  solids,
+  seat,
+  // Aliased: the frame loop already has a local called `drive` (the stick's
+  // magnitude in steer mode), and shadowing the wheel with it cost a compile.
+  drive: wheelRef,
+  focus,
+  stamina,
   combat,
   dead,
   onDash,
@@ -152,6 +222,73 @@ export function PlayerControls({
   fly: boolean
   /** The world, for the collision test. Read, never written. */
   blocks: BlockMap
+  /**
+   * The summoned things that stop you, if there are any.
+   *
+   * A second source of "is this cell solid", and deliberately not folded into
+   * `blocks`: that map is what gets *drawn*, so a bench added to it would be
+   * rendered as a dirt cube. This is the same question asked of a different
+   * set, and the answer is either.
+   *
+   * A mutable object rather than a value, because the renderer writes it as
+   * each model finishes loading and this component reads it every frame. See
+   * ../_sim/thing-solids. Optional, because the scenes that have no thingiverse
+   * - the demo, the shot server - still walk about.
+   */
+  solids?: ThingSolids | null
+  /**
+   * Where the body is pinned while it is sitting in something, or null.
+   *
+   * A ref rather than a value, so getting into a chair does not re-render the
+   * scene - the same reason `solids` is a mutable object. Read at the top of
+   * each step: when it is set, the physics is skipped entirely and the position
+   * is the seat's.
+   *
+   * Skipped rather than clamped, and that is the whole of why this is one line
+   * and not a mode: a seated body has no gravity to fall under, no walls to
+   * slide along and no jump to spend, so the honest implementation is not to
+   * run any of it. Looking about still works, because the camera is downstream
+   * of this and reads the mouse rather than the body.
+   */
+  seat?: React.RefObject<{ x: number; y: number; z: number } | null>
+  /**
+   * The wheel, while somebody is behind one, or null - which is always,
+   * except while driving.
+   *
+   * A ref for the same reason `seat` is: getting into a kart should not
+   * re-render the scene, and the state inside it - speed, heading, where the
+   * front wheels point - changes every frame and is read by the renderer
+   * drawing the vehicle. When it is set, the walk below is swapped for
+   * `stepDrive`: the stick stops being a direction and becomes a throttle and
+   * a wheel, which is the whole of "the controls change" when you drive.
+   *
+   * The physics is deliberately *not* swapped: the drive asks for a move and
+   * `stepPhysics` grants what the walls allow, exactly as a walk does - so a
+   * vehicle is stopped by what stops a person, steps the same kerbs, and
+   * falls off the same ledges. What a wall costs it is speed; see `wallSlow`.
+   */
+  drive?: React.RefObject<{ state: DriveState; tuning: DriveTuning } | null>
+  /**
+   * A cell to frame instead of standing behind your own eyes.
+   *
+   * Set while something is being placed. The camera goes to the thing, the
+   * player stands still, and the mouse orbits rather than turns - because what
+   * somebody is doing in that moment is looking *at* an object, not out of a
+   * head.
+   *
+   * A ref, so picking something up does not re-render the scene, and null the
+   * rest of the time - which is every other frame this component has ever run.
+   */
+  focus?: React.RefObject<{ x: number; y: number; z: number } | null>
+  /**
+   * Whether running costs anything here.
+   *
+   * False is what this world has always been - hold shift and go. True hands
+   * the sprint to `stepStamina`, which is the whole of the change: the walk is
+   * untouched at every level, because a world where running out of breath
+   * stopped you dead would be a punishment rather than a mechanic.
+   */
+  stamina?: boolean
   /** False for solo rooms and the public showcase; the dash does nothing there. */
   combat: boolean
   /** Down, and not moving until they choose to come back. */
@@ -173,6 +310,22 @@ export function PlayerControls({
    */
   watching: boolean
 }) {
+  /**
+   * Is anything at all standing in this cell?
+   *
+   * The blocks first, because there are thousands of them and one of them is
+   * the answer nearly every time; the things second, and only when there are
+   * any. Both are `Set.has` on a string key, so the whole test stays the
+   * constant-time lookup the character controller has always assumed it is.
+   */
+  const isSolidHere = useCallback(
+    (x: number, y: number, z: number): boolean => {
+      const key = blockKey(x, y, z)
+      return blocks.has(key) || (solids?.has(key) ?? false)
+    },
+    [blocks, solids],
+  )
+
   const {
     moveRef,
     lookRef,
@@ -184,10 +337,44 @@ export function PlayerControls({
     knockRef,
     transformsRef,
     vrOriginRef,
+    staminaRef,
   } = useSceneRefs()
 
   const { camera, gl } = useThree()
   const keys = useRef<Record<string, boolean>>({})
+  /**
+   * How much breath is left, kept between frames.
+   *
+   * The *state*, beside `staminaRef` which is the fraction the bar draws: one
+   * is what the rule needs to carry forward, the other is what a DOM element
+   * reads sixty times a second, and collapsing them would put the winded latch
+   * somewhere a stylesheet can see it.
+   */
+  const breath = useRef<StaminaState>(FRESH)
+
+  /**
+   * How far the camera has travelled toward the thing being placed, 0 to 1.
+   *
+   * And the last thing it was sent to, kept so that letting go eases away from
+   * where the thing was rather than from wherever the rig happens to be. Refs,
+   * because this runs every frame and none of it is anything React needs to
+   * know about.
+   */
+  const frame = useRef(0)
+  /**
+   * Whether this reader asked for less motion, mirrored into a ref.
+   *
+   * Read once by a hook and kept here because the frame loop is not a render:
+   * a media query result cannot be reached from inside `useFrame` any other
+   * way without re-rendering the scene when it changes, which is a thing that
+   * happens when somebody changes a system setting and never otherwise.
+   */
+  const still = useRef(false)
+  const asked = useMediaQuery('(prefers-reduced-motion: reduce)')
+  useEffect(() => {
+    still.current = asked
+  }, [asked])
+  const framedAt = useRef<{ x: number; y: number; z: number } | null>(null)
   const euler = useRef(new THREE.Euler(0, 0, 0, 'YXZ'))
 
   /**
@@ -395,10 +582,23 @@ export function PlayerControls({
     // than returning early, keeps the camera rig below running - so the body you
     // are looking at is your own, lying where it fell.
     const live = !dead
-    const forwardInput = live
+
+    /**
+     * Something in your hands takes the walk as well as the camera.
+     *
+     * Standing still while placing is the whole of what makes the placement
+     * view legible: the camera is parked on the thing, so a step forward would
+     * move the body off screen and change nothing anybody can see. Look still
+     * works - it orbits the thing - because that is how you check what a bench
+     * looks like from the other side before you put it down.
+     */
+    const framing = focus?.current ?? null
+    const walking = live && !framing
+
+    const forwardInput = walking
       ? clamp((keys.current.KeyW ? 1 : 0) - (keys.current.KeyS ? 1 : 0) + move.forward)
       : 0
-    const strafeInput = live
+    const strafeInput = walking
       ? clamp((keys.current.KeyD ? 1 : 0) - (keys.current.KeyA ? 1 : 0) + move.strafe)
       : 0
 
@@ -418,12 +618,12 @@ export function PlayerControls({
     const forward = forwardInput * evenly
     // `let`, because steer mode spends the keyboard's share of it on a turn.
     let strafe = strafeInput * evenly
-    const vertical = live
+    const vertical = walking
       ? clamp(
           (keys.current.Space ? 1 : 0) - (keys.current.ControlLeft ? 1 : 0) + move.vertical,
         )
       : 0
-    const sprint = live && (keys.current.ShiftLeft || move.sprint)
+    const wantsSprint = walking && (keys.current.ShiftLeft || move.sprint)
 
     // Clamped, because a backgrounded tab delivers one enormous frame on return
     // and a single gravity step that size tunnels straight through the floor.
@@ -443,9 +643,15 @@ export function PlayerControls({
      * the same frame. Never in a headset, where `euler` is the headset's own
      * pose and a turn nobody's neck made is how people take one off.
      */
-    if (!rig && cameraMode === 'steer' && strafe !== 0) {
+    if (!rig && cameraMode === 'steer' && strafe !== 0 && !wheelRef?.current) {
       // A key is all-or-nothing and a stick is not, so they turn at their own
       // rates; the keyboard's own contribution is what tells them apart.
+      //
+      // Never while driving, which was reported as "the car dont steer": this
+      // spent the sideways axis on the camera and zeroed it, so the wheel down
+      // in the drive branch read an axis that was always 0. A vehicle *is* the
+      // steer mode - the sideways axis turns the nose - so the wheel takes the
+      // whole axis and the camera stays on the mouse and the drag.
       const byKey = keys.current.KeyA || keys.current.KeyD
       euler.current.y += steerTurn(strafe, dt, byKey ? STEER_KEY_TURN_RATE : undefined)
       strafe = 0
@@ -541,6 +747,29 @@ export function PlayerControls({
      * that landing out of a flight does not start with a phantom press.
      */
     const jumpDown = vertical > 0
+    /**
+     * And whether the space will let you.
+     *
+     * Asked for the sprint *and moving*: somebody leaning on shift at a wall is
+     * not running, and charging them for it would be a bar that empties itself
+     * while nothing happens.
+     *
+     * When the space does not charge, the bar is held full rather than left
+     * wherever it was - so switching the rule off mid-run is a player who is
+     * immediately fine, which is what "off" means.
+     */
+    const moving = Math.abs(forward) > 0.01 || Math.abs(strafe) > 0.01
+    let sprint = wantsSprint
+    if (stamina) {
+      const step = stepStamina(breath.current, wantsSprint && moving, dt)
+      breath.current = step.state
+      sprint = step.sprinting
+      staminaRef.current = step.state.left / STAMINA_FULL
+    } else {
+      breath.current = FRESH
+      staminaRef.current = 1
+    }
+
     const jumpPressed = jumpDown && !jumpWasDown.current
     jumpWasDown.current = jumpDown
 
@@ -553,6 +782,75 @@ export function PlayerControls({
         if (strafe !== 0) player.addScaledVector(RIGHT, speed * strafe)
         if (vertical !== 0) player.addScaledVector(UP, speed * vertical)
       }
+    } else if (wheelRef?.current) {
+      /**
+       * Driving. The stick stops being a direction: forward is a throttle,
+       * sideways is the wheel, and where you end up is a fact about momentum
+       * rather than about where you are looking. The arithmetic is
+       * `stepDrive`'s, tested on paper; this branch spends its answer through
+       * the same physics a walk goes through and settles up afterwards.
+       *
+       * Everything the walk branch does that a body in a seat cannot -
+       * dashing, kicking, jumping, being burned by the floor - is skipped
+       * rather than gated, which is the same shape the seat pin takes: the
+       * honest implementation of "you are in a vehicle" is not to run any
+       * of it.
+       */
+      const driven = wheelRef.current
+      const stepped = stepDrive(
+        driven.state,
+        // The throttle is the walk's forward and the wheel is its strafe, so
+        // WASD, the touch stick and a gamepad all drive without being taught.
+        { throttle: forward, steer: strafe },
+        driven.tuning,
+        dt,
+      )
+      driven.state.speed = stepped.speed
+      driven.state.heading = stepped.heading
+      driven.state.steer = stepped.steer
+
+      const asked = Math.hypot(stepped.moveX, stepped.moveZ)
+      const from = { x: player.x, z: player.z }
+
+      const result = stepPhysics({
+        position: player,
+        velocityY: velocityY.current,
+        moveX: stepped.moveX,
+        moveZ: stepped.moveZ,
+        jump: false,
+        jumpPressed: false,
+        jumps: jumps.current,
+        grounded: grounded.current,
+        delta: dt,
+        isSolid: (x, y, z) => isSolidHere(x, y, z),
+      })
+
+      player.set(result.position.x, result.position.y, result.position.z)
+      velocityY.current = result.velocityY
+      grounded.current = result.grounded
+      jumps.current = result.jumps
+
+      // A wall is what it looks like from in here: the physics granted a
+      // fraction of the move the drive asked for. The speed pays for it.
+      const travelled = Math.hypot(player.x - from.x, player.z - from.z)
+      if (asked > 1e-4 && travelled < asked * BLOCKED_BELOW) {
+        driven.state.speed = wallSlow(driven.state.speed)
+      }
+
+      /**
+       * The published heading is the *nose*, not the eyes.
+       *
+       * Everything that draws or broadcasts this body reads `headingRef` - the
+       * self avatar, the presence packet, the peers interpolating it - and
+       * while driving, the fact all of them want is which way the vehicle
+       * points. Looking about is still the mouse's; the camera reads its own
+       * euler and never asks this ref.
+       */
+      headingRef.current.set(
+        Math.sin(driven.state.heading),
+        0,
+        Math.cos(driven.state.heading),
+      )
     } else {
       /**
        * Walking takes the *horizontal* projection of the look direction. Using
@@ -653,21 +951,43 @@ export function PlayerControls({
           grounded.current = false
         }
 
-        const result = stepPhysics({
-          position: player,
-          velocityY: velocityY.current,
-          moveX,
-          moveZ,
-          // Space, or the touch rig's up control, is now a jump. Suppressed
-          // mid-dash: a charge is a horizontal commitment, and hopping out of
-          // the middle of one would let you skip its recovery.
-          jump: jumpDown && !dashing,
-          jumpPressed: jumpPressed && !dashing,
-          jumps: jumps.current,
-          grounded: grounded.current,
-          delta: dt,
-          isSolid: (x, y, z) => blocks.has(blockKey(x, y, z)),
-        })
+        /**
+         * Sitting in something: the seat is the answer, not the physics.
+         *
+         * Written straight into the same shape the step returns, so everything
+         * downstream - the drawn body, the presence packet, the separation from
+         * other people - carries on reading one value and does not have to know
+         * about chairs.
+         */
+        const seated = seat?.current ?? null
+        const result = seated
+          ? {
+              position: {
+                x: seated.x,
+                // The seat names where the *feet* go, as everything on this
+                // lattice does; the player vector is the eye.
+                y: seated.y + EYE_HEIGHT,
+                z: seated.z,
+              },
+              velocityY: 0,
+              grounded: true,
+              jumps: 0,
+            }
+          : stepPhysics({
+              position: player,
+              velocityY: velocityY.current,
+              moveX,
+              moveZ,
+              // Space, or the touch rig's up control, is now a jump. Suppressed
+              // mid-dash: a charge is a horizontal commitment, and hopping out
+              // of the middle of one would let you skip its recovery.
+              jump: jumpDown && !dashing,
+              jumpPressed: jumpPressed && !dashing,
+              jumps: jumps.current,
+              grounded: grounded.current,
+              delta: dt,
+              isSolid: (x, y, z) => isSolidHere(x, y, z),
+            })
 
         player.set(result.position.x, result.position.y, result.position.z)
         velocityY.current = result.velocityY
@@ -907,6 +1227,87 @@ export function PlayerControls({
       // which is what the note above says should happen.
       euler.current.setFromQuaternion(camera.quaternion)
       return
+    }
+
+    /**
+     * Framing the thing being placed, rather than looking out of a head.
+     *
+     * Parked a little back and above the cell it would land in, aimed at it,
+     * with the *yaw the player already had* deciding which side it is watched
+     * from - so the mouse orbits the thing instead of turning a body that is
+     * not moving. That is the whole of the mode: what somebody is doing here is
+     * looking at an object, and a first-person view of an object you are
+     * holding in front of your own face is a view of your own face.
+     *
+     * Before the rig is applied rather than after, and returning, because the
+     * rig's whole job is to put the camera behind the player - which is the
+     * thing this is standing in for.
+     */
+    /**
+     * Travelling between the two, rather than cutting between them.
+     *
+     * The camera used to jump to the thing the instant somebody pressed E and
+     * jump back the instant they let go, and a cut is the one motion this
+     * design system does not use: everything eases out, and a cut in a 3D scene
+     * reads as a glitch rather than as a move.
+     *
+     * So both poses are computed while the blend is running and the camera is
+     * interpolated between them - position along a line, orientation along the
+     * shortest arc. It runs in both directions off one number, which is what
+     * makes leaving as smooth as arriving without a second piece of state.
+     */
+    /**
+     * The camera travels, unless somebody has asked it not to.
+     *
+     * A camera move is the one animation in this scene that a reader with
+     * motion sensitivity cannot look away from - it moves the whole world - so
+     * for them it is a cut: `frame` is set rather than approached, and the pose
+     * is simply the one that belongs to the moment. The information is
+     * identical; only the journey is gone.
+     */
+    frame.current = still.current
+      ? framing
+        ? 1
+        : 0
+      : approach(frame.current, framing ? 1 : 0, delta / FRAME_EASE)
+
+    if (framing || frame.current > 0) {
+      const at = framing ?? framedAt.current
+      // The last thing framed is kept, so letting go eases *away from where it
+      // was* rather than snapping to nothing and then easing from there.
+      if (framing) framedAt.current = framing
+
+      if (at) {
+        const yaw = euler.current.y
+        // Behind the look direction: a camera at yaw θ faces (-sin θ, 0, -cos θ),
+        // so standing it at +that puts the thing in front of the lens.
+        FRAME_AT.set(at.x + 0.5, at.y + FRAME_LOOK, at.z + 0.5)
+        FRAME_POSITION.set(
+          FRAME_AT.x + Math.sin(yaw) * FRAME_BACK,
+          at.y + FRAME_HEIGHT,
+          FRAME_AT.z + Math.cos(yaw) * FRAME_BACK,
+        )
+
+        // The frame's orientation, read off the camera rather than derived:
+        // `lookAt` already knows how to point a camera at a spot, and doing the
+        // arithmetic again by hand is a second answer that can disagree.
+        FRAME_RIG.copy(camera.quaternion)
+        camera.position.copy(FRAME_POSITION)
+        camera.lookAt(FRAME_AT)
+        FRAME_QUAT.copy(camera.quaternion)
+
+        const t = eased(frame.current)
+        camera.position.copy(RIG_POSITION).lerp(FRAME_POSITION, t)
+        camera.quaternion.copy(FRAME_RIG).slerp(FRAME_QUAT, t)
+
+        // Fully arrived: nothing below has anything left to say about the
+        // camera, and the mirror would aim it at a face nobody is looking at.
+        if (frame.current >= 1) return
+        if (frame.current > 0) {
+          euler.current.setFromQuaternion(FRAME_RIG)
+          return
+        }
+      }
     }
 
     camera.position.copy(RIG_POSITION)

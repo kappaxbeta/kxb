@@ -4,6 +4,7 @@ import { useAnimations, useGLTF } from '@react-three/drei'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { lead } from '@/app/world/lounge/_canvas/lead'
 import { type AvatarClip } from '@/domain/lounge/avatars'
 
 /**
@@ -32,6 +33,8 @@ type SkinModelProps = {
   /** A qualified catalogue id: `adventurers/Knight`. */
   model: string
   clip?: AvatarClip
+  /** A clip the space made, ready to play. See `BodyModel`. */
+  pose?: THREE.AnimationClip | null
   fade?: number
   ignoreRay?: boolean
   rim?: THREE.Color | null
@@ -104,6 +107,7 @@ export function SkinModel(props: SkinModelProps) {
 function SkinBody({
   model,
   clip = 'idle',
+  pose = null,
   fade = 0.2,
   ignoreRay = false,
   rim = null,
@@ -193,21 +197,81 @@ function SkinBody({
   }, [body, rim])
 
   const group = useRef<THREE.Group>(null)
-  const { actions } = useAnimations(animations, group)
+
+  /**
+   * The rig's clips, plus whatever the space made. See `AvatarModel`.
+   *
+   * This is the body a space-made clip is *for*: the animator poses the dummy,
+   * and every skin in the pack carries the same skeleton down to the bone name
+   * - `hips`, `upperarm.l`, `handslot.r` - so a wave keyed on the mannequin
+   * plays on a knight without anything being retargeted.
+   */
+  /**
+   * The pack's clips only, and the space's kept out of this list on purpose.
+   *
+   * `useAnimations` rebuilds its whole action set whenever the array it is
+   * given changes identity, and the array used to gain and lose the space's
+   * clip as `pose` came and went. So starting a clip did not blend badly - it
+   * had *nothing to blend from*: every action was thrown away and rebuilt, the
+   * gait among them, and the body snapped to the new clip's first frame from
+   * wherever the rebuild left it. Reported as a clip always starting from the
+   * same place instead of from where the body was.
+   *
+   * Kept stable, the gait's actions survive a clip starting and ending, which
+   * is what makes a crossfade possible at all.
+   */
+  const { actions, mixer } = useAnimations(animations, group)
+
+  /** What is playing now, so the next thing can fade *from* it. */
+  const playing = useRef<THREE.AnimationAction | null>(null)
 
   useEffect(() => {
-    const action = actions[RIG_CLIP[clip]]
-    if (!action) return
+    /**
+     * The gait, the pose, or both.
+     *
+     * Both when the pose is *additive*, which is what a clip that leaves part
+     * of the body alone is built as - see `toClip`. A wave is arms, and
+     * somebody waving while crossing the room should keep walking; a sit-down
+     * is a whole body and replaces the gait outright.
+     */
+    const layered = pose?.blendMode === THREE.AdditiveAnimationBlendMode
+    const gait = !pose || layered ? actions[RIG_CLIP[clip]] : null
 
-    // Set before playing, so the first frame is already at the right cadence
-    // rather than stepping once slowly and then catching up.
-    action.setEffectiveTimeScale(CLIP_RATE[clip])
-    action.reset().fadeIn(fade).play()
+    /**
+     * The space's own clip, bound here rather than added to the list above.
+     *
+     * `mixer.clipAction` is exactly what `useAnimations` does internally, so
+     * this shares the body's one mixer, one clock and one blend - it is only
+     * kept off the array so that the array never changes identity. Bound inside
+     * the effect because it needs the group, and a ref may not be read while
+     * rendering.
+     */
+    const root = group.current
+    const extra = pose && root ? mixer.clipAction(pose, root) : null
+
+    if (gait) {
+      // Set before playing, so the first frame is already at the right cadence
+      // rather than stepping once slowly and then catching up.
+      gait.setEffectiveTimeScale(CLIP_RATE[clip])
+      lead(gait, playing, fade)
+    }
+    if (extra) {
+      // A space's own clip runs at the speed it was keyed at: the rate table is
+      // a correction for the *pack's* clips against this world's walking speed,
+      // and a clip authored here was authored against nothing.
+      extra.setEffectiveTimeScale(1)
+      // Layered clips ride on top rather than taking over, so they never become
+      // the thing the next change fades from - a wave ending should hand back
+      // to the walk that was underneath it the whole time.
+      if (layered) extra.reset().fadeIn(fade).play()
+      else lead(extra, playing, fade)
+    }
+
     // Fading out rather than stopping, so walk -> idle does not snap mid-stride.
     return () => {
-      action.fadeOut(fade)
+      if (layered) extra?.fadeOut(fade)
     }
-  }, [actions, clip, fade])
+  }, [actions, clip, fade, mixer, pose])
 
   return (
     <group ref={group} scale={SKIN_SCALE}>

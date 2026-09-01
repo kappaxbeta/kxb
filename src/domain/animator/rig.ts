@@ -197,3 +197,155 @@ export const GROUP_LABELS: Record<BoneSpec['group'], string> = {
 
 /** Where the model lives. One file, and the tool is pointed at it. */
 export const DUMMY_URL = '/xo/pda/dummy/Dummy.glb'
+
+/**
+ * The other body somebody might want to animate.
+ *
+ * ---------------------------------------------------------------------------
+ * A peep is not a skeleton, and it does not matter
+ * ---------------------------------------------------------------------------
+ * The animal packs ship with `skins: 0` - there is no skinned mesh and no
+ * armature. Each animal is seven nodes with a mesh on most of them, animated by
+ * turning the *nodes*: `root`, `body`, `tail` and four legs.
+ *
+ * That is a rig as far as everything in this editor is concerned. A pose here
+ * is a root translation plus a quaternion per named node, and three.js binds a
+ * quaternion track to a node by name whether or not the node is a `Bone`. The
+ * pack's own clips are built exactly this way - `idle` turns `leg-front-left`
+ * and the rest - so a clip keyed here is the same kind of object the pack
+ * already ships.
+ *
+ * `root` is even called `root`, so `ROOT_BONE` is the same word for both rigs.
+ * That is luck rather than design, and it is worth writing down because it is
+ * the reason nothing else in the editor had to learn about a second name for
+ * the thing that translates.
+ *
+ * ---------------------------------------------------------------------------
+ * What a peep has not got
+ * ---------------------------------------------------------------------------
+ * Arms, a spine, a head that turns, and knees. Four legs of one bone each,
+ * hung off the root, and a tail off the body. So every `reach` here is 1 - a
+ * drag turns the leg it is on and nothing above it - and there are no hinges,
+ * because a single-bone limb has no plane to get wrong.
+ *
+ * The legs are pinnable for the same reason the dummy's feet are: lowering the
+ * body should crouch the animal rather than sink it through its own feet.
+ */
+export const PEEP_BONES: BoneSpec[] = [
+  bone('body', { label: 'Body', group: 'torso', reach: 1 }),
+  bone('tail', { label: 'Tail', group: 'torso', reach: 1 }),
+  bone('leg-front-left', { label: 'Front L', group: 'legs', reach: 1, pinnable: true }),
+  bone('leg-front-right', { label: 'Front R', group: 'legs', reach: 1, pinnable: true }),
+  bone('leg-back-left', { label: 'Back L', group: 'legs', reach: 1, pinnable: true }),
+  bone('leg-back-right', { label: 'Back R', group: 'legs', reach: 1, pinnable: true }),
+]
+
+export const PEEP_SPECS: Record<string, BoneSpec> = Object.fromEntries(
+  PEEP_BONES.map((spec) => [spec.name, spec]),
+)
+
+/**
+ * The fox, standing in for every animal in the pack.
+ *
+ * They all share these seven nodes under these seven names - the pack is one
+ * rig with twenty-odd skins on it - so a clip keyed against the fox plays on
+ * the penguin. Which one the editor *draws* is cosmetic, and the fox is the
+ * one with a tail long enough to see what a tail key did.
+ */
+export const PEEP_URL = '/xo/peeps/animal-fox.glb'
+
+/**
+ * A body the animator can pose, as one value.
+ *
+ * The editor was written against the dummy and reached for `DUMMY_BONES`,
+ * `BONE_SPECS` and `DUMMY_URL` as module constants. That is fine for one rig
+ * and is the whole of what stopped there being two: nothing in the stage, the
+ * IK or the panel is *about* the dummy - they take a bone list, a spec lookup
+ * and a reach - so making the three a parameter is what lets the same tool
+ * animate an animal.
+ *
+ * `id` is what a saved clip records, so a picker can offer a clip on the bodies
+ * it will actually play on. A clip binds to nodes by name, and `hand.l` means
+ * nothing to a fox.
+ */
+export interface Rig {
+  id: RigId
+  label: string
+  url: string
+  bones: BoneSpec[]
+  specs: Record<string, BoneSpec>
+}
+
+export const RIG_IDS = ['dummy', 'peep'] as const
+export type RigId = (typeof RIG_IDS)[number]
+
+export const RIGS: Record<RigId, Rig> = {
+  dummy: {
+    id: 'dummy',
+    label: 'Person',
+    url: DUMMY_URL,
+    bones: DUMMY_BONES,
+    specs: BONE_SPECS,
+  },
+  peep: { id: 'peep', label: 'Peep', url: PEEP_URL, bones: PEEP_BONES, specs: PEEP_SPECS },
+}
+
+/**
+ * Every bone this app knows, whichever body it belongs to.
+ *
+ * The two rigs share no names - a dummy has `hips` and `upperarm.l`, a peep has
+ * `body` and `leg-front-left` - so one map answers "what part of a body is this
+ * bone" without anybody having to say which rig they are asking about. Which is
+ * exactly the question a *clip* raises: it arrives as a list of bone names and
+ * nothing else, and what plays it should not have to be told twice.
+ */
+export const ALL_SPECS: Record<string, BoneSpec> = { ...BONE_SPECS, ...PEEP_SPECS }
+
+/**
+ * Which parts of a body a set of bone names touches.
+ *
+ * Derived rather than declared, which is the whole reason a clip does not carry
+ * a `parts` field: `bake` already drops every bone that never moves, so what a
+ * clip *drives* is a fact about its own tracks. A stored list could disagree
+ * with them, and the disagreement would show up as an animation that does not
+ * do what its label says.
+ *
+ * Bones no rig here knows are ignored rather than counted as a fourth group: a
+ * clip from a pack we later drop, or from a rig somebody imported, should read
+ * as touching nothing rather than as touching something unnamed.
+ */
+export function groupsIn(
+  bones: Iterable<string>,
+  specs: Record<string, BoneSpec>,
+): Set<BoneSpec['group']> {
+  const groups = new Set<BoneSpec['group']>()
+  for (const bone of bones) {
+    const spec = specs[bone]
+    if (spec) groups.add(spec.group)
+  }
+  return groups
+}
+
+/**
+ * Whether a clip is meant to play *over* something rather than instead of it.
+ *
+ * A wave is arms. A walk is legs and a bit of everything. Played the usual way
+ * - one action crossfading to another - a wave stops the walk, and somebody
+ * waving while crossing the room stands still to do it.
+ *
+ * So a clip that leaves a whole part of the body alone is taken as a layer, and
+ * the runtime plays it additively on top of the gait. A clip that touches all
+ * three parts is a whole-body animation and replaces the gait, which is what a
+ * sit-down wants.
+ *
+ * The rule is derived from the tracks and not from a switch somebody sets,
+ * because it is the same fact twice: a clip with no leg tracks *cannot* drive
+ * the legs, whatever anybody ticked.
+ */
+export function isPartial(groups: ReadonlySet<BoneSpec['group']>): boolean {
+  return groups.size > 0 && groups.size < 3
+}
+
+export function isRigId(value: unknown): value is RigId {
+  return typeof value === 'string' && (RIG_IDS as readonly string[]).includes(value)
+}

@@ -194,6 +194,88 @@ export type HomesteadAccessSet = DomainEvent<
   { mode: DoorMode }
 >
 
+/**
+ * Coins spent on something that is not homestead furniture.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the room's shop spends this purse and does not grow its own
+ * ---------------------------------------------------------------------------
+ * Because there is one lot of play money in this product and a second would be
+ * a second economy: two balances, two places to earn, and the immediate
+ * question of whether they exchange. The coins a café earns are *the* coins,
+ * and a bench in a lounge that costs four of them is worth four sandwiches -
+ * which is a sentence somebody can reason about.
+ *
+ * ---------------------------------------------------------------------------
+ * What `cost` is trusted on, and what it is not
+ * ---------------------------------------------------------------------------
+ * `BuyGround` prices from this aggregate's own state and says, correctly, that
+ * a client which can name its own price can buy the whole map for nothing. That
+ * rule is kept here in the way that matters: **no browser-facing schema accepts
+ * a cost.** The price lives on a thingiverse blueprint, which this aggregate
+ * cannot see, so a server action reads the stored blueprint and issues the
+ * command - the same shape as `ServeCustomer`, where the exact number also
+ * comes from outside and the aggregate holds a bound rather than a derivation.
+ *
+ * The bound here is `MAX_PRICE`, and affordability. Within that, the resolver
+ * is the authority, and the resolver is server code reading a row.
+ *
+ * `what` is recorded so a purse can be explained afterwards - "four coins, the
+ * counter, a patty" - which is the one thing a balance that only ever goes down
+ * cannot tell you on its own.
+ */
+export type CoinsSpent = DomainEvent<
+  'CoinsSpent',
+  {
+    /** Summoning a thing, or taking an item off one. */
+    on: 'thing' | 'item'
+    /** What it was: a blueprint's name, or an item's word. */
+    what: string
+    cost: number
+  }
+>
+
+/**
+ * How much one person may hand another at once.
+ *
+ * Generous - a few shifts' takings - and bounded anyway, because the guard that
+ * actually matters is affordability and this one only exists to make a mistyped
+ * amount a refusal rather than a purse emptied by a stray zero.
+ */
+export const MAX_TRANSFER = 100_000
+
+/**
+ * Coins handed to somebody else, and coins handed to you.
+ *
+ * ---------------------------------------------------------------------------
+ * Two events on two streams, because there are two purses
+ * ---------------------------------------------------------------------------
+ * A homestead is per member per workspace (see `homesteadStreamId`), so a
+ * transfer is not one write - it is a debit on one stream and a credit on
+ * another, and nothing in this codebase can make those atomic. That is worth
+ * stating rather than hiding, because the failure it admits is real: if the
+ * credit fails after the debit lands, the coins are gone.
+ *
+ * That is the direction to fail in, and it is chosen rather than accepted. The
+ * other order - credit first - fails by *minting*: a credit that lands and a
+ * debit that does not is money created out of a network error, and money that
+ * can be created by retrying is not money. Losing a transfer is a support
+ * conversation; printing one is a broken economy.
+ *
+ * `transfer` is the same id on both halves, so the two ends of one movement can
+ * be found in the log afterwards - which is the only way to answer "where did
+ * my coins go" once they are gone.
+ */
+export type CoinsSent = DomainEvent<
+  'CoinsSent',
+  { to: string; amount: number; transfer: string }
+>
+
+export type CoinsReceived = DomainEvent<
+  'CoinsReceived',
+  { from: string; amount: number; transfer: string }
+>
+
 export type HomesteadEvent =
   | HomesteadFounded
   | PropPlaced
@@ -203,6 +285,9 @@ export type HomesteadEvent =
   | GroundSold
   | CustomerServed
   | HomesteadAccessSet
+  | CoinsSpent
+  | CoinsSent
+  | CoinsReceived
 
 export const HOMESTEAD_EVENT_LABELS: Record<HomesteadEvent['type'], string> = {
   HomesteadFounded: 'homestead founded',
@@ -212,5 +297,8 @@ export const HOMESTEAD_EVENT_LABELS: Record<HomesteadEvent['type'], string> = {
   GroundBought: 'ground bought',
   GroundSold: 'ground sold',
   CustomerServed: 'customer served',
+  CoinsSpent: 'coins spent',
+  CoinsSent: 'coins sent',
+  CoinsReceived: 'coins received',
   HomesteadAccessSet: 'door setting changed',
 }

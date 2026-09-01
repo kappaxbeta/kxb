@@ -9,6 +9,7 @@ import {
   placePropSchema,
   removePropSchema,
   sellGroundSchema,
+  sendCoinsSchema,
   serveCustomerSchema,
   setHomesteadAccessSchema,
 } from '@/domain/homestead/commands'
@@ -19,6 +20,7 @@ import { executeCommand } from '@/es/command'
 import { ConcurrencyError, DomainError } from '@/es/errors'
 import { runProjection } from '@/es/projection'
 import { requireTenant, writeBlockedReason } from '@/lib/tenant'
+import { randomUUID } from 'node:crypto'
 
 export type HomesteadResult = { ok: true } | { ok: false; error: string }
 
@@ -203,4 +205,88 @@ export async function setHomesteadAccess(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Bad door setting' }
   }
   return run(slug, { type: 'SetHomesteadAccess', ...parsed.data })
+}
+
+/**
+ * Hand some of your coins to somebody else in this space.
+ *
+ * ---------------------------------------------------------------------------
+ * Two writes, and the order is the design
+ * ---------------------------------------------------------------------------
+ * A homestead is per member per workspace, so a transfer is a debit on one
+ * stream and a credit on another, and nothing here can make those atomic. The
+ * debit goes first, deliberately: if the credit then fails, the coins are gone,
+ * which is a support conversation. The other order fails by *minting* - a
+ * credit that lands and a debit that does not is money created out of a network
+ * error, and money you can create by retrying is not money.
+ *
+ * Not retried for the same reason. A retry that could not tell "the credit
+ * failed" from "the credit succeeded and the reply was lost" would double it.
+ *
+ * ---------------------------------------------------------------------------
+ * Who you may pay
+ * ---------------------------------------------------------------------------
+ * Somebody in the same space, and not yourself. The membership check is what
+ * stops a crafted request paying a uuid from another workspace - the amount is
+ * bounded by the aggregate, but *which stream gets credited* is derived here,
+ * from a row this caller is allowed to read, and never from what they sent.
+ */
+export async function sendCoins(
+  slug: string,
+  input: { to: string; amount: number },
+): Promise<HomesteadResult> {
+  const parsed = sendCoinsSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Bad transfer' }
+  }
+
+  const context = await requireTenant(slug)
+
+  const blocked = writeBlockedReason(context)
+  if (blocked) return { ok: false, error: blocked }
+
+  const { supabase, tenant, user } = context
+  const { to, amount } = parsed.data
+
+  // Paying yourself is a no-op that would still write two events and read as a
+  // transfer in the log. Refused rather than ignored, because somebody who
+  // picked their own name meant to pick somebody.
+  if (to === user.id) return { ok: false, error: 'That is your own purse' }
+
+  const { data: member } = await supabase
+    .from('tenant_members')
+    .select('user_id')
+    .eq('tenant_id', tenant.id)
+    .eq('user_id', to)
+    .maybeSingle()
+
+  if (!member) return { ok: false, error: 'They are not in this space' }
+
+  const transfer = randomUUID()
+
+  // The debit. A refusal here - not founded, not affordable - stops everything,
+  // which is the whole point of doing it first.
+  const debit = await run(slug, { type: 'SendCoins', to, amount, transfer })
+  if (!debit.ok) return debit
+
+  try {
+    await executeCommand({
+      supabase,
+      decider: homesteadDecider,
+      tenantId: tenant.id,
+      streamId: homesteadStreamId(tenant.id, to),
+      command: { type: 'ReceiveCoins', from: user.id, amount, transfer },
+      metadata: { actorId: user.id },
+    })
+  } catch (error) {
+    if (error instanceof DomainError || error instanceof ConcurrencyError) {
+      // The coins have left. Say so plainly rather than reporting success, and
+      // name the transfer so it can be found in the log.
+      return { ok: false, error: `The coins left your purse but did not arrive (${transfer})` }
+    }
+    throw error
+  }
+
+  await runProjection(supabase, homesteadProjection, tenant.id)
+  return { ok: true }
 }

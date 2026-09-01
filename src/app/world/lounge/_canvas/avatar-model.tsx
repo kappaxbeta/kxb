@@ -3,11 +3,14 @@
 import { useAnimations, useGLTF } from '@react-three/drei'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { lead } from '@/app/world/lounge/_canvas/lead'
 import { type AvatarClip, avatarUrl } from '@/domain/lounge/avatars'
 
 type AvatarModelProps = {
   model: string
   clip?: AvatarClip
+  /** A clip the space made, ready to play. See `BodyModel`. */
+  pose?: THREE.AnimationClip | null
   /** Seconds to cross-fade when the clip changes. Zero snaps. */
   fade?: number
   /**
@@ -67,6 +70,7 @@ export function AvatarModel(props: AvatarModelProps) {
 function AvatarBody({
   model,
   clip = 'idle',
+  pose = null,
   fade = 0.2,
   ignoreRay = false,
   rim = null,
@@ -160,18 +164,64 @@ function AvatarBody({
   }, [cloned, rim])
 
   const group = useRef<THREE.Group>(null)
-  const { actions } = useAnimations(animations, group)
+
+  /**
+   * The pack's clips, plus whatever the space made.
+   *
+   * Appended rather than substituted, so the gait is still there to fall back
+   * to the moment the pose ends - and so the mixer keeps one set of bindings
+   * for the body rather than rebuilding them as somebody sits down.
+   *
+   * A clip keyed on a *person* has bone names an animal has never heard of;
+   * three.js binds what it can and ignores the rest, which is why this is safe
+   * to hand any clip at all. What it looks like is an animal standing still,
+   * which is the honest drawing of "that animation is not for you".
+   */
+  /**
+   * The pack's clips only. The space's is bound by hand below.
+   *
+   * `useAnimations` rebuilds every action when the array it is handed changes
+   * identity, and this array used to gain and lose the space's clip as `pose`
+   * came and went - so a clip starting threw the gait away along with
+   * everything else, leaving nothing to blend from. See the same block in
+   * `SkinModel`, which argues it at length.
+   */
+  const { actions, mixer } = useAnimations(animations, group)
+
+  /** What is playing now, so the next thing can fade *from* it. */
+  const playing = useRef<THREE.AnimationAction | null>(null)
 
   useEffect(() => {
-    const action = actions[clip]
-    if (!action) return
+    // The gait, the pose, or both. See the same block in `SkinModel`, which
+    // explains why a clip that leaves part of the body alone is a layer.
+    const layered = pose?.blendMode === THREE.AdditiveAnimationBlendMode
+    const gait = !pose || layered ? actions[clip] : null
 
-    action.reset().fadeIn(fade).play()
+    /**
+     * The space's own clip, bound here rather than added to the list above.
+     *
+     * `mixer.clipAction` is exactly what `useAnimations` does internally, so
+     * this shares the body's one mixer, one clock and one blend - it is only
+     * kept off the array so that the array never changes identity. Bound inside
+     * the effect because it needs the group, and a ref may not be read while
+     * rendering.
+     */
+    const root = group.current
+    const extra = pose && root ? mixer.clipAction(pose, root) : null
+
+    if (gait) lead(gait, playing, fade)
+    if (extra) {
+      // A layer rides on top and never becomes what the next change fades from:
+      // a wave ending hands back to the walk that was underneath it.
+      if (layered) extra.reset().fadeIn(fade).play()
+      else lead(extra, playing, fade)
+    }
+
     // Fading out rather than stopping, so walk -> idle does not snap mid-stride.
     return () => {
-      action.fadeOut(fade)
+      if (layered) extra?.fadeOut(fade)
     }
-  }, [actions, clip, fade])
+  }, [actions, clip, fade, mixer, pose])
 
   return (
     <group ref={group}>

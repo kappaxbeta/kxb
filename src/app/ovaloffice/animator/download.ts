@@ -1,7 +1,14 @@
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import { type AnimationDoc, type BakedClip, type Pose, bake, rootMoves } from '@/domain/animator/clip'
-import { ROOT_BONE } from '@/domain/animator/rig'
+import { type AnimationDoc, type Pose, bake } from '@/domain/animator/clip'
+/**
+ * The clip builder moved to `@/app/world/_canvas/baked-clip` when a world
+ * wanted one too - re-exported here because this file's callers had it from
+ * here, and because two builders of one object is how a downloaded clip and a
+ * played clip start disagreeing about the root.
+ */
+export { toClip } from '@/app/world/_canvas/baked-clip'
+import { toClip } from '@/app/world/_canvas/baked-clip'
 
 /**
  * Getting the animation out of the browser.
@@ -33,22 +40,6 @@ import { ROOT_BONE } from '@/domain/animator/rig'
  * It also means the GLB written here names its nodes without the dots, which
  * is the only spelling three can bind a track to anyway.
  */
-export function toClip(baked: BakedClip): THREE.AnimationClip {
-  const times = new Float32Array(baked.times)
-  const tracks: THREE.KeyframeTrack[] = []
-
-  for (const name of Object.keys(baked.bones)) {
-    tracks.push(new THREE.QuaternionKeyframeTrack(`${name}.quaternion`, times, new Float32Array(baked.bones[name])))
-  }
-
-  // Only when it goes somewhere. A clip that pins the root at the origin every
-  // frame is a clip that cannot be placed anywhere by whatever plays it.
-  if (rootMoves(baked)) {
-    tracks.push(new THREE.VectorKeyframeTrack(`${ROOT_BONE}.position`, times, new Float32Array(baked.root)))
-  }
-
-  return new THREE.AnimationClip(baked.name || 'clip', baked.duration, tracks)
-}
 
 /**
  * The model and the clip, as one `.glb`.

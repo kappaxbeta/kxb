@@ -6,7 +6,7 @@ import { requireXpAccess } from '@/app/xp/gate'
 import { roomId } from '@/lib/xp-rooms'
 import { XpScene } from '@/app/xp/_runtime/scene'
 import { SceneDebug } from '@/app/xp/_runtime/hud/scene-debug'
-import { readWornLook } from '@/domain/skins/queries'
+import { readLookForLevel } from '@/domain/skins/queries'
 import { createClient } from '@/lib/supabase/server'
 import { describeProblems, parseXp, type XpProblem } from '@kxb/xp'
 import {
@@ -157,7 +157,7 @@ export default async function XpPlayPage({
    * the lounge does. Null for a signed-out visitor, which falls back to the
    * built-in dummy - see `bodiesFor`.
    */
-  const avatar = await myAvatar(null)
+  const avatar = await myAvatar(null, parsed.document.player.wears)
 
   return (
     /**
@@ -225,16 +225,18 @@ async function whoAmI(): Promise<{ id: string; name: string } | null> {
 }
 
 /**
- * What this account wears, or null.
+ * What this account wears in this level, or null.
  *
- * The *profile's*, which is the same rows the lounge and the shop write - so
- * somebody who picked a penguin in their settings is a penguin here without
- * having chosen twice, and somebody who equipped a bought skin arrives in it.
- * `readWornLook` is where the precedence lives: skin over animal, animal over
- * dummy. Silent on failure rather than throwing: a body is the last thing
- * that should be able to stop a level loading.
+ * The *profile's* rows - the same ones the lounge and the shop write - put
+ * through whatever the document asked for. Somebody who picked a penguin in
+ * their settings is a penguin here without having chosen twice; somebody who
+ * equipped an XP body arrives in it; and a level that said `wears: "peep"` gets
+ * animals from both of them. `readLookForLevel` is where that precedence lives.
+ *
+ * Silent on failure rather than throwing: a body is the last thing that should
+ * be able to stop a level loading.
  */
-async function myAvatar(tenantId: string | null): Promise<string | null> {
+async function myAvatar(tenantId: string | null, wears?: string): Promise<string | null> {
   try {
     const supabase = await createClient()
     const {
@@ -246,7 +248,7 @@ async function myAvatar(tenantId: string | null): Promise<string | null> {
      * account's - a level reached at `/xp/<id>` with no room is nobody's
      * space, and the profile is the only answer there is.
      */
-    return await readWornLook(supabase, user.id, tenantId)
+    return await readLookForLevel(supabase, user.id, wears, tenantId)
   } catch {
     return null
   }

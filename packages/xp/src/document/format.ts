@@ -1175,13 +1175,37 @@ export interface XpDocument {
 /**
  * What a level dresses its players in when it has not named a body.
  *
- * A closed list, like the material names: every one of these is a select over a
- * constant in the editor, so there is nothing an author can write here that
- * fails at runtime.
+ * Nearly a closed list: every name here is a select over a constant in the
+ * editor, so there is nothing an author can *type* that fails at runtime. The
+ * one open value is a catalogue model id, and it is open because the catalogue
+ * is - see `PlayerLook`.
  */
-export const PLAYER_LOOKS = ['dummy', 'profile', 'random'] as const
+export const PLAYER_LOOKS = [
+  'dummy',
+  'profile',
+  'random',
+  'peep',
+  'xp',
+  'choose',
+] as const
 
-export type PlayerLook = (typeof PLAYER_LOOKS)[number]
+export type PlayerLookName = (typeof PLAYER_LOOKS)[number]
+
+/**
+ * A name from the list above, or a model id the level hands everybody.
+ *
+ * The model id is spelled the way every other body in this format is -
+ * `family/Model`, one slash - which is also what tells the two apart with no
+ * separate field to keep in step. A template literal rather than plain
+ * `string`, so the union does not collapse and the editor's select keeps its
+ * types: `"peep"` and `"adventurers/Knight"` both check, `"pep"` does not.
+ */
+export type PlayerLook = PlayerLookName | `${string}/${string}`
+
+/** Whether a `wears` value is a model id rather than one of the names. */
+export function isModelLook(wears: PlayerLook): boolean {
+  return !(PLAYER_LOOKS as readonly string[]).includes(wears)
+}
 
 export interface PlayerKey {
   /**
@@ -1479,6 +1503,19 @@ export interface PlayerRole {
    * what its players are, and a personal preference overriding that would be
    * the profile editing somebody's level.
    *
+   * Everybody who plays has **two** bodies at once and neither is spent by the
+   * other: a peep (their animal) and an XP body (the skin they take into the
+   * games). Three of the values below are a level saying which of the two it
+   * wants; the rest predate the split and are kept working exactly as they were.
+   *
+   *   `peep`    their animal, whatever else they own. A level about a room full
+   *             of animals stays one when somebody buys a Knight.
+   *   `xp`      their XP body. The dummy for anybody who has not got one, which
+   *             is what a player already is before they are anybody.
+   *   `choose`  neither - whichever of the two they picked for themselves. The
+   *             right answer for most levels, and the one that makes the
+   *             wardrobe mean something.
+   *
    *   `dummy`   the prototype dummy. The default, and every document written
    *             before this existed: a level about a room wants a person in
    *             it, not a paragraph about what a person is.
@@ -1489,6 +1526,11 @@ export interface PlayerRole {
    *   `random`  an animal per player whatever their profile says, picked from
    *             their own id so it is the same one on every screen and the same
    *             one tomorrow.
+   *
+   * Anything else is a catalogue model id - `adventurers/Knight` - and means
+   * the level *hands* everybody the same body. Not the same thing as naming a
+   * `blueprint`: that decides triggers, props and tags as well, and this only
+   * swaps the face. A level with a story to tell can cast it.
    *
    * Absent is `dummy`, and it is stored as absent rather than written out for
    * `draw`'s reason: a document that says the default and one that stays quiet
@@ -5757,13 +5799,28 @@ export function parseXp(raw: unknown): XpParse {
      */
     let wears: PlayerLook | undefined
     if (raw.player.wears !== undefined) {
-      if (!PLAYER_LOOKS.includes(raw.player.wears as PlayerLook)) {
+      const said = raw.player.wears
+      /**
+       * A name, or a model id - and a model id is checked for *shape* rather
+       * than against the catalogue.
+       *
+       * The parser has never known what models exist and must not start: an XP
+       * that names a body from a pack this build has not shipped should refuse
+       * to draw it, not refuse to open. One slash with something either side is
+       * the whole rule, and it is the same rule `blueprint.model` is read by.
+       */
+      const named =
+        typeof said === 'string' && (PLAYER_LOOKS as readonly string[]).includes(said)
+      const model =
+        typeof said === 'string' && /^[^/\s]+\/[^/\s]+$/.test(said)
+
+      if (!named && !model) {
         problems.push({
           at: 'player.wears',
-          message: `must be one of ${PLAYER_LOOKS.join(', ')}`,
+          message: `must be one of ${PLAYER_LOOKS.join(', ')}, or a model id like "adventurers/Knight"`,
         })
-      } else if (raw.player.wears !== 'dummy') {
-        wears = raw.player.wears as PlayerLook
+      } else if (said !== 'dummy') {
+        wears = said as PlayerLook
       }
     }
 

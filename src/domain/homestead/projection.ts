@@ -311,6 +311,30 @@ export const homesteadProjection: Projection<HomesteadEvent> = {
         await bumpPurse(supabase, event, {}, { access_mode: event.data.mode })
         return
 
+      /*
+        The three ways coins move that are not furniture, ground or a customer.
+
+        Every one of them has to be here rather than falling through to the
+        `default` below, and the reason is worth writing down because the bug it
+        causes is silent: the *aggregate* folds these and so refuses an
+        unaffordable command correctly, while the *read model* is what anybody
+        actually sees. A case missing from this switch is a balance that is
+        right every time it is enforced and wrong every time it is shown.
+      */
+      case 'CoinsSpent':
+        await bumpPurse(supabase, event, { coins: -event.data.cost })
+        return
+
+      case 'CoinsSent':
+        await bumpPurse(supabase, event, { coins: -event.data.amount })
+        return
+
+      case 'CoinsReceived':
+        // On the recipient's own stream, so `ownerOf` already points at the
+        // right purse - the same scoping every other case here relies on.
+        await bumpPurse(supabase, event, { coins: event.data.amount })
+        return
+
       default:
         return
     }

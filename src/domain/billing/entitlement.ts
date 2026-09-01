@@ -1,7 +1,8 @@
 import 'server-only'
 import type Stripe from 'stripe'
 import type { Client } from '@/es/store'
-import { GRANT_SEATS } from '@/domain/promo/application'
+import { GRANT_SEATS, type RedeemSource } from '@/domain/promo/application'
+import { type Limit, maxLimit, UNLIMITED } from '@/domain/billing/limits'
 import { ourPriceIds } from '@/domain/billing/prices'
 import {
   asTier,
@@ -309,7 +310,7 @@ export async function readEntitlement(
   supabase: Client,
   userId: string,
 ): Promise<Entitlement> {
-  const [{ data, error }, owned, grant] = await Promise.all([
+  const [{ data, error }, owned, grants] = await Promise.all([
     supabase
       .from('user_entitlements')
       .select('seats, status, current_period_end, cancel_at_period_end')
@@ -328,7 +329,7 @@ export async function readEntitlement(
      * why. Keeping the grant in its own table means the mirror can be
      * overwritten as hard as it likes.
      */
-    readPromoGrant(supabase, userId),
+    readLiveGrants(supabase, userId),
   ])
 
   if (error) {
@@ -337,23 +338,15 @@ export async function readEntitlement(
 
   const paidSeats = data?.seats ?? 0
   const stripeStatus = asEntitlementStatus(data?.status)
-  const granted = grant !== null
+  const granted = grants.best !== null
+  const grant = grants.best
 
   // Additive, not a maximum. Somebody who redeemed a code and later subscribed
   // holds both until the month runs out, and taking the larger of the two would
   // quietly cost them the space they made with the free one.
   const seats = paidSeats + (granted ? GRANT_SEATS : 0)
 
-  /**
-   * A space is "unpaid" when nothing is holding it up but the owner's goodwill.
-   *
-   * Counted against the legacy seats and any live grant, because those *do*
-   * hold spaces up - `tenant_is_entitled` says so - and a grandfathered account
-   * that suddenly could not make a space would be this change breaking the
-   * people it was written to protect.
-   */
-  const covered = seats
-  const unpaid = Math.max(0, owned.total - owned.subscribed - covered)
+  const unpaid = unpaidSpaces({ owned, stripeSeats: paidSeats, grantCovers: grants.covers })
 
   /**
    * A granted month reports as `trialing`, which is not a fudge: it is exactly
@@ -409,40 +402,121 @@ export async function readEntitlement(
 }
 
 /**
- * When this account's free month ends, if one is running.
+ * How many of this account's spaces have nothing holding them up but goodwill.
  *
- * Deliberately narrow - one column, one row, filtered in the database - because
- * this sits inside `readEntitlement`, which runs on every page load behind a
- * workspace. The richer read that names the code lives in
- * `domain/promo/queries.ts`, where nothing is on a hot path.
+ * The number the free-space cap is measured against, and a function because it
+ * was written out twice and the two copies disagreed. `readEntitlement` counted
+ * a live grant; `createTenant`'s gate built `covered` out of Stripe seats and
+ * subscribed spaces and never read a grant at all - so a forever grant was
+ * worth one seat in the summary a page renders its button from, and zero at the
+ * door that button leads to. Somebody comped for every space they own could be
+ * shown "make another" and then refused by it.
  *
- * A failure reads as "no grant". That is the safe direction here in the sense
- * that matters: it can make a space read-only for as long as the query is
- * broken, but it can never hand out seats nobody redeemed, and a lost month is
- * recoverable while a granted one is not.
+ * Legacy seats and a live grant both subtract, because both *do* hold a space
+ * up - `tenant_is_entitled` says so - and a grandfathered account that suddenly
+ * could not make a space would be the tier migration breaking the people it was
+ * written to protect.
+ *
+ * `stripeSeats` rather than `seats`, deliberately: the `seats` on `Entitlement`
+ * already has `GRANT_SEATS` folded into it, and passing that in would count the
+ * grant twice. Only what Stripe said goes in here.
  */
-async function readPromoGrant(
+export function unpaidSpaces({
+  owned,
+  stripeSeats,
+  grantCovers,
+}: {
+  owned: { total: number; subscribed: number }
+  /** Legacy account seats as Stripe reports them, with no grant folded in. */
+  stripeSeats: number
+  /** How many spaces the live grants hold up. `readLiveGrants` works it out. */
+  grantCovers: Limit
+}): number {
+  // Somebody comped for every space they own has no unpaid ones by definition,
+  // however many they make. That is what "all of them" was sold as.
+  if (grantCovers === UNLIMITED) return 0
+
+  return Math.max(0, owned.total - owned.subscribed - stripeSeats - grantCovers)
+}
+
+/**
+ * The grant that only an operator can write.
+ *
+ * `redeem_promo_code` stamps where a redemption came from, and this is the one
+ * value that means "a human in the backoffice decided this account is comped" -
+ * `grantTier` in `promo/actions.ts` passes `p_source: 'grant'`. Every other
+ * source is somebody redeeming a code for themselves. The distinction is load
+ * bearing; see `readLiveGrants`.
+ */
+const OPERATOR_GRANT: RedeemSource = 'grant'
+
+export interface LiveGrants {
+  /** The one worth naming on a screen: xp before xo. `null` when there are none. */
+  best: { until: string | null; tier: Tier } | null
+  /**
+   * How many of this account's spaces the grants hold up between them.
+   *
+   * `UNLIMITED` when an operator comped every space, a number otherwise, and
+   * `0` when there is no live grant at all.
+   */
+  covers: Limit
+}
+
+/** Nothing live. Also what a failed read answers - see the note in the reader. */
+const NO_GRANTS: LiveGrants = { best: null, covers: 0 }
+
+/**
+ * Every grant running on this account right now, and what they are worth.
+ *
+ * ---------------------------------------------------------------------------
+ * Why a grant is not simply worth the spaces it covers
+ * ---------------------------------------------------------------------------
+ * `granted_spaces` is "how many of your spaces does this grant's *tier* reach,
+ * oldest first, NULL for all of them" - read the migration that added it. It
+ * was never an allowance to *make* spaces, and the two are easy to conflate
+ * because for one grant of one space they coincide.
+ *
+ * They come apart badly at NULL. NULL is the legacy value, so every row written
+ * before that migration has it, and every self-service redemption still does:
+ * on prod today the sign-up, picker and space-creation grants are *all* "covers
+ * all of them". Reading coverage as allowance would therefore hand unlimited
+ * free spaces to every person who has ever redeemed a first-month code, which
+ * is not a generous reading of the feature - it is the free tier ceasing to
+ * exist, found later by an invoice rather than by a test.
+ *
+ * So the allowance is drawn from the operator grant only. "Put an account on a
+ * plan → for [all] spaces" in the backoffice is a person deciding this account
+ * should stop being counted, which is exactly the sentence the cap should
+ * honour. A code somebody redeemed for themselves is not, and stays worth
+ * `GRANT_SEATS` - the one space it has always been worth.
+ *
+ * The floor matters as much as the ceiling: any live grant is still worth one
+ * space, so nobody who could make a space yesterday is refused one today. This
+ * function can only ever be more generous than the constant it replaced.
+ *
+ * ---------------------------------------------------------------------------
+ * The rest
+ * ---------------------------------------------------------------------------
+ * `maxLimit` rather than a sum, because two grants describe overlapping sets of
+ * the same spaces. An xo grant covering two and an xp grant covering all of
+ * them means all of them, not "two plus everything".
+ *
+ * A failure reads as no grants. That can make a space read-only for as long as
+ * the query is broken, but it can never hand out spaces nobody redeemed, and a
+ * lost month is recoverable where a granted one is not.
+ *
+ * Exported for `createTenant`, which needs the same answer and was deciding
+ * without it. Callers that want to *say* something about a grant - which code,
+ * how long left - want `domain/promo/queries.ts` instead; this one is narrow
+ * because it sits inside `readEntitlement`, on every page load behind a space.
+ */
+export async function readLiveGrants(
   supabase: Client,
   userId: string,
-  // `until` is nullable because a grant can have no end: NULL is forever, and
-  // the caller passes it straight through to `grantUntil`, which every screen
-  // showing "how long is left" already has to handle.
-): Promise<{ until: string | null; tier: Tier } | null> {
-  /**
-   * `maybeSingle` became `limit(1)` when vouchers went per-tier.
-   *
-   * One account may now hold two live grants - a free month of xo and a free
-   * month of xp are separate entitlements under the rule in the tiers
-   * migration - and `maybeSingle` throws outright on a second row. That would
-   * have turned "redeemed both codes" into a 500 on every page load behind a
-   * space, which is a spectacular way for a generous promotion to fail.
-   *
-   * Ordered so xp wins, for the same reason `tenant_tier()` orders its grant
-   * branch: which of two grants applies must not depend on insertion order.
-   */
+): Promise<LiveGrants> {
   const { data } = await supabase
     .from('promo_redemptions')
-    .select('granted_until, granted_tier')
+    .select('granted_until, granted_tier, granted_spaces, source')
     .eq('user_id', userId)
     /*
       Both halves of "live", because NULL is a grant with no end rather than a
@@ -451,13 +525,41 @@ async function readPromoGrant(
       never expire.
     */
     .or(`granted_until.is.null,granted_until.gt.${new Date().toISOString()}`)
+    /*
+      Ordered so xp wins, for the same reason `tenant_tier()` orders its grant
+      branch: which of two grants gets named must not depend on insertion order.
+      `promo_redemptions` is unique on (user_id, granted_tier), so this is three
+      rows at the very most - but bounded anyway, because an unbounded read on a
+      hot path is a thing that only becomes a problem once.
+    */
     .order('granted_tier', { ascending: false })
-    .limit(1)
+    .limit(10)
 
-  const row = data?.[0]
-  if (!row) return null
+  const rows = data ?? []
+  if (rows.length === 0) return NO_GRANTS
 
-  return { until: row.granted_until, tier: asTier(row.granted_tier) ?? DEFAULT_TIER }
+  // The floor: any live grant is worth the one space it has always been worth.
+  let covers: Limit = GRANT_SEATS
+
+  for (const row of rows) {
+    if (row.source !== OPERATOR_GRANT) continue
+
+    // NULL is "all of them", which is the whole point of the operator form's
+    // "all" and the only way to say "stop counting this person's spaces".
+    const reach: Limit =
+      typeof row.granted_spaces === 'number' ? row.granted_spaces : UNLIMITED
+
+    covers = maxLimit(covers, reach)
+  }
+
+  const first = rows[0]
+
+  return {
+    best: first
+      ? { until: first.granted_until, tier: asTier(first.granted_tier) ?? DEFAULT_TIER }
+      : null,
+    covers,
+  }
 }
 
 /**

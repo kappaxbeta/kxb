@@ -136,34 +136,33 @@ export function useSpawn({
           spawnAt.y ?? undefined,
         )
 
+      /**
+       * The ground the door itself stands on, which is what every other cell is
+       * measured against.
+       *
+       * Not `spawnAt.y` straight, for two reasons. The block the door was set on
+       * may since have been broken, and `standingSurface` already answers that
+       * by returning the nearest surface it can find - so asking it is asking
+       * where the door is *now*. And a door with no remembered height at all -
+       * which is every door a published world carries, because the document
+       * stores two numbers - still stands somewhere, and until this was worked
+       * out the spread was simply not tested for those: the hash sent people to
+       * a cell past the island's edge, which has no surface, and they arrived on
+       * the world floor while the door sat twenty blocks above them.
+       */
+      const anchorGround = groundAt(spawnAt.x, spawnAt.z)
+
       // Keyed on who is arriving, or on the world when nobody is named - an
       // unpeopled preview has no identity to hash and no crowd to avoid.
       //
-      /**
-       * And spread only onto ground that is beside the door rather than under
-       * it.
-       *
-       * Only where the door remembers a height, because only then is there
-       * anything to compare a cell against - see `standable` in ./spawn.ts for
-       * what this fixes. Without the test a door on a floating island honours
-       * its height and still drops you on the world floor, because the cell the
-       * hash picked for you is past the island's edge and has no surface at all.
-       *
-       * The comparison is against the remembered height and not against the
-       * anchor's current surface: the block the door was set on may since have
-       * been broken, and `standingSurface` already answers that case by
-       * returning the nearest surface it can find - which is exactly the number
-       * this then measures.
-       */
+      // And spread only onto ground that is beside the door rather than under
+      // it - see `standable` in ./spawn.ts for what that test is for.
       const cell = arrivalCell(
         spawnAt,
         userId ?? worldId ?? 'visitor',
         undefined,
-        spawnAt.y === null
-          ? undefined
-          : (candidate) =>
-              Math.abs(groundAt(candidate.x, candidate.z) - (spawnAt.y as number)) <=
-              ARRIVAL_STEP,
+        (candidate) =>
+          Math.abs(groundAt(candidate.x, candidate.z) - anchorGround) <= ARRIVAL_STEP,
       )
 
       /**

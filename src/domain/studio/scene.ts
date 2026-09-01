@@ -1,6 +1,13 @@
-import { AVATAR_CLIPS, type AvatarClip, AVATARS, isKnownAvatar } from '@/domain/lounge/avatars'
+import {
+  AVATAR_CLIPS,
+  type AvatarClip,
+  AVATARS,
+  avatarShotUrl,
+} from '@/domain/lounge/avatars'
+import { isBuildable } from '@/domain/builder/catalogue'
 import { isKnownModel } from '@/domain/lounge/palette'
 import { EMOTE_COUNT } from '@/domain/world/emotes'
+import { parsePose, type Pose } from '@/domain/animator/clip'
 
 /**
  * A composed still, as a document.
@@ -101,6 +108,31 @@ export interface PeepSpec {
    * renderer's whole job is to draw the words it is handed.
    */
   say: string | null
+  /**
+   * Not drawn at all, or absent for a body that is.
+   *
+   * Optional, and read by the renderer rather than by anything numeric: this
+   * is not a keyable property but the resolved answer to a `hide` beat, the
+   * same way `say` is the resolved answer to a `talk` one. A hidden peep keeps
+   * its place in the cast - the array index is what the editor selects and
+   * poses by - so it is skipped at the point of drawing rather than filtered
+   * out of the scene.
+   */
+  hidden?: boolean
+  /**
+   * The skeleton, posed - laid over whatever the clip is doing.
+   *
+   * Resolved, like `say` and `glow`: a shot's authored clip is sampled by
+   * `actorAt` and what reaches the renderer is where every bone stands at this
+   * instant. Bones the pose does not name stay with the clip, which is what
+   * lets a wave ride on top of a walk.
+   *
+   * A still keeps one of these directly - it *is* one instant, so where the
+   * bones ended up is the whole of what there is to keep. A shot keeps the
+   * keyed document instead and resolves it to one of these per frame, because
+   * it has a clock to play the keys against.
+   */
+  pose?: Pose
 }
 
 /**
@@ -134,6 +166,103 @@ export interface BlockSpec {
   top: number
   z: number
   rotation: number
+  /**
+   * A thing off the space's shelf, drawn instead of the model, or absent.
+   *
+   * A *reference*, for the reason `SetSpec` is one: the document lives in the
+   * address bar and a blueprint is a root model, a list of parts, a body, a
+   * state machine and everything else a thing can be. The renderer is handed
+   * the specs the space already loaded, so a link stays a link.
+   *
+   * A prop whose blueprint the reader cannot resolve - another space's, a
+   * retired one - falls back to drawing `model`, which is why that field stays
+   * required. A picture of the wrong crate is a better answer than a hole.
+   */
+  blueprint?: string
+  /**
+   * Whether to run the deeds that need somebody, on a blueprint that has them.
+   *
+   * A thing says *when* it acts: `always`, or on touch, near and use. A shot
+   * has nobody standing in it, so the last three can never happen on their own
+   * and a prop that only honoured `always` would stand still for most of the
+   * blueprints anybody has written.
+   *
+   * This is the author saying "shoot it as though somebody had", and it is off
+   * by default because the commonest thing to do on touch is `vanish` - which
+   * on by default would make a placed prop disappear.
+   */
+  triggered?: boolean
+  /**
+   * Seconds into whatever clip the model carries, before the shot's own clock
+   * is added to it.
+   *
+   * Zero for a palette block, which carries none, and the reason this is stored
+   * rather than derived is the case where two of the same thing stand next to
+   * each other: two galaxies both starting their turn at zero are one galaxy
+   * drawn twice. A phase somebody can set is what makes them two things.
+   *
+   * The same field `PeepSpec.time` is, for the same reason and read the same
+   * way - see `sceneAt`, which adds `t` to it rather than replacing it.
+   */
+  time: number
+  /**
+   * How big it is drawn, as a multiplier on the pack's own scale.
+   *
+   * One is whatever the pack calls a cell, exactly as a thingiverse blueprint's
+   * `scale` means it - so the two spellings of "make it bigger" in this product
+   * agree, and the bounds below are that type's bounds. Blocks did without this
+   * for as long as a block was only ever a bb10 cube, where the answer is
+   * always one cell and a half-size crate is a mistake. A galaxy is the case
+   * where the size is the whole point.
+   */
+  scale: number
+  /**
+   * A colour multiplied over it, or null for the model's own.
+   *
+   * ---------------------------------------------------------------------------
+   * Why this exists when the pack already ships tinted models
+   * ---------------------------------------------------------------------------
+   * Because there are two places a thing gets put and only one of them has a
+   * panel. In a *world* - summoned into a room, placed by the builder - there
+   * is nowhere to hang a colour picker: a placement is an id, a cell and a
+   * scale, and that shape is shared by all 1,401 models. So the id carries the
+   * colour there, which is what `cosmos/galaxy_jade` is.
+   *
+   * A still is not a world. It is a document with an inspector over it, so here
+   * the honest answer is a control - and a control beats four presets the
+   * moment somebody wants the fifth colour.
+   *
+   * Null rather than white, and they are not the same: white multiplies a
+   * model's own colours by one, which is *nearly* a no-op and stops being one
+   * for anything the renderer treats differently when tinted. Null means "do
+   * not touch it", which is what every block written before this meant.
+   */
+  tint: string | null
+  /**
+   * The other two axes, in degrees. `rotation` is the third.
+   *
+   * ---------------------------------------------------------------------------
+   * Why one angle stopped being enough
+   * ---------------------------------------------------------------------------
+   * A block only ever needed a turn, because a cube on a lattice has nothing to
+   * gain from being tipped: it is a cube, and a tilted one no longer fits the
+   * grid it was placed on. Every model in the catalogue that stands on a floor
+   * is in the same position.
+   *
+   * A galaxy is not. It is authored tipped 22 degrees towards the viewer - see
+   * `TILT` in scripts/build-galaxy.ts, which argues for that angle because a
+   * flat disc vanishes when you walk up to its edge - and that is the right
+   * default in a *room*, where somebody walks around it. In a shot the camera
+   * is placed rather than walked, and the composition that wants the spiral
+   * face-on cannot get it: yaw turns it about the axis it is already tipped
+   * around, so the disc stays tipped however far it is turned.
+   *
+   * So all three, in the order they are applied: pitch about X, then the
+   * existing turn about Y, then roll about Z. Zero for everything drawn before
+   * this existed, which is what it always meant.
+   */
+  pitch: number
+  roll: number
 }
 
 /**
@@ -331,8 +460,8 @@ export const DEFAULT_SCENE: StudioScene = {
     { ...DEFAULT_PEEP, avatar: 'panda', x: 2.4, z: -0.6, rotation: -126, time: 2.4, emote: 14 },
   ],
   blocks: [
-    { model: 'hay_bale', x: -3.5, top: 1, z: -2.5, rotation: 0 },
-    { model: 'crate', x: 3.5, top: 1, z: -3.5, rotation: 0 },
+    { model: 'hay_bale', x: -3.5, top: 1, z: -2.5, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0 },
+    { model: 'crate', x: 3.5, top: 1, z: -3.5, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0 },
   ],
   goals: [],
   balls: [],
@@ -374,7 +503,7 @@ const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i
 function peep(value: unknown): PeepSpec {
   const raw = (value ?? {}) as Record<string, unknown>
   const avatar =
-    typeof raw.avatar === 'string' && isKnownAvatar(raw.avatar)
+    typeof raw.avatar === 'string' && isStudioLook(raw.avatar)
       ? raw.avatar
       : DEFAULT_PEEP.avatar
   const clip =
@@ -387,6 +516,7 @@ function peep(value: unknown): PeepSpec {
     typeof raw.emote === 'number' && raw.emote >= 0 && raw.emote < EMOTE_COUNT
       ? Math.floor(raw.emote)
       : null
+  const pose = parsePose(raw.pose)
 
   return {
     avatar,
@@ -409,6 +539,9 @@ function peep(value: unknown): PeepSpec {
     // silent peep.
     say:
       typeof raw.say === 'string' && raw.say.trim().length > 0 ? raw.say.slice(0, 120) : null,
+    // Spread rather than set, so an unposed peep carries no key at all and a
+    // link written before posing existed re-encodes byte for byte.
+    ...(pose ? { pose } : {}),
   }
 }
 
@@ -434,13 +567,44 @@ function block(value: unknown): BlockSpec | null {
   const raw = (value ?? {}) as Record<string, unknown>
   // Unlike a peep's avatar, an unknown block has no sensible substitute: the
   // renderer would fetch a glTF that is not there and suspend forever. Dropped.
-  if (typeof raw.model !== 'string' || !isKnownModel(raw.model)) return null
+  if (typeof raw.model !== 'string') return null
+  // A palette block, or anything in the world catalogue. Two lists rather than
+  // one because they guard different things: `isKnownModel` is the lounge's
+  // event-log allow-list and stays exactly as small as it was, while a still is
+  // a picture in a URL - nothing it names is permanent, so it may reach the
+  // whole shelf the builder already builds worlds out of. Without this the
+  // studio could draw 58 of the 1,394 models we ship, and the 59th - a galaxy -
+  // was silently dropped on parse rather than refused with a reason.
+  if (!isKnownModel(raw.model) && !isBuildable(raw.model)) return null
   return {
     model: raw.model,
     x: number(raw.x, 0, -40, 40),
     top: number(raw.top, 1, -8, 24),
     z: number(raw.z, 0, -40, 40),
     rotation: number(raw.rotation, 0, -360, 360),
+    // Absent in every scene written before the catalogue was reachable here,
+    // which is why it defaults rather than refusing: those are all palette
+    // blocks and zero is the only answer that was ever true for them.
+    time: number(raw.time, 0, 0, 120),
+    // The bounds a summoned thing gets, so "twice the size" means the same in a
+    // shot as it does in a room. See MIN/MAX_THING_SCALE.
+    scale: number(raw.scale, 1, 0.1, 12),
+    tint: typeof raw.tint === 'string' && HEX.test(raw.tint) ? raw.tint : null,
+    pitch: number(raw.pitch, 0, -360, 360),
+    roll: number(raw.roll, 0, -360, 360),
+    /*
+      Shape rather than membership, and spread rather than set.
+
+      Which blueprints exist is the *space's* question and this parser answers
+      to a link that any reader may open - one that names a thing this reader
+      cannot see falls back to `model`, which is the same degrading a retired
+      one gets. What is checked here is that the id could be an id at all, so
+      nothing hand-written in a URL reaches a query.
+    */
+    ...(typeof raw.blueprint === 'string' && UUID.test(raw.blueprint)
+      ? { blueprint: raw.blueprint }
+      : {}),
+    ...(raw.triggered === true ? { triggered: true } : {}),
   }
 }
 
@@ -600,3 +764,83 @@ export function decodeScene(encoded: string | undefined): StudioScene {
 /** Everything the editor's avatar picker offers. Re-exported so it imports one module. */
 export const STUDIO_AVATARS = AVATARS
 export const STUDIO_CLIPS = Object.values(AVATAR_CLIPS)
+
+/**
+ * The rigged half of the cast: every skeleton body the level packs ship.
+ *
+ * An allow-list written out by hand, deliberately, the way the XP registry
+ * itself was forked from the builder's rather than imported. The catalogue
+ * that knows these models is half a megabyte of generated bounds; this module
+ * is decoded on every surface that opens a scene link, including the public
+ * ones, and twelve ids is not what half a megabyte is for. The cost is the
+ * cost every fork here pays: a new skeleton pack means adding its bodies to
+ * this list before the studio can cast them.
+ *
+ * Qualified `pack/Name` ids, the same shape the lounge's skins wear
+ * (`isSkinLook`), so a look means one thing across the product.
+ */
+export const STUDIO_RIGGED = [
+  'dummy/Dummy',
+  'adventurers/Barbarian',
+  'adventurers/Barbarian_Large',
+  'adventurers/Druid',
+  'adventurers/Engineer',
+  'adventurers/Knight',
+  'adventurers/Mage',
+  'adventurers/Ranger',
+  'adventurers/Rogue',
+  'adventurers/Rogue_Hooded',
+  'kappa/Monster',
+  'kappa/MonsterCostume',
+] as const
+
+/**
+ * The whole cast, grouped the way the picker draws it.
+ *
+ * A flat list of thirty-six where twelve wear slashes and twenty-four do not
+ * is a select nobody can scan; the groups are the packs, named what the packs
+ * call themselves.
+ */
+export const STUDIO_CAST_GROUPS: readonly { name: string; models: readonly string[] }[] = [
+  { name: 'Peeps', models: AVATARS },
+  { name: 'Characters', models: ['dummy/Dummy'] },
+  { name: 'Adventurers', models: STUDIO_RIGGED.filter((look) => look.startsWith('adventurers/')) },
+  { name: 'Monsters', models: STUDIO_RIGGED.filter((look) => look.startsWith('kappa/')) },
+]
+
+const STUDIO_LOOKS: ReadonlySet<string> = new Set<string>([...AVATARS, ...STUDIO_RIGGED])
+
+/**
+ * Is this a body the studio can cast - roster animal or rigged look?
+ *
+ * Membership rather than the lounge's shape test, because a scene link is a
+ * thing people edit by hand and the renderer meets an unknown file as a fetch
+ * that never resolves. An id off this list falls back to the default peep,
+ * exactly as a retired animal always has.
+ */
+export function isStudioLook(look: string): boolean {
+  return STUDIO_LOOKS.has(look)
+}
+
+/** Whether a look is one of the rigged bodies rather than a peep. */
+export function isRiggedLook(look: string): boolean {
+  return look.includes('/')
+}
+
+/** What a row calls a look: the name without its pack, spaces for underscores. */
+export function lookLabel(look: string): string {
+  const name = isRiggedLook(look) ? look.slice(look.indexOf('/') + 1) : look
+  return name.replace(/_/g, ' ')
+}
+
+/**
+ * The look as a picture, wherever a thumbnail is wanted.
+ *
+ * Peeps have pre-rendered stills in `/xo/shots`; the rigged bodies ship the
+ * same thing under `/xp/thumbs`, one per model, because the skins shop already
+ * needed them. Both exist ahead of time, so a tile can never advertise a body
+ * the product does not have.
+ */
+export function lookShotUrl(look: string): string {
+  return isRiggedLook(look) ? `/xp/thumbs/${look}.webp` : avatarShotUrl(look)
+}

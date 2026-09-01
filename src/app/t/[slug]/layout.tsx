@@ -417,6 +417,20 @@ export default async function TenantLayout({
                       scenes: features.scenes,
                       xp: hasTier(context, 'xp'),
                       skinShop: features.skin_shop,
+                      /*
+                        Both halves, and the tier is the half worth naming: the
+                        thingiverse is world-building, and world-building is
+                        what xo is. A free space with the flag on would get a
+                        tab whose every button ends in an upsell.
+                      */
+                      thingiverse: features.thingiverse && hasTier(context, 'xo'),
+                      /*
+                        A capability rather than a flag, and one that defaults
+                        *off*: every world this product has ever had lets you
+                        run as long as you like, so a space that has never
+                        touched this has not asked for the rule.
+                      */
+                      stamina: context.tenant.capabilities.stamina ?? false,
                   }}
                   username={username}
                   email={user.email ?? railDict(locale).account.signedIn}

@@ -41,7 +41,8 @@ import type { Locale } from '@/domain/i18n/locale'
  * look like four marked items. Three measured numbers are `Figures` and look
  * like figures. A procedure is `Steps` and is numbered, because the order is the
  * information. A closed vocabulary is a `TagField` and looks like a field of
- * chips.
+ * chips, and a set that can be photographed is a `Rack` and is shown rather than
+ * described.
  *
  * That is the whole layout thesis: the shape of a section is a claim about its
  * content, and a page of identical shapes makes no claims at all.
@@ -361,6 +362,18 @@ export function Shot({
   caption,
   /** How much of the right edge fades, where the capture cut through a panel. */
   cutRight,
+  /**
+   * A capture of a phone rather than of a browser.
+   *
+   * The plate is the same plate; what changes is that it stops taking the
+   * band's full width. A 2:1 screenshot of the app at full width is the right
+   * size for it, and the identical rule applied to a portrait capture gives you
+   * a picture two thousand pixels tall - a reader scrolls past the caption, the
+   * next heading and most of their own patience before they reach the bottom of
+   * it. Capped at roughly the width of the device it was taken on and centred,
+   * which is also the honest scale: this is what it looks like in a hand.
+   */
+  phone,
 }: {
   src: string
   alt: string
@@ -368,9 +381,10 @@ export function Shot({
   height: number
   caption: React.ReactNode
   cutRight?: string
+  phone?: boolean
 }) {
   return (
-    <figure className="band-shot">
+    <figure className={`band-shot${phone ? ' band-shot-phone' : ''}`}>
       <div className="band-shot-plate" style={{ '--screen-cut-right': cutRight } as React.CSSProperties}>
         <Image
           src={src}
@@ -432,6 +446,100 @@ export function TagField({
       {tags.map((tag) => (
         <li key={tag.id} title={tag.hint} className="tagfield-chip">
           {tag.label}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * A cut-out render, standing in a band on a floor of its own.
+ *
+ * The sibling of `Shot`, and the pair splits on what the picture is *of*. A
+ * screenshot is a capture of the software: opaque to the edges, plated, and
+ * captioned underneath, because a reader has to be told which running thing
+ * they are looking at. This is a frame of the *world* - shot in `/world/shots`
+ * off the same models the lounge loads, cut out, with nothing behind it - and
+ * a plate around one of those is a picture of a picture.
+ *
+ * No caption, deliberately, where `Shot` insists on one. A screenshot needs a
+ * line saying what it is; a fox in a dinosaur costume summoning a crate does
+ * not, and a caption under it would be the page explaining its own joke.
+ *
+ * `priority` is not offered. Every one of these is below the fold by
+ * construction - it is inside a band, and the hero is the thing above it.
+ */
+export function BandScene({
+  src,
+  alt,
+  width,
+  height,
+}: {
+  src: string
+  alt: string
+  width: number
+  height: number
+}) {
+  return (
+    <div className="band-scene">
+      {/* The house way to say "this is a room". Reused rather than redrawn -
+          see the note on `.neon-floor`. */}
+      <span className="neon-floor" />
+      <Image
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        className="band-scene-img"
+        sizes="(max-width: 900px) 100vw, 34rem"
+      />
+    </div>
+  )
+}
+
+/**
+ * A set, shown as the things themselves rather than described.
+ *
+ * `TagField`'s twin, and the pair divides on one question: can the set be
+ * *photographed*? Twelve world tags cannot - they are words - so they are
+ * chips. Fifty vehicles can, because every model in both catalogues already has
+ * a thumbnail rendered off its own glTF for the model browser inside a space.
+ *
+ * Which makes this the cheapest honest picture on the site. A render in
+ * `/xo/scenes` is a scene somebody staged and shot; a rack is the catalogue
+ * answering for itself, and a model that got deleted from a pack takes its own
+ * tile off the page with it rather than leaving a marketing claim standing.
+ *
+ * `alt=""` on every tile and one `aria-label` on the list. The labels are drawn
+ * under the pictures already, so a screen reader that read both would hear
+ * every name twice; what it needs instead is to be told what the field *is* and
+ * then left to read the names.
+ */
+export function Rack({
+  label,
+  items,
+}: {
+  /** What the whole field is, for anybody who cannot see it. */
+  label: string
+  items: readonly { src: string; label: string }[]
+}) {
+  return (
+    <ul className="rack" aria-label={label}>
+      {items.map((item) => (
+        <li key={item.src} className="rack-cell">
+          <Image
+            src={item.src}
+            alt=""
+            width={192}
+            height={192}
+            className="rack-img"
+            /* The tiles are small and there are a lot of them, so this is the
+               one image on these pages that is genuinely better lazy: a rack
+               below the fold is thirty requests that would otherwise compete
+               with the hero. */
+            sizes="8rem"
+          />
+          <span className="rack-label">{item.label}</span>
         </li>
       ))}
     </ul>

@@ -418,25 +418,37 @@ describe('where a link lets out', () => {
 describe('where a link lands somebody', () => {
   const slug = 'acme'
 
+  const lounge = { kind: 'lounge', ref: null, name: null } as const
+
   test('no destination is the lounge', () => {
-    expect(guestLandingSpot(null, slug)).toEqual({ kind: 'lounge', room: null })
-    expect(guestLandingSpot(undefined, slug)).toEqual({ kind: 'lounge', room: null })
-    expect(guestLandingSpot('/t/acme/lounge', slug)).toEqual({ kind: 'lounge', room: null })
+    expect(guestLandingSpot(null, slug)).toEqual(lounge)
+    expect(guestLandingSpot(undefined, slug)).toEqual(lounge)
+    expect(guestLandingSpot('/t/acme/lounge', slug)).toEqual(lounge)
   })
 
-  test('a room is named', () => {
+  test('a room is carried by its slug, unnamed until somebody looks it up', () => {
     expect(guestLandingSpot('/t/acme/rooms/workshop', slug)).toEqual({
       kind: 'room',
-      room: 'workshop',
+      ref: 'workshop',
+      name: null,
     })
   })
 
-  test('a match is a kind rather than an id', () => {
-    // The id is a uuid nobody can read, and the match is over long before the
-    // link stops being listed.
+  test('a match carries its id, which is the handle its name is found by', () => {
+    // The id is never drawn - it is what `listGuestLinks` looks the match's own
+    // name up by, so that three fights in one evening are three distinct rows.
     expect(guestLandingSpot('/t/acme/battle/8f14e45f', slug)).toEqual({
       kind: 'match',
-      room: null,
+      ref: '8f14e45f',
+      name: null,
+    })
+  })
+
+  test('a match link with no match in it has nothing to look up', () => {
+    expect(guestLandingSpot('/t/acme/battle/', slug)).toEqual({
+      kind: 'match',
+      ref: null,
+      name: null,
     })
   })
 
@@ -448,24 +460,20 @@ describe('where a link lands somebody', () => {
    * saying nothing, because it is the row a host would trust.
    */
   test('a destination that could not be honoured is described as the lounge', () => {
-    expect(guestLandingSpot('/t/other/rooms/workshop', slug)).toEqual({
-      kind: 'lounge',
-      room: null,
-    })
-    expect(guestLandingSpot('https://evil.example/x', slug)).toEqual({
-      kind: 'lounge',
-      room: null,
-    })
-    expect(guestLandingSpot('/t/acme-evil/rooms/workshop', slug)).toEqual({
-      kind: 'lounge',
-      room: null,
-    })
+    expect(guestLandingSpot('/t/other/rooms/workshop', slug)).toEqual(lounge)
+    expect(guestLandingSpot('https://evil.example/x', slug)).toEqual(lounge)
+    expect(guestLandingSpot('/t/acme-evil/rooms/workshop', slug)).toEqual(lounge)
   })
 
-  test('the label is the room name itself, and an article otherwise', () => {
-    expect(guestLandingLabel({ kind: 'room', room: 'Workshop' })).toBe('Workshop')
-    expect(guestLandingLabel({ kind: 'lounge', room: null })).toBe('The lounge')
-    expect(guestLandingLabel({ kind: 'match', room: null })).toBe('A match')
+  test('the label is the thing own name, and a category word until it has one', () => {
+    expect(guestLandingLabel({ kind: 'room', ref: 'workshop', name: 'Workshop' })).toBe(
+      'Workshop',
+    )
+    expect(guestLandingLabel({ kind: 'match', ref: 'b1', name: 'Finals' })).toBe('Finals')
+    expect(guestLandingLabel({ kind: 'lounge', ref: null, name: null })).toBe('The lounge')
+    // Closed, swept, or simply never looked up.
+    expect(guestLandingLabel({ kind: 'room', ref: 'gone', name: null })).toBe('A room')
+    expect(guestLandingLabel({ kind: 'match', ref: 'b2', name: null })).toBe('A match')
   })
 })
 

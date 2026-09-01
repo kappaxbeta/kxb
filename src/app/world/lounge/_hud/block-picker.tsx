@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { PALETTE_GROUPS, type PaletteGroupId, thumbnailUrl } from '@/domain/lounge/palette'
+import { thumbnailFor as thingThumbnail } from '@/domain/thingiverse/models'
 import { DEFAULT_WORLD_SIZE } from '@/domain/lounge/events'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
@@ -1023,51 +1024,84 @@ function GoalSection({ goals }: { goals: GoalControls }) {
  */
 export function SelectedBlockChip({
   selected,
+  near,
   onOpen,
+  onAct,
   isTouch,
 }: {
   selected: string
+  /**
+   * The thing you are standing next to, and what E would do to it.
+   *
+   * ---------------------------------------------------------------------
+   * Why the chip is the E prompt now
+   * ---------------------------------------------------------------------
+   * There used to be two of these on screen at once: a pill low in the
+   * middle reading "E - pick up Dummy Base", and this chip, showing the same
+   * thing and reading "Press E" underneath it. Two controls, one key, one
+   * subject - and whichever one you read, the other was noise.
+   *
+   * So the key is announced once, here, on the thing it acts on: near a
+   * thing this chip *is* that thing and its second line says what E does to
+   * it; near nothing it is the block you are building with and E opens the
+   * palette. The picture answers "what am I about to touch" either way.
+   *
+   * Not what you are *holding*, which is what this briefly showed: the
+   * carried thing already has a panel of its own with its name at the top,
+   * so a chip repeating it was a third spelling of the same sentence.
+   */
+  near?: { name: string; model: string; line: string } | null
   onOpen: () => void
+  /**
+   * What E would do, done.
+   *
+   * Tapping the chip is the touch spelling of the key - a phone has no E, and
+   * the thing named on a chip you cannot press is a thing you cannot reach.
+   */
+  onAct?: () => void
   isTouch: boolean
 }) {
-  const t = worldDict(useLocale()).picker
+  const words = worldDict(useLocale())
+  const t = words.picker
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="hud-chip pointer-events-auto !py-1.5 !pl-1.5 !pr-4"
-    >
-      <span className="flex size-9 items-center justify-center rounded-full bg-white/10">
-        {/*
-          Eager, unlike the grid's: this one is on screen from the moment the
-          world is, and it is the HUD's answer to "what am I holding".
+    <span className="pointer-events-none flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={near ? onAct : onOpen}
+        className="hud-chip pointer-events-auto !py-1.5 !pl-1.5 !pr-4"
+      >
+        <span className="flex size-9 items-center justify-center rounded-full bg-white/10">
+          {/*
+            Eager, unlike the grid's: this one is on screen from the moment the
+            world is, and it is the HUD's answer to "what am I holding".
 
-          It used to fall back to a grey square, because the picture did not
-          exist until somebody had opened the picker and let it render - so the
-          chip showed a blank for anybody who had not. A file has no such
-          state.
-        */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={thumbnailUrl(selected)}
-          alt=""
-          width={32}
-          height={32}
-          decoding="async"
-          className="size-8"
-          draggable={false}
-        />
-      </span>
-      <span className="text-left">
-        <span className="block text-xs font-medium leading-tight text-ink">
-          {label(selected, t.blocks)}
+            It used to fall back to a grey square, because the picture did not
+            exist until somebody had opened the picker and let it render - so the
+            chip showed a blank for anybody who had not. A file has no such
+            state.
+          */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={near ? thingThumbnail(near.model) : thumbnailUrl(selected)}
+            alt=""
+            width={32}
+            height={32}
+            decoding="async"
+            className="size-8 object-contain"
+            draggable={false}
+          />
         </span>
-        <span className="block text-[10px] leading-tight text-ink-muted">
-          {isTouch ? t.tapToChange : t.pressE}
+        <span className="text-left">
+          <span className="block text-xs font-medium leading-tight text-ink">
+            {near ? near.name : label(selected, t.blocks)}
+          </span>
+          <span className="block text-[10px] leading-tight text-ink-muted">
+            {near ? near.line : isTouch ? t.tapToChange : t.pressE}
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+    </span>
   )
 }
 

@@ -25,7 +25,13 @@ import {
 } from './entities'
 import { bodiesFor } from './entities'
 import { damage } from '../rules/triggers'
-import { describeProblems, parseXp, XP_FORMAT, type XpDocument } from '../document/format'
+import {
+  describeProblems,
+  parseXp,
+  XP_FORMAT,
+  type PlayerLook,
+  type XpDocument,
+} from '../document/format'
 import { EYE_HEIGHT, step, WALK_PACE } from './physics'
 import { buildSolids } from './solids'
 
@@ -699,7 +705,7 @@ describe('the body a document did not bring', () => {
     expect(bodiesFor(bare(), null)[BUILT_IN_BODY]?.model).toBe('dummy/Dummy')
   })
 
-  const wearing = (look: 'profile' | 'random'): XpDocument => ({
+  const wearing = (look: PlayerLook): XpDocument => ({
     ...bare(),
     player: { ...bare().player, wears: look },
   })
@@ -757,5 +763,148 @@ describe('the body a document did not bring', () => {
       const model = bodiesFor(wearing('profile'), bad, 'who')[BUILT_IN_BODY]?.model
       expect(model?.startsWith('peepz/')).toBe(true)
     }
+  })
+})
+
+/**
+ * Which of a player's two bodies the level asked for.
+ *
+ * Everybody who plays has a peep *and* an XP body, kept side by side - neither
+ * is spent by choosing the other. `peep`, `xp` and `choose` are the level's say
+ * in which of the two it draws, and a model id is the level not asking at all.
+ *
+ * The mount resolves the same rule server-side before it broadcasts (see
+ * `readLookForLevel`), so in practice the look handed in here is already the
+ * right half. These check the second line of defence: a look that arrives as
+ * the wrong half - a peer who resolved before this rule existed, a host that
+ * never asked - is still drawn the way the level asked for.
+ */
+describe('the two bodies a level can ask for', () => {
+  const bare = (): XpDocument => {
+    const parsed = parseXp({
+      format: 'xp/1', id: 'bare', name: 'Bare',
+      packs: [{ id: 'proto' }], spawn: { x: 0, y: 1, z: 0, facing: 0 },
+      blueprints: {}, entities: [],
+      world: { floorY: 0, ground: true, placements: [], marks: [] },
+    })
+    if (!parsed.ok) throw new Error(describeProblems(parsed.problems))
+    return parsed.document
+  }
+
+  const wearing = (look: PlayerLook): XpDocument => ({
+    ...bare(),
+    player: { ...bare().player, wears: look },
+  })
+
+  test('peep is the animal, whatever else they own', () => {
+    // The point of the value: a room full of animals stays one when somebody
+    // buys a body for the games.
+    expect(bodiesFor(wearing('peep'), 'fox')[BUILT_IN_BODY]?.model).toBe('peepz/fox')
+    // Already a person's height, so it is not shrunk the way the dummy is.
+    expect(bodyScaleFor(wearing('peep'), 'fox')).toBe(1)
+  })
+
+  test('and an XP body handed to it is refused rather than worn', () => {
+    const model = bodiesFor(wearing('peep'), 'adventurers/Knight', 'who')[BUILT_IN_BODY]
+      ?.model
+    expect(model?.startsWith('peepz/')).toBe(true)
+  })
+
+  test('xp is the bought body', () => {
+    expect(bodiesFor(wearing('xp'), 'adventurers/Knight')[BUILT_IN_BODY]?.model).toBe(
+      'adventurers/Knight',
+    )
+  })
+
+  test('and the dummy for somebody who has not got one', () => {
+    /**
+     * Not their animal, which is the mirror of the test above it. A level that
+     * asked for XP bodies gets the body a player already is before they are
+     * anybody, rather than quietly promoting a peep into the role.
+     */
+    expect(bodiesFor(wearing('xp'), 'fox', 'who')[BUILT_IN_BODY]?.model).toBe('dummy/Dummy')
+    expect(bodiesFor(wearing('xp'), null, 'who')[BUILT_IN_BODY]?.model).toBe('dummy/Dummy')
+  })
+
+  test('choose wears whichever half it is handed', () => {
+    expect(bodiesFor(wearing('choose'), 'fox')[BUILT_IN_BODY]?.model).toBe('peepz/fox')
+    expect(bodiesFor(wearing('choose'), 'adventurers/Knight')[BUILT_IN_BODY]?.model).toBe(
+      'adventurers/Knight',
+    )
+  })
+
+  test('and never invents one for somebody who has chosen nothing', () => {
+    // The difference from `profile`, and the whole of what "let them choose"
+    // means: choosing nothing is a choice, and the dummy is what it looks like.
+    expect(bodiesFor(wearing('choose'), null, 'who')[BUILT_IN_BODY]?.model).toBe(
+      'dummy/Dummy',
+    )
+  })
+
+  test('a model id casts everybody, whoever they are', () => {
+    // The level not asking a question. Nobody's profile is consulted, so two
+    // people who look nothing alike are the same body here.
+    const level = wearing('adventurers/Knight')
+    expect(bodiesFor(level, 'fox', 'one')[BUILT_IN_BODY]?.model).toBe('adventurers/Knight')
+    expect(bodiesFor(level, 'skeletons/Skeleton', 'two')[BUILT_IN_BODY]?.model).toBe(
+      'adventurers/Knight',
+    )
+    expect(bodiesFor(level, null, 'three')[BUILT_IN_BODY]?.model).toBe('adventurers/Knight')
+    // And it is a real body, the same honesty check the animals get.
+    expect(findModel('adventurers/Knight')).toBeTruthy()
+  })
+
+  test('a cast body swaps the face of a named blueprint and nothing else', () => {
+    const parsed = parseXp({
+      format: 'xp/1', id: 'named', name: 'Named',
+      packs: [{ id: 'proto' }, { id: 'dummy' }],
+      spawn: { x: 0, y: 1, z: 0, facing: 0 },
+      player: { blueprint: 'peep', wears: 'adventurers/Knight' },
+      blueprints: {
+        peep: { model: 'dummy/Dummy', props: { hp: 100 }, tags: ['player'] },
+      },
+      entities: [],
+      world: { floorY: 0, ground: true, placements: [], marks: [] },
+    })
+    if (!parsed.ok) throw new Error(describeProblems(parsed.problems))
+
+    const worn = bodiesFor(parsed.document, 'fox')
+    expect(worn.peep?.model).toBe('adventurers/Knight')
+    expect(worn.peep?.props.hp).toBe(100)
+    expect(worn.peep?.tags).toEqual(['player'])
+  })
+})
+
+describe('what a level may say it dresses people in', () => {
+  const withWears = (wears: unknown) =>
+    parseXp({
+      format: 'xp/1', id: 'wearing', name: 'Wearing',
+      packs: [{ id: 'proto' }], spawn: { x: 0, y: 1, z: 0, facing: 0 },
+      player: { wears },
+      blueprints: {},
+      entities: [],
+      world: { floorY: 0, ground: true, placements: [], marks: [] },
+    })
+
+  test('the names, and a model id', () => {
+    for (const look of ['dummy', 'profile', 'random', 'peep', 'xp', 'choose']) {
+      expect(withWears(look).ok).toBe(true)
+    }
+    expect(withWears('adventurers/Knight').ok).toBe(true)
+  })
+
+  test('and nothing else', () => {
+    // Checked for shape rather than against the catalogue: an XP naming a body
+    // from a pack this build has not shipped should fail to *draw* it, not fail
+    // to open. One slash, something either side, no spaces.
+    for (const bad of ['pep', 'a/b/c', '/Knight', 'adventurers/', 'a b/c', 42]) {
+      expect(withWears(bad).ok).toBe(false)
+    }
+  })
+
+  test('dummy round-trips as absence, the way it always has', () => {
+    const parsed = withWears('dummy')
+    if (!parsed.ok) throw new Error(describeProblems(parsed.problems))
+    expect(parsed.document.player.wears).toBeUndefined()
   })
 })

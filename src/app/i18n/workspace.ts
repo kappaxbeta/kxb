@@ -29,6 +29,391 @@ export interface WorkspaceDict {
     welcome: string
     builder: string
     skins: string
+    thingiverse: string
+  }
+
+  /**
+   * The thingiverse: the shelf, and the packs it is cut from.
+   *
+   * The third dictionary this one feature reaches, and the split is by *mood*
+   * rather than by feature. `world.ts` has what you read while holding a bench
+   * over a floor; `rail.ts` has the tab you summon from; this has the page you
+   * read while deciding what a thing should be. A single block would put a
+   * button label from a HUD next to a paragraph about licences.
+   */
+  thingiverse: {
+    heading: string
+    intro: string
+    /** The two halves of the page. */
+    shelfTab: string
+    packsTab: string
+    search: string
+    /**
+     * The submit button beside it.
+     *
+     * Its own word rather than `search` reused: the box already says "Search
+     * every pack" as its placeholder, and a button repeating that reads as the
+     * page having drawn one control twice.
+     */
+    searchGo: string
+    searchHint: string
+    /** `{n}` models in `{pack}`. */
+    packSize: string
+    /**
+     * The two catalogues, as headings over the chips.
+     *
+     * Labelled because they collide: both ship a pack called Prototype and both
+     * ship one called Peeps, and a single row of fifty-one chips listed each
+     * name twice with nothing to tell them apart. See `MODEL_PACKS`.
+     */
+    roomPacks: string
+    levelPacks: string
+    /** The chip that clears the pack filter, across both catalogues. */
+    everyPack: string
+    /** How many packs are folded away behind the level row. `{n}` of them. */
+    packCount: string
+    /** How much of the search is drawn: `{shown}` of `{total}`. */
+    showing: string
+    /** Nothing in either catalogue matches `{q}`. */
+    noModels: string
+    make: string
+    making: string
+    /** Nobody has cut anything from the packs yet. */
+    emptyShelf: string
+    /** The editor. */
+    name: string
+    /** What is wrong with the name. `{n}` is the bound. */
+    nameNeeded: string
+    nameTooLong: string
+    model: string
+    size: string
+    blocks: string
+    blocksHint: string
+    falls: string
+    fallsHint: string
+    gravity: string
+    bounce: string
+    mass: string
+    clip: string
+    clipHint: string
+    tags: string
+    tagsHint: string
+    actions: string
+    actionsHint: string
+    addAction: string
+    /**
+     * The `use` block: a thing you get into rather than walk past.
+     *
+     * Three clips because using something has three moments - see `UseSpec`.
+     */
+    use: string
+    useHint: string
+    enterClip: string
+    loopClip: string
+    leaveClip: string
+    seats: string
+    seatHint: string
+    addSeat: string
+    inputs: string
+    inputsHint: string
+    key: string
+    addInput: string
+    remove: string
+    save: string
+    saved: string
+    share: string
+    unshare: string
+    retire: string
+    mine: string
+    shared: string
+    /** Reporting something somebody else made. See `content_reports`. */
+    report: string
+    reportHint: string
+    reportSend: string
+    reportSent: string
+    /** The words an action is built out of. */
+    when: Record<string, string>
+    deed: Record<string, string>
+    /** Under the pack grid: who drew it, and what we may do with it. */
+    credit: string
+    /**
+     * The catalogue's podium: one canvas over the grid.
+     */
+    browser: {
+      nothingPicked: string
+      /** `{n}` animations this model carries. */
+      plays: string
+      still: string
+      onTheShelf: string
+    }
+
+    /**
+     * Who you are, at the top of the page.
+     *
+     * An account has two bodies and keeps both - a peep and an XP skin - and
+     * `in_lounge` is the mode that decides which a world draws. The words have
+     * to keep those two ideas apart, because conflating them is what put a
+     * Knight in the lounge. See `readXpBody`.
+     */
+    you: {
+      /** The arrows, which move between the two bodies rather than through a list. */
+      otherBody: string
+      /** Which body is on screen, said underneath it. */
+      peepBody: string
+      xpBody: string
+      /** And for an account that owns no skin, so has only the one. */
+      onlyBody: string
+      changePeep: string
+      /** `{n}` animals to choose from. */
+      pickPeep: string
+      shop: string
+      saving: string
+    }
+
+    /**
+     * The three doors, and what each one makes.
+     */
+    hub: {
+      doorsLabel: string
+      blueprints: string
+      blueprintsNote: string
+      clips: string
+      clipsNote: string
+      vehicles: string
+      vehiclesNote: string
+      emotes: string
+      emotesNote: string
+      models: string
+      modelsNote: string
+      /** The catalogue is a reference; things are picked at the bench. */
+      modelsHint: string
+      /** What a blueprint is called before anybody has named it. */
+      untitled: string
+      /** The example the vehicles door builds. See `exampleCar`. */
+      exampleCarName: string
+      newVehicle: string
+      newBlueprint: string
+      starting: string
+      newClip: string
+    }
+
+    /**
+     * The emote menu: clips in branches, reached by keys.
+     */
+    emotes: {
+      intro: string
+      empty: string
+      addBranch: string
+      addInside: string
+      remove: string
+      /** `{label}` is the row being taken out. */
+      removeRow: string
+      key: string
+      label: string
+      plays: string
+      opensOnly: string
+      save: string
+      saving: string
+      saved: string
+      /** `{n}` rows in the whole menu. */
+      rows: string
+      /** Typing the keys to see where they land. */
+      tryIt: string
+      tryHint: string
+      reachesNothing: string
+      /** `{label}` opens, or `{label}` plays `{clip}`. */
+      reachesBranch: string
+      reachesClip: string
+    }
+
+    /**
+     * The bench a thing is built on: `/thingiverse/blueprint/[id]`.
+     *
+     * Its own block rather than more keys on the one above, because it is a
+     * different page in the same sense the pose editor is: that one is "what
+     * could this be made of", the shelf is "what is this like", and this is
+     * "what is this made *of*, and where does each piece go".
+     */
+    composer: {
+      heading: string
+      intro: string
+      backToShelf: string
+      /** `{n}` pieces, the root included. */
+      pieces: string
+      theRoot: string
+      size: string
+      turn: string
+      /** The pad and the keys beside it. Labels for the ones drawn as a glyph. */
+      move: string
+      up: string
+      down: string
+      bigger: string
+      smaller: string
+      removePiece: string
+      addPiece: string
+      /** Changing what the selected piece is. `{where}` is what it is now. */
+      swapFor: string
+      searchPieces: string
+      look: string
+      looking: string
+      /** Nothing in either catalogue matches `{q}`. */
+      noPieces: string
+      /** `{where}` is the piece the sockets belong to. */
+      socketsOn: string
+      socketsHint: string
+      socketName: string
+      addSocket: string
+      remove: string
+      /** Which socket a seat sits on, and the option for none. */
+      onSocket: string
+      looseSeat: string
+      /** The viewport's own two switches, and what it says nothing is picked. */
+      showSockets: string
+      showSeats: string
+      nothingPicked: string
+      /** The vehicle block: the switch, its tuning, and the wheels. */
+      vehicle: string
+      vehicleLabel: string
+      vehicleHint: string
+      topSpeed: string
+      turnRate: string
+      addWheel: string
+      steers: string
+      /** `hideDriver`: the vehicle swallows whoever is aboard. */
+      hideDriver: string
+      hideDriverHint: string
+
+      /**
+       * The machine: what a thing can be, and what makes it something else.
+       *
+       * Its own group inside the composer's dict rather than thirty more flat
+       * keys, because the panel is a list of cards with a list inside each card
+       * and every flat name was going to start with `state`.
+       */
+      machine: {
+        heading: string
+        label: string
+        hint: string
+        state: string
+        name: string
+        starts: string
+        looksLike: string
+        sameAsThing: string
+        plays: string
+        nothing: string
+        hidden: string
+        hiddenHint: string
+        solid: string
+        shouts: string
+        healsUp: string
+        addState: string
+        changes: string
+        addChange: string
+        goesTo: string
+        /** The words a change waits for, in the order `CHANGE_WHENS` has them. */
+        when: {
+          after: string
+          signal: string
+          use: string
+          touch: string
+          broken: string
+          filled: string
+          emptied: string
+        }
+        seconds: string
+        showBar: string
+        onlyOnce: string
+        preset: string
+        presetRespawn: string
+      }
+
+      /** The fight block: what it can take, and what it can dish out. */
+      fight: {
+        heading: string
+        hint: string
+        health: string
+        healthLabel: string
+        max: string
+        showBar: string
+        hurtBy: string
+        hurt: { dash: string; kick: string; shot: string; bump: string }
+        weapon: string
+        weaponLabel: string
+        damage: string
+        reach: string
+        every: string
+        aimsAt: string
+        at: { people: string; things: string; all: string }
+        fires: string
+        firesHint: string
+        speed: string
+        fromSocket: string
+        middle: string
+      }
+
+      /** The craft block: places to put things, and what they make together. */
+      craft: {
+        heading: string
+        hint: string
+        label: string
+        slots: string
+        addSlot: string
+        onSocket: string
+        takes: string
+        anything: string
+        alreadyHolds: string
+        nothingHeld: string
+        shouts: string
+        recipes: string
+        addRecipe: string
+        needs: string
+        makes: string
+        seconds: string
+        atOnce: string
+        landsOn: string
+        whereItWasMade: string
+        /** Prices, in the play money the café and the house already run on. */
+        price: string
+        free: string
+        toSummon: string
+        priceHint: string
+      }
+      saving: string
+      /** `{n}` things are wrong, said beside a Save that will not go. */
+      problems: string
+    }
+
+    /**
+     * The pose editor, and the clips it fills the shelf with.
+     *
+     * Its own little block rather than more keys on the one above, because it
+     * is a different page: that one is "what could this be made of", this one
+     * is "what can it do".
+     */
+    clips: {
+      heading: string
+      intro: string
+      open: string
+      newClip: string
+      yours: string
+      shared: string
+      none: string
+      save: string
+      saved: string
+      rename: string
+      retire: string
+      share: string
+      unshare: string
+      /** `{rig}` is the body it was keyed on. */
+      playsOn: string
+      playsOnLabel: string
+      allBodies: string
+      noneForBody: string
+      /** Which parts of the body the clip is allowed to drive. */
+      parts: string
+      partsHint: string
+      groups: { torso: string; arms: string; legs: string }
+    }
   }
 
   /** The space's front page: a masthead, a wire of notices, and two shelves. */
@@ -413,6 +798,284 @@ export const WORKSPACE_EN: WorkspaceDict = {
     welcome: 'Welcome',
     builder: 'World builder',
     skins: 'Skins',
+    thingiverse: 'Thingiverse',
+  },
+
+  thingiverse: {
+    heading: 'Thingiverse',
+    intro: 'Everything a room can be furnished with: what this space has made, and the packs it is all cut from.',
+    shelfTab: 'The shelf',
+    packsTab: 'The packs',
+    search: 'Search every pack',
+    searchGo: 'Search',
+    roomPacks: 'For rooms',
+    levelPacks: 'For levels',
+    everyPack: 'Every pack',
+    packCount: '{n} packs',
+    showing: 'Showing {shown} of {total}',
+    noModels: 'No model matches “{q}”. Try a plainer word — chair, tree, box.',
+    searchHint: 'Type a word — bench, lamp, ball.',
+    packSize: '{n} models',
+    make: 'Make a blueprint',
+    making: 'Making…',
+    emptyShelf: 'Nothing has been cut from the packs yet. Find a model and make a blueprint of it.',
+    name: 'Name',
+    nameNeeded: 'A thing on the shelf needs a name.',
+    nameTooLong: 'A name is at most {n} characters.',
+    model: 'Model',
+    size: 'Size',
+    blocks: 'Blocks the way',
+    blocksHint: 'Off, you walk straight through it. A coin, a rug, a banner.',
+    falls: 'Falls',
+    fallsHint: 'Off, it stands where it is put forever. On, gravity has an opinion.',
+    gravity: 'Gravity',
+    bounce: 'Bounce',
+    mass: 'Mass',
+    clip: 'Clip',
+    clipHint: 'An animation it plays while it stands there. Leave empty for a still model.',
+    tags: 'Tags',
+    tagsHint: 'Words to find it by later. Comma separated.',
+    actions: 'What it does',
+    actionsHint: 'At most four. Every one of these happens in the room, with nobody keeping score — a thing that has to keep score is an XP.',
+    addAction: 'Add',
+    use: 'Can be used',
+    useHint: 'A chair you sit in, a turntable you play, a kart you drive. E gets in while playing; E in creative mode picks the thing up instead.',
+    enterClip: 'Getting in',
+    loopClip: 'While in it',
+    leaveClip: 'Getting out',
+    seats: 'Where the bodies stand',
+    addSeat: 'Add a seat',
+    seatHint: 'Cells from the thing itself, one row per person. They turn with the thing, so a bench turned round still seats people on the bench.',
+    inputs: 'Extra animations',
+    inputsHint: 'One key each, played while somebody is in it. The key is eaten while they are, so it cannot also do whatever it usually does.',
+    key: 'Key',
+    addInput: 'Add a key',
+    remove: 'Remove',
+    save: 'Save',
+    saved: 'Saved',
+    share: 'Share with the space',
+    unshare: 'Keep to yourself',
+    retire: 'Retire',
+    mine: 'Yours',
+    shared: 'Shared with the space',
+    report: 'Report',
+    reportHint: 'Say what is wrong with it. Nobody is told who reported it.',
+    reportSend: 'Send report',
+    reportSent: 'Reported. Thank you.',
+    when: { touch: 'When somebody walks into it', near: 'When somebody stands near it', always: 'All the time' },
+    deed: {
+      play: 'play a clip',
+      spin: 'spin',
+      bob: 'bob up and down',
+      vanish: 'vanish',
+    },
+    credit: 'Every pack we ship is CC0: use it, change it, sell what you make. The link goes to whoever drew it.',
+    browser: {
+      nothingPicked: 'Pick a model and it stands here, at the size a room would draw it.',
+      plays: 'Plays ({n})',
+      still: 'Still',
+      onTheShelf: 'Already on the shelf',
+    },
+    you: {
+      otherBody: 'Your other body',
+      peepBody: 'Your peep. This is what a room draws you as.',
+      xpBody: 'Your XP body. Rooms draw this one until you switch back.',
+      onlyBody: 'Your peep. Buy a skin and you get a second body to switch to.',
+      changePeep: 'Change',
+      pickPeep: 'Pick one of {n}',
+      shop: 'Shop',
+      saving: 'Saving…',
+    },
+    hub: {
+      doorsLabel: 'What this space makes',
+      blueprints: 'Blueprints',
+      blueprintsNote: 'Things a room can be furnished with.',
+      clips: 'Clips',
+      clipsNote: 'Poses a body can play.',
+      vehicles: 'Vehicles',
+      vehiclesNote: 'Things you get in and drive.',
+      emotes: 'Menu',
+      emotesNote: 'Clips in branches, reached by keys.',
+      models: 'Models',
+      modelsNote: 'Everything we ship, to look through.',
+      modelsHint: 'A reference, not a shelf — models are picked at the bench, inside the blueprint they go into.',
+      untitled: 'Untitled thing',
+      exampleCarName: 'Little hatchback',
+      newVehicle: 'Build a car',
+      newBlueprint: 'Start a blueprint',
+      starting: 'Starting…',
+      newClip: 'Open the pose editor',
+    },
+    emotes: {
+      intro: 'Put the clips into branches and give each one a key. In a world, the keys reach them — D then R plays the robot dance.',
+      empty: 'No menu yet. Add a branch and put a clip in it.',
+      addBranch: 'Add a branch',
+      addInside: 'Add inside',
+      remove: 'Remove',
+      removeRow: 'Remove {label}',
+      key: 'Key',
+      label: 'Name',
+      plays: 'Plays',
+      opensOnly: 'just opens',
+      save: 'Save the menu',
+      saving: 'Saving…',
+      saved: 'Saved',
+      rows: '{n} rows',
+      tryIt: 'Try it',
+      tryHint: 'Type the keys and see where they land.',
+      reachesNothing: 'Reaches nothing.',
+      reachesBranch: 'Opens {label}.',
+      reachesClip: '{label} — plays {clip}.',
+    },
+    composer: {
+      heading: 'The bench',
+      intro: 'Bolt pieces together, name the places things attach, and put the seats where the bodies go.',
+      backToShelf: 'Back to the shelf',
+      pieces: 'Pieces ({n})',
+      theRoot: 'the thing itself',
+      size: 'Size',
+      turn: 'Turn',
+      move: 'Drag to move it',
+      up: 'Up',
+      down: 'Down',
+      bigger: 'Bigger',
+      smaller: 'Smaller',
+      removePiece: 'Take this piece off',
+      addPiece: 'Add a piece',
+      swapFor: 'Use a different model for {where}',
+      searchPieces: 'crate, lamp, wheel',
+      look: 'Look',
+      looking: 'Looking…',
+      noPieces: 'Nothing matches “{q}”.',
+      socketsOn: 'Sockets on {where}',
+      socketsHint: 'A named place something attaches to — a seat, or the grip of a held item. It turns and moves with its piece.',
+      socketName: 'name it',
+      addSocket: 'Add a socket',
+      remove: 'Remove',
+      onSocket: 'Sits on',
+      looseSeat: 'nowhere in particular',
+      showSockets: 'Sockets',
+      showSeats: 'Seats',
+      nothingPicked: 'click a piece',
+      vehicle: 'Vehicle',
+      vehicleLabel: 'You can drive it',
+      vehicleHint:
+        'The first seat is the wheel. Summon it with /vehicle and its name — W and S drive, A and D steer, G gets out.',
+      topSpeed: 'Top speed',
+      turnRate: 'Turning',
+      addWheel: 'Add a wheel',
+      steers: 'Turns with the steering',
+      hideDriver: 'It swallows whoever is aboard',
+      hideDriverHint:
+        'No body is drawn while somebody is in it — the room sees only the vehicle move. For cars with roofs, or things you drive as.',
+      machine: {
+        heading: 'What it can be',
+        label: 'It changes',
+        hint: 'A burger that cooks, a crate that breaks, a target that comes back. Each state can wear a different model.',
+        state: 'State',
+        name: 'Called',
+        starts: 'Starts here',
+        looksLike: 'Looks like',
+        sameAsThing: 'The thing itself',
+        plays: 'Plays',
+        nothing: 'Nothing',
+        hidden: 'Not there',
+        hiddenHint: 'Still standing and still counting down — just invisible, and not solid.',
+        solid: 'Solid',
+        shouts: 'Shouts',
+        healsUp: 'Full health again',
+        addState: 'Add a state',
+        changes: 'Ways out',
+        addChange: 'Add a way out',
+        goesTo: 'becomes',
+        when: {
+          after: 'after a while',
+          signal: 'on a word',
+          use: 'when used',
+          touch: 'when touched',
+          broken: 'when broken',
+          filled: 'when something is put on it',
+          emptied: 'when something is taken off',
+        },
+        seconds: 'Seconds',
+        showBar: 'Draw a bar',
+        onlyOnce: 'Only once',
+        preset: 'Start from',
+        presetRespawn: 'Breaks and comes back',
+      },
+      fight: {
+        heading: 'Fighting',
+        hint: 'Only in battle mode. In creative mode the same key picks it up instead.',
+        health: 'It can be hurt',
+        healthLabel: 'Health',
+        max: 'Full',
+        showBar: 'Draw a bar once it has been hurt',
+        hurtBy: 'Hurt by',
+        hurt: { dash: 'a dash', kick: 'a kick', shot: 'a shot', bump: 'being run into' },
+        weapon: 'It hits back',
+        weaponLabel: 'Weapon',
+        damage: 'Damage',
+        reach: 'Reach',
+        every: 'Every',
+        aimsAt: 'Aims at',
+        at: { people: 'people', things: 'things', all: 'everything' },
+        fires: 'It shoots',
+        firesHint: 'Leave this off and it swings instead.',
+        speed: 'Speed',
+        fromSocket: 'Fires from',
+        middle: 'the middle of it',
+      },
+      craft: {
+        heading: 'Things on it',
+        hint: 'Places to put something, and what those things make together.',
+        label: 'Things can be put on it',
+        slots: 'Places',
+        addSlot: 'Add a place',
+        onSocket: 'On socket',
+        takes: 'Takes',
+        anything: 'anything',
+        alreadyHolds: 'Already holds',
+        nothingHeld: 'nothing',
+        shouts: 'Shouts',
+        recipes: 'Recipes',
+        addRecipe: 'Add a recipe',
+        needs: 'Needs',
+        makes: 'Makes',
+        seconds: 'Takes',
+        atOnce: 'at once',
+        landsOn: 'Lands on',
+        whereItWasMade: 'where it was made',
+        price: 'Costs',
+        free: 'free',
+        toSummon: 'Costs to summon',
+        priceHint:
+          'Coins, the same ones the café and the house use. Spent from your own till.',
+      },
+      saving: 'Saving…',
+      problems: '{n} to fix',
+    },
+    clips: {
+      heading: 'Poses',
+      intro: 'Drag the dots to pose a body, key the pose on the strip, and save the clip here. A blueprint names it, and a thing plays it.',
+      open: 'Poses',
+      newClip: 'New clip',
+      yours: 'Yours',
+      shared: 'Shared with the space',
+      none: 'No clips yet. Pose something and save it.',
+      save: 'Save to the space',
+      saved: 'Saved',
+      rename: 'Rename',
+      retire: 'Retire',
+      share: 'Share with the space',
+      unshare: 'Keep to yourself',
+      playsOn: 'Plays on the {rig}',
+      playsOnLabel: 'Body',
+      allBodies: 'All ({n})',
+      noneForBody: 'Nothing keyed for the {body} yet.',
+      parts: 'Drives',
+      partsHint: 'A clip that leaves part of the body alone plays over the walk instead of stopping it — so a wave is a wave while you cross the room.',
+      groups: { torso: 'Body', arms: 'Arms', legs: 'Legs' },
+    },
   },
 
   board: {
@@ -428,10 +1091,10 @@ export const WORKSPACE_EN: WorkspaceDict = {
     bestStreak: '· best {n}',
     seeTheBoard: '— see the board',
 
-    news: 'From the platform',
+    news: 'From kxb.team',
     hideAnnouncement: 'Hide this announcement',
     hideIt: 'Hide it — it stays under News',
-    noNews: 'Nothing from the platform yet.',
+    noNews: 'Nothing from kxb.team yet.',
 
     studio: 'From the studio',
     openStudio: 'Open the studio',
@@ -822,6 +1485,284 @@ export const WORKSPACE_DE: WorkspaceDict = {
     welcome: 'Willkommen',
     builder: 'Weltenbaukasten',
     skins: 'Skins',
+    thingiverse: 'Thingiverse',
+  },
+
+  thingiverse: {
+    heading: 'Thingiverse',
+    intro: 'Alles, womit ein Raum eingerichtet werden kann: was dieser Space gebaut hat, und die Pakete, aus denen alles geschnitten ist.',
+    shelfTab: 'Das Regal',
+    packsTab: 'Die Pakete',
+    search: 'Alle Pakete durchsuchen',
+    searchGo: 'Suchen',
+    roomPacks: 'Für Räume',
+    levelPacks: 'Für Level',
+    everyPack: 'Alle Pakete',
+    packCount: '{n} Pakete',
+    showing: '{shown} von {total} werden gezeigt',
+    noModels: 'Kein Modell passt zu „{q}“. Versuchen Sie ein einfacheres Wort — Stuhl, Baum, Kiste.',
+    searchHint: 'Ein Wort eintippen — Bank, Lampe, Ball.',
+    packSize: '{n} Modelle',
+    make: 'Blaupause anlegen',
+    making: 'Wird angelegt …',
+    emptyShelf: 'Noch nichts aus den Paketen geschnitten. Suchen Sie ein Modell und legen Sie eine Blaupause an.',
+    name: 'Name',
+    nameNeeded: 'Ein Ding im Regal braucht einen Namen.',
+    nameTooLong: 'Ein Name hat höchstens {n} Zeichen.',
+    model: 'Modell',
+    size: 'Größe',
+    blocks: 'Versperrt den Weg',
+    blocksHint: 'Aus: Sie gehen hindurch. Eine Münze, ein Teppich, ein Banner.',
+    falls: 'Fällt',
+    fallsHint: 'Aus: es steht für immer, wo es abgesetzt wurde. An: die Schwerkraft hat eine Meinung.',
+    gravity: 'Schwerkraft',
+    bounce: 'Sprungkraft',
+    mass: 'Masse',
+    clip: 'Clip',
+    clipHint: 'Eine Animation, die läuft, während es dasteht. Leer lassen für ein stilles Modell.',
+    tags: 'Schlagworte',
+    tagsHint: 'Wörter zum Wiederfinden. Mit Komma getrennt.',
+    actions: 'Was es tut',
+    actionsHint: 'Höchstens vier. Alles davon passiert im Raum, ohne dass jemand zählt — was zählen muss, ist ein XP.',
+    addAction: 'Hinzufügen',
+    use: 'Kann benutzt werden',
+    useHint: 'Ein Stuhl zum Sitzen, ein Plattenspieler, ein Kart. Im Spiel steigt E ein; im Kreativmodus hebt E das Ding stattdessen auf.',
+    enterClip: 'Einsteigen',
+    loopClip: 'Währenddessen',
+    leaveClip: 'Aussteigen',
+    seats: 'Wo die Körper stehen',
+    addSeat: 'Platz hinzufügen',
+    seatHint: 'Zellen vom Ding aus, eine Zeile pro Person. Dreht sich mit: eine gedrehte Bank setzt trotzdem alle auf die Bank.',
+    inputs: 'Weitere Animationen',
+    inputsHint: 'Je eine Taste, abgespielt, solange jemand drin ist. Die Taste wird so lange abgefangen und tut nichts anderes.',
+    key: 'Taste',
+    addInput: 'Taste hinzufügen',
+    remove: 'Entfernen',
+    save: 'Speichern',
+    saved: 'Gespeichert',
+    share: 'Mit dem Space teilen',
+    unshare: 'Für sich behalten',
+    retire: 'Aus dem Regal',
+    mine: 'Ihres',
+    shared: 'Mit dem Space geteilt',
+    report: 'Melden',
+    reportHint: 'Sagen Sie, was daran nicht in Ordnung ist. Niemand erfährt, wer gemeldet hat.',
+    reportSend: 'Meldung senden',
+    reportSent: 'Gemeldet. Danke.',
+    when: { touch: 'Wenn jemand hineinläuft', near: 'Wenn jemand danebensteht', always: 'Die ganze Zeit' },
+    deed: {
+      play: 'einen Clip spielen',
+      spin: 'sich drehen',
+      bob: 'auf und ab wippen',
+      vanish: 'verschwinden',
+    },
+    credit: 'Jedes Paket, das wir ausliefern, ist CC0: benutzen, verändern, verkaufen. Der Link führt zu denen, die es gezeichnet haben.',
+    browser: {
+      nothingPicked: 'Wählen Sie ein Modell — es steht hier, in der Größe, in der ein Raum es zeichnet.',
+      plays: 'Spielt ({n})',
+      still: 'Still',
+      onTheShelf: 'Schon im Regal',
+    },
+    you: {
+      otherBody: 'Ihr anderer Körper',
+      peepBody: 'Ihr Peep. So zeichnet ein Raum Sie.',
+      xpBody: 'Ihr XP-Körper. Räume zeichnen diesen, bis Sie zurückschalten.',
+      onlyBody: 'Ihr Peep. Mit einem Skin bekommen Sie einen zweiten Körper zum Umschalten.',
+      changePeep: 'Ändern',
+      pickPeep: 'Eines von {n} wählen',
+      shop: 'Laden',
+      saving: 'Wird gespeichert …',
+    },
+    hub: {
+      doorsLabel: 'Was dieser Space macht',
+      blueprints: 'Blaupausen',
+      blueprintsNote: 'Dinge, mit denen ein Raum eingerichtet wird.',
+      clips: 'Clips',
+      clipsNote: 'Posen, die ein Körper abspielen kann.',
+      vehicles: 'Fahrzeuge',
+      vehiclesNote: 'Dinge, in die man steigt und fährt.',
+      emotes: 'Menü',
+      emotesNote: 'Clips in Ästen, über Tasten erreichbar.',
+      models: 'Modelle',
+      modelsNote: 'Alles, was wir mitliefern, zum Durchsehen.',
+      modelsHint: 'Eine Übersicht, kein Regal — Modelle werden an der Werkbank gewählt, in der Blaupause, in die sie gehören.',
+      untitled: 'Unbenanntes Ding',
+      exampleCarName: 'Kleiner Flitzer',
+      newVehicle: 'Auto bauen',
+      newBlueprint: 'Blaupause beginnen',
+      starting: 'Wird begonnen …',
+      newClip: 'Pose-Editor öffnen',
+    },
+    emotes: {
+      intro: 'Ordnen Sie die Clips in Äste und geben Sie jedem eine Taste. In einer Welt erreichen die Tasten sie — D, dann R spielt den Robotertanz.',
+      empty: 'Noch kein Menü. Legen Sie einen Ast an und einen Clip hinein.',
+      addBranch: 'Ast hinzufügen',
+      addInside: 'Darin hinzufügen',
+      remove: 'Entfernen',
+      removeRow: '{label} entfernen',
+      key: 'Taste',
+      label: 'Name',
+      plays: 'Spielt',
+      opensOnly: 'öffnet nur',
+      save: 'Menü speichern',
+      saving: 'Wird gespeichert …',
+      saved: 'Gespeichert',
+      rows: '{n} Zeilen',
+      tryIt: 'Ausprobieren',
+      tryHint: 'Tasten tippen und sehen, wo sie landen.',
+      reachesNothing: 'Erreicht nichts.',
+      reachesBranch: 'Öffnet {label}.',
+      reachesClip: '{label} — spielt {clip}.',
+    },
+    composer: {
+      heading: 'Die Werkbank',
+      intro: 'Teile zusammensetzen, Andockpunkte benennen und die Sitze dorthin legen, wo die Körper stehen.',
+      backToShelf: 'Zurück zum Regal',
+      pieces: 'Teile ({n})',
+      theRoot: 'das Ding selbst',
+      size: 'Größe',
+      turn: 'Drehung',
+      move: 'Ziehen zum Bewegen',
+      up: 'Hoch',
+      down: 'Runter',
+      bigger: 'Größer',
+      smaller: 'Kleiner',
+      removePiece: 'Teil abnehmen',
+      addPiece: 'Teil hinzufügen',
+      swapFor: 'Anderes Modell für {where}',
+      searchPieces: 'Kiste, Lampe, Rad',
+      look: 'Suchen',
+      looking: 'Wird gesucht …',
+      noPieces: 'Nichts passt zu „{q}“.',
+      socketsOn: 'Andockpunkte an {where}',
+      socketsHint: 'Ein benannter Punkt, an dem etwas ansetzt — ein Sitz oder der Griff eines gehaltenen Dings. Er dreht und bewegt sich mit seinem Teil.',
+      socketName: 'benennen',
+      addSocket: 'Andockpunkt hinzufügen',
+      remove: 'Entfernen',
+      onSocket: 'Sitzt auf',
+      looseSeat: 'nirgends besonders',
+      showSockets: 'Andockpunkte',
+      showSeats: 'Sitze',
+      nothingPicked: 'Teil anklicken',
+      vehicle: 'Fahrzeug',
+      vehicleLabel: 'Du kannst es fahren',
+      vehicleHint:
+        'Der erste Sitz ist das Lenkrad. Ruf es mit /vehicle und seinem Namen — W und S fahren, A und D lenken, G steigt aus.',
+      topSpeed: 'Höchsttempo',
+      turnRate: 'Lenkung',
+      addWheel: 'Rad hinzufügen',
+      steers: 'Dreht mit der Lenkung',
+      hideDriver: 'Es verschluckt, wer an Bord ist',
+      hideDriverHint:
+        'Solange jemand drin sitzt, wird kein Körper gezeichnet — der Raum sieht nur das Fahrzeug fahren. Für Autos mit Dach, oder Dinge, als die man fährt.',
+      machine: {
+        heading: 'Was es sein kann',
+        label: 'Es verändert sich',
+        hint: 'Ein Burger, der brät, eine Kiste, die zerbricht, eine Zielscheibe, die wiederkommt. Jeder Zustand kann ein anderes Modell tragen.',
+        state: 'Zustand',
+        name: 'Heißt',
+        starts: 'Fängt hier an',
+        looksLike: 'Sieht aus wie',
+        sameAsThing: 'Das Ding selbst',
+        plays: 'Spielt',
+        nothing: 'Nichts',
+        hidden: 'Nicht da',
+        hiddenHint: 'Steht weiter da und zählt weiter — nur unsichtbar und nicht fest.',
+        solid: 'Fest',
+        shouts: 'Ruft',
+        healsUp: 'Wieder volle Gesundheit',
+        addState: 'Zustand hinzufügen',
+        changes: 'Wege hinaus',
+        addChange: 'Weg hinaus hinzufügen',
+        goesTo: 'wird zu',
+        when: {
+          after: 'nach einer Weile',
+          signal: 'auf ein Wort',
+          use: 'beim Benutzen',
+          touch: 'bei Berührung',
+          broken: 'wenn kaputt',
+          filled: 'wenn etwas daraufgelegt wird',
+          emptied: 'wenn etwas heruntergenommen wird',
+        },
+        seconds: 'Sekunden',
+        showBar: 'Balken zeigen',
+        onlyOnce: 'Nur einmal',
+        preset: 'Anfangen mit',
+        presetRespawn: 'Zerbricht und kommt wieder',
+      },
+      fight: {
+        heading: 'Kämpfen',
+        hint: 'Nur im Kampfmodus. Im Kreativmodus hebt dieselbe Taste es stattdessen auf.',
+        health: 'Es kann verletzt werden',
+        healthLabel: 'Gesundheit',
+        max: 'Voll',
+        showBar: 'Balken zeigen, sobald es verletzt ist',
+        hurtBy: 'Verletzt durch',
+        hurt: { dash: 'einen Sprint', kick: 'einen Tritt', shot: 'einen Schuss', bump: 'Anrennen' },
+        weapon: 'Es schlägt zurück',
+        weaponLabel: 'Waffe',
+        damage: 'Schaden',
+        reach: 'Reichweite',
+        every: 'Alle',
+        aimsAt: 'Zielt auf',
+        at: { people: 'Leute', things: 'Dinge', all: 'alles' },
+        fires: 'Es schießt',
+        firesHint: 'Aus lassen, dann schlägt es stattdessen zu.',
+        speed: 'Geschwindigkeit',
+        fromSocket: 'Schießt aus',
+        middle: 'der Mitte',
+      },
+      craft: {
+        heading: 'Dinge darauf',
+        hint: 'Plätze, um etwas abzulegen, und was diese Dinge zusammen ergeben.',
+        label: 'Man kann Dinge darauflegen',
+        slots: 'Plätze',
+        addSlot: 'Platz hinzufügen',
+        onSocket: 'Auf Anschluss',
+        takes: 'Nimmt',
+        anything: 'alles',
+        alreadyHolds: 'Hält bereits',
+        nothingHeld: 'nichts',
+        shouts: 'Ruft',
+        recipes: 'Rezepte',
+        addRecipe: 'Rezept hinzufügen',
+        needs: 'Braucht',
+        makes: 'Macht',
+        seconds: 'Dauert',
+        atOnce: 'sofort',
+        landsOn: 'Landet auf',
+        whereItWasMade: 'wo es gemacht wurde',
+        price: 'Kostet',
+        free: 'gratis',
+        toSummon: 'Kostet beim Herbeirufen',
+        priceHint:
+          'Münzen, dieselben wie im Café und im Haus. Von Ihrer eigenen Kasse.',
+      },
+      saving: 'Wird gespeichert …',
+      problems: '{n} zu beheben',
+    },
+    clips: {
+      heading: 'Posen',
+      intro: 'Ziehen Sie die Punkte, um einen Körper zu posieren, setzen Sie die Pose auf die Leiste und speichern Sie den Clip hier. Eine Blaupause nennt ihn, ein Ding spielt ihn.',
+      open: 'Posen',
+      newClip: 'Neuer Clip',
+      yours: 'Ihre',
+      shared: 'Mit dem Space geteilt',
+      none: 'Noch keine Clips. Posieren Sie etwas und speichern Sie es.',
+      save: 'Im Space speichern',
+      saved: 'Gespeichert',
+      rename: 'Umbenennen',
+      retire: 'Aus dem Regal',
+      share: 'Mit dem Space teilen',
+      unshare: 'Für sich behalten',
+      playsOn: 'Läuft auf: {rig}',
+      playsOnLabel: 'Körper',
+      allBodies: 'Alle ({n})',
+      noneForBody: 'Noch nichts für {body} angelegt.',
+      parts: 'Bewegt',
+      partsHint: 'Ein Clip, der einen Teil des Körpers auslässt, läuft über dem Gehen statt es zu stoppen — winken bleibt winken, auch unterwegs.',
+      groups: { torso: 'Körper', arms: 'Arme', legs: 'Beine' },
+    },
   },
 
   board: {
@@ -837,10 +1778,10 @@ export const WORKSPACE_DE: WorkspaceDict = {
     bestStreak: '· Bestwert {n}',
     seeTheBoard: '— zur Tafel',
 
-    news: 'Von der Plattform',
+    news: 'Von kxb.team',
     hideAnnouncement: 'Diese Ankündigung ausblenden',
     hideIt: 'Ausblenden — sie bleibt unter Neuigkeiten',
-    noNews: 'Noch nichts von der Plattform.',
+    noNews: 'Noch nichts von kxb.team.',
 
     studio: 'Aus dem Studio',
     openStudio: 'Studio öffnen',
@@ -1252,6 +2193,284 @@ export const WORKSPACE_BG: WorkspaceDict = {
     welcome: 'Добре дошли',
     builder: 'Строител на светове',
     skins: 'Скинове',
+    thingiverse: 'Thingiverse',
+  },
+
+  thingiverse: {
+    heading: 'Thingiverse',
+    intro: 'Всичко, с което може да се обзаведе стая: каквото този спейс е направил, и пакетите, от които е изрязано.',
+    shelfTab: 'Рафтът',
+    packsTab: 'Пакетите',
+    search: 'Търсене във всички пакети',
+    searchGo: 'Търси',
+    roomPacks: 'За стаи',
+    levelPacks: 'За нива',
+    everyPack: 'Всички пакети',
+    packCount: '{n} пакета',
+    showing: 'Показани {shown} от {total}',
+    noModels: 'Няма модел, който да съвпада с „{q}“. Опитайте по-проста дума — стол, дърво, кутия.',
+    searchHint: 'Напишете дума — пейка, лампа, топка.',
+    packSize: '{n} модела',
+    make: 'Направи блупринт',
+    making: 'Създава се…',
+    emptyShelf: 'Още нищо не е изрязано от пакетите. Намерете модел и направете блупринт.',
+    name: 'Име',
+    nameNeeded: 'Нещо на рафта се нуждае от име.',
+    nameTooLong: 'Името е най-много {n} знака.',
+    model: 'Модел',
+    size: 'Размер',
+    blocks: 'Препречва пътя',
+    blocksHint: 'Изключено: минавате през него. Монета, килим, банер.',
+    falls: 'Пада',
+    fallsHint: 'Изключено: стои завинаги там, където е сложено. Включено: гравитацията има мнение.',
+    gravity: 'Гравитация',
+    bounce: 'Отскок',
+    mass: 'Маса',
+    clip: 'Клип',
+    clipHint: 'Анимация, докато стои там. Оставете празно за неподвижен модел.',
+    tags: 'Етикети',
+    tagsHint: 'Думи, по които да го намерите. Разделени със запетая.',
+    actions: 'Какво прави',
+    actionsHint: 'Най-много четири. Всичко това се случва в стаята, без някой да брои — нещо, което брои, е XP.',
+    addAction: 'Добави',
+    use: 'Може да се използва',
+    useHint: 'Стол, на който сядате, грамофон, количка. В игра E влиза; в творчески режим E вдига нещото.',
+    enterClip: 'Влизане',
+    loopClip: 'Докато си вътре',
+    leaveClip: 'Излизане',
+    seats: 'Къде застават телата',
+    addSeat: 'Добави място',
+    seatHint: 'Клетки спрямо самото нещо, по един ред на човек. Въртят се с него, така че обърната пейка пак слага хората на пейката.',
+    inputs: 'Още анимации',
+    inputsHint: 'По един клавиш всяка, докато някой е вътре. Клавишът се прихваща и не прави нищо друго.',
+    key: 'Клавиш',
+    addInput: 'Добави клавиш',
+    remove: 'Премахни',
+    save: 'Запази',
+    saved: 'Запазено',
+    share: 'Сподели със спейса',
+    unshare: 'Запази за себе си',
+    retire: 'Свали от рафта',
+    mine: 'Ваше',
+    shared: 'Споделено със спейса',
+    report: 'Докладвай',
+    reportHint: 'Кажете какво не е наред. Никой не научава кой е докладвал.',
+    reportSend: 'Изпрати доклад',
+    reportSent: 'Докладвано. Благодарим.',
+    when: { touch: 'Когато някой се блъсне в него', near: 'Когато някой стои наблизо', always: 'През цялото време' },
+    deed: {
+      play: 'пуска клип',
+      spin: 'се върти',
+      bob: 'подскача',
+      vanish: 'изчезва',
+    },
+    credit: 'Всеки пакет, който доставяме, е CC0: използвайте, променяйте, продавайте. Връзката води към авторите.',
+    browser: {
+      nothingPicked: 'Изберете модел — застава тук, в размера, в който стая би го нарисувала.',
+      plays: 'Играе ({n})',
+      still: 'Неподвижно',
+      onTheShelf: 'Вече на рафта',
+    },
+    you: {
+      otherBody: 'Другото ви тяло',
+      peepBody: 'Вашият пийп. Така ви рисува стаята.',
+      xpBody: 'Вашето XP тяло. Стаите рисуват него, докато не превключите обратно.',
+      onlyBody: 'Вашият пийп. Със скин получавате второ тяло, между които да превключвате.',
+      changePeep: 'Смени',
+      pickPeep: 'Изберете едно от {n}',
+      shop: 'Магазин',
+      saving: 'Запазва се…',
+    },
+    hub: {
+      doorsLabel: 'Какво прави този спейс',
+      blueprints: 'Чертежи',
+      blueprintsNote: 'Неща, с които се обзавежда стая.',
+      clips: 'Клипове',
+      clipsNote: 'Пози, които тялото може да изиграе.',
+      vehicles: 'Превозни средства',
+      vehiclesNote: 'Неща, в които се качвате и карате.',
+      emotes: 'Меню',
+      emotesNote: 'Клипове в клони, достъпни с клавиши.',
+      models: 'Модели',
+      modelsNote: 'Всичко, което доставяме, за разглеждане.',
+      modelsHint: 'Справочник, не рафт — моделите се избират на работната маса, в чертежа, за който са.',
+      untitled: 'Ненаименувано нещо',
+      exampleCarName: 'Малко хече',
+      newVehicle: 'Направи кола',
+      newBlueprint: 'Започни чертеж',
+      starting: 'Започва се…',
+      newClip: 'Отвори редактора на пози',
+    },
+    emotes: {
+      intro: 'Подредете клиповете в клони и дайте на всеки клавиш. В света клавишите ги достигат — D, после R пуска робота.',
+      empty: 'Още няма меню. Добавете клон и сложете клип в него.',
+      addBranch: 'Добави клон',
+      addInside: 'Добави вътре',
+      remove: 'Премахни',
+      removeRow: 'Премахни {label}',
+      key: 'Клавиш',
+      label: 'Име',
+      plays: 'Играе',
+      opensOnly: 'само отваря',
+      save: 'Запази менюто',
+      saving: 'Запазва се…',
+      saved: 'Запазено',
+      rows: '{n} реда',
+      tryIt: 'Пробвайте',
+      tryHint: 'Напишете клавишите и вижте къде водят.',
+      reachesNothing: 'Не води до нищо.',
+      reachesBranch: 'Отваря {label}.',
+      reachesClip: '{label} — играе {clip}.',
+    },
+    composer: {
+      heading: 'Работната маса',
+      intro: 'Сглобете части, наименувайте местата за закачане и сложете седалките там, където стоят телата.',
+      backToShelf: 'Обратно към рафта',
+      pieces: 'Части ({n})',
+      theRoot: 'самото нещо',
+      size: 'Размер',
+      turn: 'Завъртане',
+      move: 'Плъзнете, за да местите',
+      up: 'Нагоре',
+      down: 'Надолу',
+      bigger: 'По-голямо',
+      smaller: 'По-малко',
+      removePiece: 'Махни тази част',
+      addPiece: 'Добави част',
+      swapFor: 'Друг модел за {where}',
+      searchPieces: 'щайга, лампа, колело',
+      look: 'Търси',
+      looking: 'Търси се…',
+      noPieces: 'Нищо не съвпада с „{q}“.',
+      socketsOn: 'Гнезда на {where}',
+      socketsHint: 'Наименувано място, където нещо се закача — седалка или дръжката на държан предмет. Върти се и се мести заедно със своята част.',
+      socketName: 'име',
+      addSocket: 'Добави гнездо',
+      remove: 'Премахни',
+      onSocket: 'Стои на',
+      looseSeat: 'никъде конкретно',
+      showSockets: 'Гнезда',
+      showSeats: 'Седалки',
+      nothingPicked: 'щракнете върху част',
+      vehicle: 'Превозно средство',
+      vehicleLabel: 'Можеш да го караш',
+      vehicleHint:
+        'Първата седалка е воланът. Извикай го с /vehicle и името му — W и S карат, A и D завиват, G слиза.',
+      topSpeed: 'Максимална скорост',
+      turnRate: 'Завиване',
+      addWheel: 'Добави колело',
+      steers: 'Върти се с волана',
+      hideDriver: 'Поглъща този, който е вътре',
+      hideDriverHint:
+        'Докато някой е вътре, тяло не се рисува — стаята вижда само превозното средство. За коли с покрив или неща, като които караш.',
+      machine: {
+        heading: 'Какво може да бъде',
+        label: 'То се променя',
+        hint: 'Бургер, който се пече, щайга, която се чупи, мишена, която се връща. Всяко състояние може да носи различен модел.',
+        state: 'Състояние',
+        name: 'Казва се',
+        starts: 'Започва тук',
+        looksLike: 'Изглежда като',
+        sameAsThing: 'Самото нещо',
+        plays: 'Пуска',
+        nothing: 'Нищо',
+        hidden: 'Няма го',
+        hiddenHint: 'Още стои и още брои — само че невидимо и не е плътно.',
+        solid: 'Плътно',
+        shouts: 'Вика',
+        healsUp: 'Отново пълно здраве',
+        addState: 'Добави състояние',
+        changes: 'Изходи',
+        addChange: 'Добави изход',
+        goesTo: 'става',
+        when: {
+          after: 'след време',
+          signal: 'при дума',
+          use: 'при използване',
+          touch: 'при допир',
+          broken: 'когато се счупи',
+          filled: 'когато сложат нещо върху него',
+          emptied: 'когато вземат нещо от него',
+        },
+        seconds: 'Секунди',
+        showBar: 'Показвай лента',
+        onlyOnce: 'Само веднъж',
+        preset: 'Започни от',
+        presetRespawn: 'Чупи се и се връща',
+      },
+      fight: {
+        heading: 'Битка',
+        hint: 'Само в режим на битка. В творчески режим същият клавиш го вдига вместо това.',
+        health: 'Може да бъде наранено',
+        healthLabel: 'Здраве',
+        max: 'Пълно',
+        showBar: 'Показвай лента, щом бъде наранено',
+        hurtBy: 'Наранява се от',
+        hurt: { dash: 'засилване', kick: 'ритник', shot: 'изстрел', bump: 'блъскане' },
+        weapon: 'То отвръща',
+        weaponLabel: 'Оръжие',
+        damage: 'Щета',
+        reach: 'Обхват',
+        every: 'На всеки',
+        aimsAt: 'Цели се в',
+        at: { people: 'хора', things: 'неща', all: 'всичко' },
+        fires: 'То стреля',
+        firesHint: 'Остави изключено и то ще удря вместо това.',
+        speed: 'Скорост',
+        fromSocket: 'Стреля от',
+        middle: 'средата му',
+      },
+      craft: {
+        heading: 'Неща върху него',
+        hint: 'Места, където да оставиш нещо, и какво правят тези неща заедно.',
+        label: 'Върху него може да се слагат неща',
+        slots: 'Места',
+        addSlot: 'Добави място',
+        onSocket: 'На гнездо',
+        takes: 'Приема',
+        anything: 'всичко',
+        alreadyHolds: 'Вече държи',
+        nothingHeld: 'нищо',
+        shouts: 'Вика',
+        recipes: 'Рецепти',
+        addRecipe: 'Добави рецепта',
+        needs: 'Нужни са',
+        makes: 'Прави',
+        seconds: 'Отнема',
+        atOnce: 'веднага',
+        landsOn: 'Каца върху',
+        whereItWasMade: 'където е направено',
+        price: 'Струва',
+        free: 'безплатно',
+        toSummon: 'Струва при призоваване',
+        priceHint:
+          'Монети, същите като в кафето и къщата. От вашата каса.',
+      },
+      saving: 'Запазва се…',
+      problems: '{n} за поправка',
+    },
+    clips: {
+      heading: 'Пози',
+      intro: 'Влачете точките, за да позирате тяло, сложете позата на лентата и запазете клипа тук. Блупринт го назовава, а нещо го пуска.',
+      open: 'Пози',
+      newClip: 'Нов клип',
+      yours: 'Ваши',
+      shared: 'Споделени със спейса',
+      none: 'Още няма клипове. Позирайте нещо и го запазете.',
+      save: 'Запази в спейса',
+      saved: 'Запазено',
+      rename: 'Преименувай',
+      retire: 'Свали от рафта',
+      share: 'Сподели със спейса',
+      unshare: 'Запази за себе си',
+      playsOn: 'Върви на: {rig}',
+      playsOnLabel: 'Тяло',
+      allBodies: 'Всички ({n})',
+      noneForBody: 'Още нищо не е направено за {body}.',
+      parts: 'Движи',
+      partsHint: 'Клип, който не докосва част от тялото, върви върху ходенето, вместо да го спира — махането си остава махане в движение.',
+      groups: { torso: 'Тяло', arms: 'Ръце', legs: 'Крака' },
+    },
   },
 
   board: {
@@ -1267,10 +2486,10 @@ export const WORKSPACE_BG: WorkspaceDict = {
     bestStreak: '· най-добро {n}',
     seeTheBoard: '— към дъската',
 
-    news: 'От платформата',
+    news: 'От kxb.team',
     hideAnnouncement: 'Скрий това съобщение',
     hideIt: 'Скрий го — остава под Новини',
-    noNews: 'Още нищо от платформата.',
+    noNews: 'Още нищо от kxb.team.',
 
     studio: 'От студиото',
     openStudio: 'Отвори студиото',

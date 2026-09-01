@@ -74,6 +74,13 @@ export function blocksFromWorld(world: BuilderWorld, cap = SCENE_BLOCK_CAP): Imp
     top: placement.y + 1,
     z: placement.z,
     rotation: 0,
+    time: 0,
+    // One cell. A lounge placement is a block in a cell and carries no size of
+    // its own - the imported world is a grid, and everything in it is a cube.
+    scale: 1,
+    tint: null,
+    pitch: 0,
+    roll: 0,
   }))
 
   if (specs.length <= cap) return { blocks: specs, props, dropped: 0 }

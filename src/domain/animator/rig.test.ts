@@ -1,5 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { BONE_SPECS, DUMMY_BONES, ROOT_BONE, boneKey } from '@/domain/animator/rig'
+import { existsSync } from 'node:fs'
+import {
+  ALL_SPECS,
+  BONE_SPECS,
+  DUMMY_BONES,
+  groupsIn,
+  isPartial,
+  PEEP_BONES,
+  ROOT_BONE,
+  boneKey,
+} from '@/domain/animator/rig'
 
 /**
  * The rig description, checked against the model it describes.
@@ -96,5 +106,104 @@ describe('the dummy', () => {
     // more would be the chest, and the reach on the torso bones is what keeps
     // a hand drag out of the spine.
     for (const spec of DUMMY_BONES) expect(spec.reach).toBeLessThanOrEqual(3)
+  })
+})
+
+/**
+ * The peep, checked against a peep the same way.
+ *
+ * The animals ship *unskinned* - seven nodes with a mesh on most of them,
+ * turned rather than deformed - which is a rig as far as this editor is
+ * concerned: a pose here is a root translation plus a quaternion per named
+ * node, and three.js binds a quaternion track to a node by name whether or not
+ * the node is a `Bone`.
+ *
+ * The fox stands in for the pack. They share one rig under one set of names, so
+ * a clip keyed against the fox plays on the penguin.
+ */
+const PEEP_GLB = 'public/xo/peeps/animal-fox.glb'
+
+/**
+ * Whether the animal is on disk, because in one checkout it is not.
+ *
+ * The community repository ships no model kits by design - see its
+ * docs/assets.md - and its CI skips the suites that read one by listing them.
+ * The dummy is the exception: it is *generated* there, so everything in this
+ * file that only needs a rig runs and passes, and listing the whole file would
+ * throw those away to spare the two tests below.
+ *
+ * So the two that need the fox say so themselves, and the file keeps earning
+ * its place in both trees. Fetch the packs and they run here as they always
+ * have.
+ */
+const HAS_PEEP = existsSync(PEEP_GLB)
+
+describe('the peep rig', () => {
+  test.skipIf(!HAS_PEEP)('every handle names a node the file actually has', async () => {
+    const names = new Set((await nodesIn(PEEP_GLB)).map((node) => node.name))
+    for (const spec of PEEP_BONES) expect(names).toContain(spec.name)
+  })
+
+  test.skipIf(!HAS_PEEP)('its root is called `root`, which is why nothing needed a second word', async () => {
+    // Luck rather than design, and worth a test: `ROOT_BONE` is the one name
+    // the whole editor hardcodes, and the peep happens to spell it the same.
+    expect((await nodesIn(PEEP_GLB)).some((node) => node.name === ROOT_BONE)).toBe(true)
+  })
+
+  test('is four legs, a body and a tail - and no arms to wave with', () => {
+    expect(PEEP_BONES.filter((spec) => spec.group === 'legs')).toHaveLength(4)
+    expect(PEEP_BONES.some((spec) => spec.group === 'arms')).toBe(false)
+  })
+
+  test('every limb is one bone, so no chain has a plane to get wrong', () => {
+    for (const spec of PEEP_BONES) {
+      expect(spec.reach).toBe(1)
+      expect(spec.hinge).toBeUndefined()
+    }
+  })
+})
+
+describe('which parts of a body a clip touches', () => {
+  test('a wave is arms', () => {
+    // The *loaded* names, which is what a baked clip's tracks are keyed by.
+    expect([...groupsIn(['upperarmr', 'lowerarmr', 'handr'], ALL_SPECS)]).toEqual(['arms'])
+  })
+
+  test('a bone no rig here knows counts as nothing', () => {
+    // A clip from a pack we later drop, or a rig somebody imported. Reading it
+    // as "touches nothing" is what stops it being trimmed or mislabelled.
+    expect(groupsIn(['tentacle'], ALL_SPECS).size).toBe(0)
+  })
+
+  test('both rigs answer from one map, because their names never collide', () => {
+    expect([...groupsIn(['leg-front-left', 'body'], ALL_SPECS)].sort()).toEqual([
+      'legs',
+      'torso',
+    ])
+    expect([...groupsIn(['hips'], ALL_SPECS)]).toEqual(['torso'])
+  })
+
+  test('no name means two different parts on the two bodies', () => {
+    for (const spec of PEEP_BONES) {
+      const other = BONE_SPECS[spec.name]
+      if (other) expect(other.group).toBe(spec.group)
+    }
+  })
+})
+
+describe('whether a clip plays over the walk or instead of it', () => {
+  test('leaving a part of the body alone makes it a layer', () => {
+    expect(isPartial(groupsIn(['handr'], ALL_SPECS))).toBe(true)
+    expect(isPartial(groupsIn(['handr', 'hips'], ALL_SPECS))).toBe(true)
+  })
+
+  test('a whole-body animation replaces the gait', () => {
+    expect(isPartial(groupsIn(['handr', 'hips', 'footl'], ALL_SPECS))).toBe(false)
+  })
+
+  test('a clip that drives nothing is not a layer over anything', () => {
+    // Every track dropped, or every bone unknown. Playing it additively would
+    // be adding nothing to something, which is a frame's work for no picture.
+    expect(isPartial(groupsIn([], ALL_SPECS))).toBe(false)
   })
 })

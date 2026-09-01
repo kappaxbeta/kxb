@@ -8,6 +8,7 @@ import {
   setFlagValue,
   setGlobalFlag,
 } from '@/domain/flags/actions'
+import { FREE_SPACES_PER_ACCOUNT } from '@/domain/billing/tiers'
 import type { FeatureKey, FeatureScope } from '@/domain/flags/keys'
 import type { FeatureOverrideRow } from '@/domain/flags/queries'
 import { ErrorNote } from '@/app/components/error-note'
@@ -85,12 +86,38 @@ const CONSEQUENCE: Partial<Record<FeatureKey, (value: number) => string>> = {
   match_limit: (n) =>
     `No space may have more than ${n} battles open at once. Concurrency, not a monthly allowance.`,
   free_space_limit: (n) =>
-    `One account may own ${n} spaces it is not paying for. Paid spaces are never capped, and being a member of other people's spaces is never capped either.`,
+    `One account may own ${n} spaces it is not paying for, and nobody below can be given more than ${n} — this clamps them. Paid spaces are never capped, and being a member of other people's spaces is never capped either.`,
 }
 
-/** The reassurance shown when a cap is off. Off means unlimited, everywhere. */
+/** The reassurance shown when a cap is off. Off means unlimited, nearly everywhere. */
 function unlimitedSentence(unit: string): string {
   return `No limit on ${unit}.`
+}
+
+/**
+ * What switching one *off* means, where "unlimited" would be a lie.
+ *
+ * One entry, and it needs one badly. Every other flag here is the only thing
+ * imposing its number, so off really is unlimited. `free_space_limit` is not:
+ * it is the *ceiling* above `FREE_SPACES_PER_ACCOUNT`, which is a constant in
+ * code, so turning this off hands nobody a second free space - it stops the
+ * ceiling clamping the per-person exceptions listed underneath.
+ *
+ * That clamp is the whole reason to say so here. `freeSpaceLimit` in
+ * `billing/quota.ts` ends with `minLimit(granted, ceiling)`, so with this on at
+ * one, a blank "unlimited" override for one person still resolves to one - the
+ * admin has granted an exception the database will not honour, and nothing on
+ * this page would have told them. Reading "unlimited" off the badge on the way
+ * past is how they end up believing they already lifted it.
+ */
+const WHEN_OFF: Partial<Record<FeatureKey, { badge: string; sentence: string }>> = {
+  free_space_limit: {
+    badge: 'no ceiling',
+    sentence:
+      `Nothing above the built-in ${FREE_SPACES_PER_ACCOUNT}. An account still owns ` +
+      `${FREE_SPACES_PER_ACCOUNT === 1 ? 'one free space' : `${FREE_SPACES_PER_ACCOUNT} free spaces`}` +
+      ` by default — off means the people listed below can be given more than that.`,
+  },
 }
 
 export function AccessSettings({
@@ -223,13 +250,13 @@ function LimitCard({
                 enabled ? 'bg-amber-500/20 text-amber-500' : 'bg-card px-2 text-muted-foreground'
               }`}
             >
-              {enabled ? `${value} ${unit}` : 'unlimited'}
+              {enabled ? `${value} ${unit}` : (WHEN_OFF[key]?.badge ?? 'unlimited')}
             </span>
           </p>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {enabled
               ? (describe?.(value) ?? `Capped at ${value} ${unit}.`)
-              : unlimitedSentence(unit)}
+              : (WHEN_OFF[key]?.sentence ?? unlimitedSentence(unit))}
           </p>
         </div>
 

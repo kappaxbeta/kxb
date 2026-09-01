@@ -381,20 +381,34 @@ function Source({
         with its own overflow hidden, so there is exactly one scrollbar and the
         two layers cannot drift.
 
+        `h-max min-h-full` on that column, and on the gutter, is what makes the
+        last sentence true - it was not. The column is a flex item, so the row
+        stretched it to the *panel's* height while the `pre` inside it stood as
+        tall as the script; the textarea, stretched to the column, was then
+        hundreds of pixels shorter than its own text, and a textarea shorter
+        than its text scrolls - silently, with `overflow-hidden`, the moment the
+        caret leaves the visible part. The paint behind it stayed put, and from
+        then on a click landed fifty lines from the line it pointed at. Sized to
+        the script, the textarea's content always fits and neither layer ever
+        scrolls; the box around all three does.
+
         Everything that decides where a glyph lands is repeated on both - the
         font, the size, the leading, the padding, and `break-words` to match how
         a textarea breaks a word too long for the line. A difference in any one
         of them is not a small visual bug: it is coloured text sliding out from
         under the characters it belongs to.
       */}
-      <div className="flex min-h-0 flex-1 overflow-auto rounded border border-neutral-800 bg-neutral-950/60 focus-within:border-neutral-600">
+      {/* `code-stack`: on a touch screen the 16px input floor in `globals.css`
+          would otherwise raise the caret's text and leave the paint at 11px.
+          The class hands the floor to both layers at once - see the rule. */}
+      <div className="code-stack flex min-h-0 flex-1 overflow-auto rounded border border-neutral-800 bg-neutral-950/60 focus-within:border-neutral-600">
         <pre
           aria-hidden
-          className="shrink-0 border-r border-neutral-900 bg-neutral-950 px-1.5 py-1 text-right font-mono text-[11px] leading-[1.45] text-neutral-700"
+          className="h-max min-h-full shrink-0 border-r border-neutral-900 bg-neutral-950 px-1.5 py-1 text-right font-mono text-[11px] leading-[1.45] text-neutral-700"
         >
           {Array.from({ length: lines }, (_, i) => i + 1).join('\n')}
         </pre>
-        <div className="relative min-w-0 flex-1">
+        <div className="relative h-max min-h-full min-w-0 flex-1">
           <pre
             aria-hidden
             className="whitespace-pre-wrap break-words px-2 py-1 font-mono text-[11px] leading-[1.45] text-neutral-200"

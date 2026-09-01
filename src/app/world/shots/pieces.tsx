@@ -5,9 +5,17 @@ import { useLoader, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useRainbowFor, useRainbowSkin } from '@/app/world/_canvas/rainbow'
-import { type AvatarClip, avatarUrl } from '@/domain/lounge/avatars'
+import { type AvatarClip, avatarUrl, isSkinLook } from '@/domain/lounge/avatars'
+import type { Pose } from '@/domain/animator/clip'
+/**
+ * From the file rather than the `Addons.js` barrel, for the reason the XP
+ * runtime gives: the barrel drags a CDN-fetching lottie loader into the bundle
+ * and fails outright outside a browser. See `@/app/xp/_runtime/body/skinned`.
+ */
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { modelUrl as tinyUrl } from '@kxb/peepz-world/catalog'
 import { modelUrl as blockUrl } from '@/domain/lounge/palette'
+import { drawingOf, modelUrlFor } from '@/domain/thingiverse/models'
 import {
   EMOTE_COLUMNS,
   EMOTE_ROWS,
@@ -91,22 +99,7 @@ function useModel(url: string): THREE.Object3D {
   }, [scene])
 }
 
-/**
- * One animal, posed.
- *
- * `time` is chosen per peep so a room full of the same idle clip does not read
- * as a room of clones breathing in unison.
- */
-export function Peep({
-  model,
-  clip = 'idle',
-  time = 0,
-  position,
-  rotation = 0,
-  tilt = 0,
-  scale = 1,
-  rim = null,
-}: {
+interface PeepProps {
   model: string
   clip?: AvatarClip
   /** Seconds into the clip. */
@@ -133,9 +126,138 @@ export function Peep({
    * glow should be weakest.
    */
   rim?: string | null
-}) {
-  const { scene, animations } = useGLTF(avatarUrl(model))
+  /**
+   * A pose laid over the clip, or null for the clip alone.
+   *
+   * Already sampled - `actorAt` blends the keys, so what arrives here is where
+   * every bone stands at this instant, and drawing it stays a function of the
+   * props. Bones the pose names follow it; bones it never mentions stay with
+   * the clip, which is what lets an authored wave ride on a derived walk.
+   */
+  pose?: Pose | null
+  /**
+   * Clicking the body itself, for an editor that wants selection in the scene.
+   *
+   * Undefined everywhere a still is only being *drawn* - the marketing shots,
+   * the capture - where a body that swallowed clicks would be a body the
+   * camera cannot be orbited through.
+   */
+  onPick?: () => void
+  /**
+   * The drawn body's own node graph, handed over once it exists.
+   *
+   * What makes posing-in-place possible: the editor gets the same object the
+   * renderer is drawing, so handles land on the body standing in the shot
+   * rather than on a second copy in a second viewport. Fired once per clone.
+   */
+  onBody?: (root: THREE.Object3D) => void
+  /**
+   * Hands the skeleton over entirely: no clip, no pose, nothing written.
+   *
+   * For while a pointer is dragging a bone. Anything writing quaternions
+   * behind the solver's back is a pose that fights the hand holding it.
+   */
+  posing?: boolean
+}
 
+/**
+ * Where the rigged bodies' shared clips live.
+ *
+ * The same two files the XP runtime fetches (see the note on `SOURCES` in
+ * `@/app/xp/_runtime/body/skinned`, whose path this deliberately repeats
+ * rather than imports - that module is a live-room thing built around a frame
+ * loop, and everything in this file is posed by hand). `Idle_A` is in
+ * `General`; the walk and run are in `MovementBasic`.
+ */
+const RIGGED_CLIP_SOURCES = [
+  '/xp/packs/animation/Rig_Medium/Rig_Medium_MovementBasic.glb',
+  '/xp/packs/animation/Rig_Medium/Rig_Medium_General.glb',
+]
+
+/**
+ * The studio's four verbs, in the shared pack's names.
+ *
+ * `dance` maps to the idle on purpose: the rig has no dance, and the runtime
+ * already gives the same honest answer (see `poseFor` in the XP body's motion
+ * module). A dancing knight is what the pose track is for.
+ */
+const RIGGED_CLIPS: Record<AvatarClip, string> = {
+  idle: 'Idle_A',
+  walk: 'Walking_A',
+  run: 'Running_A',
+  dance: 'Idle_A',
+}
+
+/**
+ * What shrinks a dummy-rig body onto the peep's metre grid.
+ *
+ * The XP runtime's `PLAYER_SCALE`, repeated rather than imported: that
+ * constant lives beside the half-megabyte generated catalogue, and this file
+ * is in the marketing pages' bundle. A knight drawn at 1 stands a head over
+ * the tallest peep and reads as a different product.
+ */
+const RIGGED_SCALE = 0.71
+
+/**
+ * One body, posed - whichever of the two kinds it is.
+ *
+ * A component boundary rather than a branch, because the two kinds get their
+ * clips from opposite places and hooks cannot be conditional: a peep's four
+ * clips live inside its own glb, while a rigged look (`pack/Name`, the same
+ * shape the lounge's skins wear) fetches the shared `Rig_Medium` pack - one
+ * download for the whole cast, and nothing at all for a scene of foxes.
+ *
+ * `time` is chosen per peep so a room full of the same idle clip does not read
+ * as a room of clones breathing in unison.
+ */
+export function Peep(props: PeepProps) {
+  return isSkinLook(props.model) ? <RiggedPeep {...props} /> : <AnimalPeep {...props} />
+}
+
+function AnimalPeep(props: PeepProps) {
+  const { scene, animations } = useGLTF(avatarUrl(props.model))
+  return <Body {...props} scene={scene} animations={animations} clipName={props.clip ?? 'idle'} />
+}
+
+function RiggedPeep(props: PeepProps) {
+  const { scene } = useGLTF(`/xp/packs/${props.model}.glb`)
+  const movement = useGLTF(RIGGED_CLIP_SOURCES[0])
+  const general = useGLTF(RIGGED_CLIP_SOURCES[1])
+  const animations = useMemo(
+    () => [...movement.animations, ...general.animations],
+    [movement.animations, general.animations],
+  )
+  return (
+    <Body
+      {...props}
+      scene={scene}
+      animations={animations}
+      clipName={RIGGED_CLIPS[props.clip ?? 'idle']}
+      scale={(props.scale ?? 1) * RIGGED_SCALE}
+    />
+  )
+}
+
+function Body({
+  scene,
+  animations,
+  clipName,
+  time = 0,
+  position,
+  rotation = 0,
+  tilt = 0,
+  scale = 1,
+  rim = null,
+  pose = null,
+  onPick,
+  onBody,
+  posing = false,
+}: Omit<PeepProps, 'model' | 'clip'> & {
+  scene: THREE.Object3D
+  animations: THREE.AnimationClip[]
+  /** The clip's name in `animations`, already translated per body kind. */
+  clipName: string
+}) {
   /**
    * The body and its mixer, which outlive any one pose.
    *
@@ -146,15 +268,40 @@ export function Peep({
    * play back, let alone capture. The clone is the expensive part and the pose
    * is not, so they are separated.
    */
-  const { object, mixer } = useMemo(() => {
-    const copy = scene.clone(true)
+  const { object, mixer, nodes } = useMemo(() => {
+    // `SkeletonUtils.clone` rather than `scene.clone(true)`: the rigged bodies
+    // are skinned, and a plain clone leaves their meshes bound to the cached
+    // original's skeleton - two knights in a shot would share one pose. On the
+    // unskinned peeps it does the same thing the plain clone did.
+    const copy = cloneSkinned(scene)
+    /**
+     * Every named node, indexed, with the quaternion it woke up with.
+     *
+     * The index is how a pose finds its bones; the rest rotations are how it
+     * lets go of them. A clip only rewrites the bones its own tracks drive, so
+     * a posed head on a clip that never tracks the head would otherwise stay
+     * tilted after the pose ends - putting everything back to rest before each
+     * sample keeps the drawn frame a function of the props, which is the rule
+     * this whole file exists to keep.
+     */
+    const nodes = new Map<
+      string,
+      { node: THREE.Object3D; rest: THREE.Quaternion; stood: THREE.Vector3 }
+    >()
     copy.traverse((node) => {
       if ((node as THREE.Mesh).isMesh) {
         node.castShadow = true
         node.receiveShadow = true
       }
+      if (node.name) {
+        nodes.set(node.name, {
+          node,
+          rest: node.quaternion.clone(),
+          stood: node.position.clone(),
+        })
+      }
     })
-    return { object: copy, mixer: new THREE.AnimationMixer(copy) }
+    return { object: copy, mixer: new THREE.AnimationMixer(copy), nodes }
   }, [scene])
 
   /**
@@ -253,11 +400,27 @@ export function Peep({
    * action still weighted.
    */
   useEffect(() => {
-    const track = animations.find((candidate) => candidate.name === clip)
+    const track = animations.find((candidate) => candidate.name === clipName)
     if (!track) return
     mixer.stopAllAction()
     mixer.clipAction(track).play()
-  }, [animations, clip, mixer])
+  }, [animations, clipName, mixer])
+
+  /**
+   * What the last authored pose touched, so letting go can be surgical.
+   *
+   * The obvious cleanup - put every bone back to rest before each sample - is
+   * wrong in a way three.js keeps to itself: `PropertyMixer.apply` only
+   * writes a bone when its *own* consecutive evaluations differ, so a mixer
+   * asked for the same instant twice writes nothing, and a reset made behind
+   * its back simply stays. It looked like the clip dying the moment a pose
+   * arrived, because the pose is a fresh object every sample and re-fired
+   * this effect at an unchanged time - and every re-fire left the body at
+   * bind. So nothing is reset wholesale; only bones the previous pose drove
+   * and the current one has let go of go back to rest, which is also what an
+   * unbaked bone means everywhere else.
+   */
+  const touched = useRef<ReadonlySet<string>>(new Set())
 
   /**
    * The pose. The whole animation system, for one moment.
@@ -265,10 +428,39 @@ export function Peep({
    * `setTime` from zero every time rather than `update(delta)`, so the pose is a
    * function of the argument and not of how many frames have been drawn - which
    * is what keeps a shot reproducible and what lets a scrubber jump backwards.
+   *
+   * Clip first, authored pose last - the same layering `actorAt` promises:
+   * the clip drives what its tracks name, and the pose overrides the bones
+   * *its* keys name over that. The root's translation comes with it, because
+   * a keyed jump has to leave the floor.
    */
+  // Handed over once, when the clone exists. The editor holds it for as long
+  // as this body is on screen; a new clone is a new body and a new handover.
   useEffect(() => {
+    onBody?.(object)
+  }, [object, onBody])
+
+  useEffect(() => {
+    // A hand on a handle owns the skeleton outright - see `posing`.
+    if (posing) return
+    const current = new Set(pose ? Object.keys(pose.bones) : [])
+    const rooted = nodes.get('root')
+    for (const name of touched.current) {
+      if (current.has(name)) continue
+      const found = nodes.get(name)
+      if (found) found.node.quaternion.copy(found.rest)
+    }
+    if (touched.current.size > 0 && !pose && rooted) rooted.node.position.copy(rooted.stood)
+    touched.current = current
+
     mixer.setTime(time)
-  }, [mixer, time, clip])
+    if (!pose) return
+    for (const [name, quat] of Object.entries(pose.bones)) {
+      const found = nodes.get(name)
+      if (found) found.node.quaternion.set(quat[0], quat[1], quat[2], quat[3])
+    }
+    if (rooted) rooted.node.position.set(pose.root[0], pose.root[1], pose.root[2])
+  }, [mixer, nodes, time, clipName, pose, posing])
 
   // Releases the mixer's hold on the clone's tracks when the peep goes away.
   useEffect(
@@ -279,7 +471,27 @@ export function Peep({
   )
 
   return (
-    <group position={position} rotation={[0, rotation, 0]}>
+    <group
+      position={position}
+      rotation={[0, rotation, 0]}
+      /*
+        Selectable only where somebody asked for it.
+
+        Without `onPick` this is the same inert body it always was, which is
+        what every drawn still needs - a mesh that ate clicks would be a mesh
+        the camera cannot be orbited through. `stopPropagation` keeps the click
+        off whatever is behind, so picking the near peep in a crowd picks the
+        near one.
+      */
+      onClick={
+        onPick
+          ? (event) => {
+              event.stopPropagation()
+              onPick()
+            }
+          : undefined
+      }
+    >
       {/* The pivot is the feet, so a lean tips the animal over its toes rather
           than about its middle - which is the difference between a lunge and a
           model that sinks into the floor. */}
@@ -631,24 +843,162 @@ export function Backdrop({ image, aspect }: { image: string | null; aspect: numb
   return null
 }
 
-/** One bb10 block, in a world cell. */
+/**
+ * One block in a world cell - or one model out of the wider catalogue.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the same component draws both
+ * ---------------------------------------------------------------------------
+ * A still names what stands in it by id, and there was only ever one kind of id
+ * here: a palette block, at bb10's two-units-to-the-cell. The catalogue the
+ * builder builds worlds out of is 1,394 models on the same grid, and none of
+ * them could be put in a shot - not because a shot could not draw one, but
+ * because this function only knew how to turn a name into one URL.
+ *
+ * So the *name* decides, and everything downstream is unchanged: the studio's
+ * block list, its animation track, the URL the scene lives in and the recorder
+ * all still see a string and a position. A parallel `props` list would have
+ * needed its own codec, its own timeline and its own panel to arrive at the
+ * same picture.
+ *
+ * The two differ in exactly two facts, and both come from the pack table rather
+ * than from a branch here: how many units make a cell (`scale`), and how far
+ * the model's own origin sits above the cell floor (`lift`).
+ */
 export function Block({
   model,
   position,
   rotation = 0,
+  time = 0,
+  size = 1,
+  pitch = 0,
+  roll = 0,
+  tint = null,
+  onPick,
 }: {
   model: string
   position: Vec3
   rotation?: number
+  /** Seconds into whatever clip the model carries. See below. */
+  time?: number
+  /** Multiplier on the pack's own scale. See `BlockSpec.scale`. */
+  size?: number
+  /** The other two axes, in radians. See `BlockSpec.pitch`. */
+  pitch?: number
+  roll?: number
+  /** A colour multiplied over the model, or nothing for its own. */
+  tint?: string | null
+  /** Clicking the prop itself. See the same prop on `<Peep>`. */
+  onPick?: () => void
 }) {
-  const object = useModel(blockUrl(model))
+  // `drawingOf` answers for the catalogue and returns null for a palette block,
+  // which is what keeps the 58 drawing exactly as they always have.
+  const drawing = drawingOf(model)
+  const object = useModel(drawing ? modelUrlFor(model) : blockUrl(model))
   // Repainted rather than given a `material` prop: this is a cloned glTF and
   // the meshes inside it already have their own. The clone is ours, so the
   // hook swaps them and puts them back on the way out.
   useRainbowSkin(object, useRainbowFor(model))
 
+  /**
+   * The tint, multiplied into the clone's own materials.
+   *
+   * ---------------------------------------------------------------------------
+   * Why the materials are cloned before they are touched
+   * ---------------------------------------------------------------------------
+   * `useModel` clones the *scene graph*, which is what stops two crates sharing
+   * a transform - but three.js shares the materials across that clone by
+   * design, because that is normally exactly what you want. It is not what you
+   * want here: writing a colour onto a shared material tints every other block
+   * drawn from the same glTF, including ones in a different scene, and the last
+   * one to render wins. So a tinted block gets materials of its own.
+   *
+   * Both channels again, and for the reason the pack's own tinted variants give
+   * at length: `color` is what the room's lights land on and `emissive` is what
+   * the model makes by itself, so tinting one gives something that changes
+   * colour when the lights go out.
+   */
+  useEffect(() => {
+    if (!tint) return
+    const colour = new THREE.Color(tint)
+    const swapped: { mesh: THREE.Mesh; original: THREE.Material | THREE.Material[] }[] = []
+
+    object.traverse((node) => {
+      const mesh = node as THREE.Mesh
+      if (!mesh.isMesh) return
+      const original = mesh.material
+      const paint = (material: THREE.Material): THREE.Material => {
+        const copy = material.clone()
+        const lit = copy as THREE.MeshStandardMaterial
+        if (lit.color) lit.color.multiply(colour)
+        if (lit.emissive) lit.emissive.multiply(colour)
+        return copy
+      }
+      mesh.material = Array.isArray(original) ? original.map(paint) : paint(original)
+      swapped.push({ mesh, original })
+    })
+
+    return () => {
+      for (const { mesh, original } of swapped) {
+        const made = mesh.material
+        mesh.material = original
+        // The clones are ours and nothing else can be holding them.
+        if (Array.isArray(made)) made.forEach((one) => one.dispose())
+        else made.dispose()
+      }
+    }
+  }, [object, tint])
+
+  /**
+   * Whatever the model brought with it, posed at `time`.
+   *
+   * Posed, not played: see the note at the top of this file. A clip driven by
+   * the frame loop would make the same scene export different pixels on every
+   * run and would draw nothing at all under a headless driver, which is the one
+   * thing every piece in here is arranged to avoid. `time` is the shot's own
+   * clock, so a galaxy is at the same point in its turn in the viewport, in the
+   * scrubber and in frame 400 of the recording.
+   *
+   * A palette block carries no clips and none of this runs for one.
+   */
+  const clips = useGLTF(drawing ? modelUrlFor(model) : blockUrl(model)).animations
+  const mixer = useMemo(
+    () => (clips.length > 0 ? new THREE.AnimationMixer(object) : null),
+    [object, clips.length],
+  )
+
+  useEffect(() => {
+    if (!mixer) return
+    // The one it stands in, not the one it arrives with: `plop` is a spawn and
+    // looping it would make the thing pulse for the whole shot.
+    const standing = clips.find((clip) => clip.name === 'spin' || clip.name === 'idle') ?? clips[0]
+    const action = mixer.clipAction(standing)
+    action.play()
+    // `setTime` rather than `update`: absolute, so a scrubber dragged backwards
+    // lands on the same pose it showed on the way forward.
+    mixer.setTime(time)
+    return () => {
+      action.stop()
+      mixer.uncacheAction(standing)
+    }
+  }, [mixer, clips, time])
+
   return (
-    <group position={position} rotation={[0, rotation, 0]} scale={BLOCK_SCALE}>
+    <group
+      position={
+        drawing ? [position[0], position[1] + drawing.lift, position[2]] : position
+      }
+      rotation={[pitch, rotation, roll]}
+      scale={(drawing ? drawing.scale : BLOCK_SCALE) * size}
+      onClick={
+        onPick
+          ? (event) => {
+              event.stopPropagation()
+              onPick()
+            }
+          : undefined
+      }
+    >
       <primitive object={object} />
     </group>
   )

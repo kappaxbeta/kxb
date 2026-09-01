@@ -1,6 +1,11 @@
+import { ContentQueue } from '@/app/ovaloffice/reports/content-queue'
 import { MessageQueue } from '@/app/ovaloffice/reports/message-queue'
 import { ReportQueue } from '@/app/ovaloffice/reports/report-queue'
-import { listMessageReports, listWorldReports } from '@/domain/moderation/queries'
+import {
+  listContentReports,
+  listMessageReports,
+  listWorldReports,
+} from '@/domain/moderation/queries'
 import { requireBackofficeSection } from '@/lib/backoffice'
 
 export const dynamic = 'force-dynamic'
@@ -29,9 +34,10 @@ export default async function ReportsPage({
   const filter =
     status === 'upheld' || status === 'dismissed' || status === 'all' ? status : 'open'
 
-  const [reports, messages] = await Promise.all([
+  const [reports, messages, content] = await Promise.all([
     listWorldReports(admin, filter),
     listMessageReports(admin, filter),
+    listContentReports(admin, filter),
   ])
 
   return (
@@ -61,6 +67,19 @@ export default async function ReportsPage({
             and this queue reads the same value. Two filter strips on one page
             that set the same parameter would be two controls for one setting. */}
         <MessageQueue reports={messages} />
+      </section>
+
+      <section className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold">Reported blueprints, clips, XPs and movies</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Taking something down removes it from every shelf and store it was on.
+            It stays where it is and the person who made it keeps it &mdash; what
+            they see is that nobody else can.
+          </p>
+        </div>
+
+        <ContentQueue reports={content} />
       </section>
     </div>
   )

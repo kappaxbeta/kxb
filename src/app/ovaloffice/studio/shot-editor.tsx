@@ -2,10 +2,11 @@
 
 import { OrbitControls } from '@react-three/drei'
 import { Canvas, useFrame, useStore, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import {
   Diamond,
+  Film,
   Gamepad2,
   ImageDown,
   Link2,
@@ -20,16 +21,24 @@ import {
 import { EmoteSwatch, Stick } from '@/app/ovaloffice/studio/parts'
 import { intentFromKeys, isTyping, useKeys } from '@/app/ovaloffice/studio/drive'
 import { canRecord, captureNote, FFMPEG_HINT, record } from '@/app/ovaloffice/studio/record'
+import { captureAlpha, type AlphaFormat } from '@/app/ovaloffice/studio/frames'
 import { SavePanel } from '@/app/ovaloffice/studio/save-panel'
 import type { ImportableWorld } from '@/app/ovaloffice/studio/world-picker'
 import { Backdrop } from '@/app/world/shots/pieces'
-import { SceneStage } from '@/app/ovaloffice/studio/scene-stage'
+import {
+  type BlueprintChoice,
+  SceneStage,
+  type ScenePosing,
+} from '@/app/ovaloffice/studio/scene-stage'
+import type { RigHandle } from '@/app/ovaloffice/animator/posing'
+import type { BlueprintSpec } from '@/domain/thingiverse/blueprint'
+import { emptyDoc, type Pose, putKey, snapTime } from '@/domain/animator/clip'
 import { ShotControls } from '@/app/ovaloffice/studio/shot-controls'
 import { Voice } from '@/app/ovaloffice/studio/speak'
 import { type Selected, Timeline } from '@/app/ovaloffice/studio/timeline'
 import type { SceneScope } from '@/domain/scenes/actions'
 import { encodeScene, type PeepSpec, type StudioScene, type Vec3 } from '@/domain/studio/scene'
-import { type Action, jumpLength, talkDuration } from '@/domain/studio/action'
+import { type Action, jumpLength, ordered, talkDuration } from '@/domain/studio/action'
 import {
   applyTake,
   type Intent,
@@ -98,14 +107,33 @@ interface Parts {
  */
 const DRAFT_KEY = 'studio:shot'
 
+/**
+ * How long a pose beat is when the editor lays one down for you, in seconds.
+ *
+ * Long enough to see the pose land and short enough not to swallow whatever
+ * comes after it. The clip's own length grows with the keys anyway - `putKey`
+ * lengthens rather than refuses - and the beat is draggable like any other.
+ */
+const POSE_BEAT = 2
+
 export function ShotEditor({
   initial,
   scene,
   worlds = [],
+  blueprints = [],
 }: {
   initial: ShotSpec
   /** Worlds that can be pulled in as a set, same list the picture studio offers. */
   worlds?: ImportableWorld[]
+  /**
+   * The things this space has on its shelf, for props that are blueprints.
+   *
+   * Empty in the backoffice, which is not a space and has no shelf - the
+   * picker simply does not appear. Passing the whole spec rather than a name
+   * and an id is what lets the stage draw one without a fetch of its own; see
+   * `SceneStage.blueprints`.
+   */
+  blueprints?: BlueprintChoice[]
   /**
    * Where a save goes, and where the row it may already be is.
    *
@@ -164,6 +192,42 @@ export function ShotEditor({
    * else changed.
    */
   const [driving, setDriving] = useState<number | null>(null)
+
+  /**
+   * A picture behind the shot that never leaves this tab.
+   *
+   * Deliberately *not* on the document. `background.image` is a path on this
+   * origin and travels in the URL, which is what makes a shot a link somebody
+   * else can open - a picture off the desktop has no such path, and a data URL
+   * of one would be a megabyte of base64 in an address bar and a megabyte
+   * stored on the server the moment the shot is saved. Asked for as a picture
+   * you can include "but not save on server".
+   *
+   * So it lives here, as an object URL: it draws, it records into the export,
+   * and it is gone when the tab is. The panel says so.
+   */
+  const [localImage, setLocalImage] = useState<{ url: string; name: string } | null>(null)
+
+  // Object URLs are a handle on a blob the browser holds for us; letting the
+  // last one go is what stops a session of trying pictures leaking all of them.
+  useEffect(() => {
+    const url = localImage?.url
+    return () => {
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [localImage])
+
+  /**
+   * Which actor has handles on its bones, and which bone is lit.
+   *
+   * An index for the reason `driving` is one. The rig beside it is the *live*
+   * body the stage is drawing - the panel's sliders and the viewport's handles
+   * write to the same quaternions, which is what makes the two agree without
+   * either owning the other.
+   */
+  const [posing, setPosing] = useState<number | null>(null)
+  const [bone, setBone] = useState<string | null>(null)
+  const [rig, setRig] = useState<RigHandle | null>(null)
 
   /**
    * What has been performed so far.
@@ -503,6 +567,71 @@ export function ShotEditor({
     setNote(`take kept — ${(finished.end - finished.start).toFixed(1)}s performed`)
   }
 
+  /**
+   * A pose, keyed onto the actor at the playhead.
+   *
+   * Where a drag in the viewport and a slider in the panel both end up. Three
+   * things happen at once, and all three are what makes the pose you just made
+   * the pose the shot plays:
+   *
+   *  - the actor gets a clip if it had none, starting at this instant;
+   *  - the pose becomes a key on it, at the playhead;
+   *  - a `pose` action is laid down if none covers the playhead, because a clip
+   *    nothing plays is a clip you cannot see. Posing a body and watching it
+   *    snap back to its walk is the whole reason this exists.
+   *
+   * The key's time is measured from where the covering beat *starts*, since
+   * that is the clock `actorAt` samples the clip against.
+   */
+  const keyPose = useCallback(
+    (index: number, pose: Pose) => {
+      const at = Math.round((clock.current?.now() ?? 0) * 100) / 100
+      setShot((current) => {
+        const actor = current.cast[index]
+        if (!actor) return current
+
+        const covering = actor.actions.find(
+          (action) => action.kind === 'pose' && at >= action.t && at <= action.t + action.duration,
+        )
+        const beat = covering ?? { kind: 'pose' as const, t: at, duration: POSE_BEAT }
+        const into = snapTime(Math.max(0, at - beat.t), actor.pose?.fps ?? 24)
+
+        const doc = actor.pose ?? { ...emptyDoc(pose, 'pose'), duration: POSE_BEAT }
+        return {
+          ...current,
+          cast: current.cast.map((one, i) =>
+            i === index
+              ? {
+                  ...one,
+                  pose: putKey(doc, into, pose),
+                  actions: covering ? one.actions : ordered([...one.actions, beat]),
+                }
+              : one,
+          ),
+        }
+      })
+    },
+    [],
+  )
+
+  /**
+   * Picking a body by clicking it.
+   *
+   * The timeline and the cast list were the only ways in, and both ask you to
+   * find a row for something you are already looking at. Selecting here is
+   * exactly what selecting there does - the panel follows the selection - so
+   * this writes the same state and nothing else has to know where a click came
+   * from.
+   */
+  const pick = useCallback((index: number) => {
+    setSelected({ node: { kind: 'peep', index }, action: null })
+  }, [])
+
+  /** The same, for a prop. Blocks are keyframeable nodes like any other. */
+  const pickBlock = useCallback((index: number) => {
+    setSelected({ node: { kind: 'block', index }, action: null })
+  }, [])
+
   /** Something discrete, at the moment it was pressed. */
   const perform = useCallback((build: (t: number) => Action) => {
     const at = Math.round((clock.current?.now() ?? 0) * 100) / 100
@@ -543,7 +672,131 @@ export function ShotEditor({
     return () => window.removeEventListener('keydown', down)
   }, [driving, perform])
 
+  /**
+   * Roll again, with a hole in it.
+   *
+   * The same take as `shoot` and deliberately not folded into it, because the
+   * two differ in every step that matters: this one drives the clock frame by
+   * frame rather than in real time, reads the canvas itself rather than handing
+   * it to a recorder, and has no audio track to keep in sync - a picture format
+   * cannot carry one. See `captureAlpha`.
+   *
+   * What is shared is the resize dance around it, which is the same problem the
+   * still export and the recorder both have: the viewport is whatever size the
+   * panel left it, and the export is whatever the output fields say.
+   */
+  const shootAlpha = async (format: AlphaFormat) => {
+    const parts = gpu.current
+    if (!parts) return
+    const { gl, scene, camera, canvas } = parts
+
+    setPlaying(false)
+    setNote(null)
+    setWarning(false)
+    setProgress(0)
+
+    const previousSize = { x: gl.domElement.width, y: gl.domElement.height }
+    const previousRatio = gl.getPixelRatio()
+    const previousAspect = camera.aspect
+    const previousBackground = scene.background
+
+    gl.setPixelRatio(1)
+    gl.setSize(shot.width, shot.height, false)
+    camera.aspect = shot.width / shot.height
+    camera.updateProjectionMatrix()
+    gl.setClearAlpha(0)
+
+    try {
+      const capture = await captureAlpha(canvas, format, {
+        fps: shot.fps,
+        duration: shot.duration,
+        width: shot.width,
+        height: shot.height,
+        render: (t) => {
+          /*
+            The backdrop is taken off every frame, not once before the take.
+
+            `<color attach="background">` re-installs itself whenever that
+            element renders, and this export renders it plenty: `setProgress`
+            is React state, so every frame of the capture is a re-render of the
+            editor. Clearing it once at the top produced an animation that was
+            transparent for its first frame and painted for all the rest.
+          */
+          scene.background = null
+          clock.current?.seek(t)
+        },
+        onProgress: setProgress,
+      })
+
+      const url = URL.createObjectURL(capture.blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${name || 'shot'}.${capture.extension}`
+      link.click()
+      // Revoked on a timer rather than immediately, for the reason the recorder
+      // gives: the click is handled asynchronously, and pulling the blob out
+      // from under it cancels the save on some builds.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+
+      const size = Math.round(capture.blob.size / 1024)
+      setNote(
+        `${name || 'shot'}.${capture.extension} — ${capture.frames} frames, ${size} kB, ` +
+          'transparent',
+      )
+    } catch (error) {
+      setWarning(true)
+      setNote(error instanceof Error ? error.message : 'The export failed.')
+    } finally {
+      scene.background = previousBackground
+      gl.setClearAlpha(1)
+      gl.setPixelRatio(previousRatio)
+      gl.setSize(previousSize.x / previousRatio, previousSize.y / previousRatio, false)
+      camera.aspect = previousAspect
+      camera.updateProjectionMatrix()
+      setProgress(null)
+      seek(0)
+    }
+  }
+
   const recording = progress !== null
+
+  /**
+   * What the stage needs to put handles on a body, or nothing.
+   *
+   * Undefined while a take is being driven or recorded: both own the cast for
+   * the length of the take, and a hand on a bone during either is two things
+   * writing one body.
+   */
+  /**
+   * The shelf, by id, for the stage to resolve a prop's reference against.
+   *
+   * A map rather than the list, because the stage asks per prop and a linear
+   * scan per block per frame is the kind of thing that is fine until somebody
+   * puts forty crates in a shot.
+   */
+  const byId = useMemo(
+    () => Object.fromEntries(blueprints.map((one) => [one.id, one.spec])),
+    [blueprints],
+  )
+
+  const scenePosing: ScenePosing | undefined =
+    driving === null && !recording
+      ? {
+          onPick: pick,
+          onPickBlock: pickBlock,
+          index: posing,
+          bone,
+          onBone: setBone,
+          onRig: setRig,
+          onPose: (pose) => {
+            if (posing !== null) keyPose(posing, pose)
+          },
+          // The camera has the left button in free look, so handles let go of
+          // it - otherwise every attempt to orbit grabs whatever dot is under
+          // the pointer.
+          grabbable: !free,
+        }
+      : undefined
 
   return (
     // Two columns from `md`, not `lg`. A tablet in landscape is 1024 wide and
@@ -559,7 +812,32 @@ export function ShotEditor({
             'md:grid-cols-[minmax(0,1fr)_2.75rem]'
       }`}
     >
-      <div className="flex min-w-0 flex-col gap-3">
+      {/*
+        `contents` on a phone, a column from `md`.
+
+        This is what actually makes the viewport stay put. A sticky element can
+        only travel inside its own parent's box, and this column's box ends at
+        the timeline - so scrolling on to the panel below, which is the *next
+        grid item* rather than a sibling in here, pushed the picture off the
+        top. Reported as the canvas not staying fixed on mobile, and it was
+        sticky the whole time.
+
+        `display: contents` removes this box without moving anything: the
+        viewport and the timeline become grid items of the editor itself, whose
+        box runs the full height of the page - panel included - so the sticky
+        viewport has that whole run to stay pinned across. From `md` the panel
+        is beside the picture, nothing needs pinning, and the column comes back.
+
+        This was reverted once on the strength of a canvas measured at 300x150 -
+        the unsized default - which looked like `contents` collapsing the box.
+        It was not: 300x150 is what you read whenever you measure before layout
+        settles, and the same number turns up under the plain column too. Held
+        against an isolated repro that waits properly, the two layouts size the
+        canvas identically at both widths (388x217 and 1080x608) and only this
+        one keeps the picture on screen. Measure after a real wait before
+        believing this is at fault again.
+      */}
+      <div className="contents md:flex md:min-w-0 md:flex-col md:gap-3">
         {/*
           Stuck to the top on a narrow screen, and only there.
           A phone stacks the viewport, the timeline and several hundred inputs
@@ -587,9 +865,24 @@ export function ShotEditor({
           <Canvas
             shadows="percentage"
             dpr={[1, 2]}
-            // Opaque, unlike the still studio's canvas. Video has no alpha
-            // channel, and a transparent canvas records as black.
-            gl={{ preserveDrawingBuffer: true, alpha: false, antialias: true }}
+            /*
+              An alpha channel, and an opaque picture anyway.
+
+              It was `alpha: false`, because video has none and a see-through
+              canvas records as black. That is still true of the WebM - and it
+              is not the whole of what leaves this studio any more: the
+              transparent exports read the canvas themselves, and a context
+              made without an alpha channel has no transparency to read no
+              matter what is cleared to.
+
+              Nothing about the recording changes. The shot always has a
+              backdrop - a colour when it has no picture, see below - so every
+              pixel of every frame is painted by the scene rather than left to
+              the clear, and the clear alpha is put to one on creation for the
+              corner where it is not.
+            */
+            gl={{ preserveDrawingBuffer: true, alpha: true, antialias: true }}
+            onCreated={({ gl }) => gl.setClearAlpha(1)}
             camera={{
               position: initial.camera[0].position,
               fov: initial.camera[0].fov,
@@ -600,10 +893,16 @@ export function ShotEditor({
             {/* One or the other, never both: `attach` re-installs the colour
                 on every render, and would blank the texture the backdrop just
                 put there. */}
-            {shot.background.image === null && (
+            {shot.background.image === null && localImage === null && (
               <color attach="background" args={[shot.background.colour]} />
             )}
-            <Backdrop image={shot.background.image} aspect={shot.width / shot.height} />
+            {/* The local picture wins while there is one: it is the thing
+                somebody just chose, and the document's own backdrop is still
+                there underneath when they clear it. */}
+            <Backdrop
+              image={localImage?.url ?? shot.background.image}
+              aspect={shot.width / shot.height}
+            />
             <Bridge partsRef={gpu} />
             <OrbitControls
               makeDefault
@@ -650,6 +949,8 @@ export function ShotEditor({
             <Playhead
               shot={shot}
               driving={driving}
+              posing={scenePosing}
+              blueprints={byId}
               keysRef={keys}
               stickRef={stick}
               takeRef={take}
@@ -871,6 +1172,39 @@ export function ShotEditor({
             <ImageDown className="size-4" aria-hidden />
             This frame as a still
           </a>
+
+          {/*
+            The two transparent exports, beside the video rather than behind a
+            mode switch.
+
+            They are a different *kind* of output, not a setting on this one: a
+            WebM is a master to re-encode and put on a timeline, and these are
+            finished pictures to drop straight into a page. Nothing about the
+            shot changes between them, so making somebody set a format first and
+            press record second would be a mode with one honest use.
+
+            WebP first because it is the one to use - real alpha, every colour,
+            a fraction of the bytes. The GIF is the copy for everywhere that
+            still cannot read one. See `captureAlpha`.
+          */}
+          <button
+            type="button"
+            onClick={() => shootAlpha('webp')}
+            disabled={!ready || recording}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm transition hover:bg-secondary disabled:opacity-40"
+          >
+            <Film className="size-4" aria-hidden />
+            Transparent WebP
+          </button>
+          <button
+            type="button"
+            onClick={() => shootAlpha('gif')}
+            disabled={!ready || recording}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
+          >
+            <Film className="size-4" aria-hidden />
+            Transparent GIF
+          </button>
         </div>
 
         {note && (
@@ -945,7 +1279,25 @@ export function ShotEditor({
           selected={selected}
           onSelect={setSelected}
           onDrive={driving === null && ready && !recording ? drive : undefined}
+          localImage={localImage}
+          onLocalImage={setLocalImage}
+          posing={posing}
+          onPosing={(index) => {
+            setPosing(index)
+            // A bone lit on the body you have just stopped posing is a panel
+            // showing sliders for something with no handles on it.
+            if (index === null) setBone(null)
+          }}
+          poseRig={{
+            rig,
+            bone,
+            onBone: setBone,
+            onPose: (pose) => {
+              if (posing !== null) keyPose(posing, pose)
+            },
+          }}
           worlds={worlds}
+          blueprints={blueprints}
         />
           </>
         )}
@@ -968,6 +1320,8 @@ function Playhead({
   playing,
   free,
   driving,
+  posing,
+  blueprints,
   keysRef,
   stickRef,
   takeRef,
@@ -975,6 +1329,10 @@ function Playhead({
   onEnd,
   onReady,
 }: {
+  /** Handed straight through to the stage - see `ScenePosing`. */
+  posing?: ScenePosing
+  /** Likewise: resolved specs for props that name one. */
+  blueprints?: Readonly<Record<string, BlueprintSpec>>
   shot: ShotSpec
   playing: boolean
   /** The author is orbiting, so the shot's framing is not applied. */
@@ -1115,7 +1473,7 @@ function Playhead({
   return (
     <>
       <Lens framing={scene.camera} active={!free} />
-      <SceneStage scene={scene} onReady={onReady} />
+      <SceneStage scene={scene} onReady={onReady} posing={posing} blueprints={blueprints} />
     </>
   )
 }

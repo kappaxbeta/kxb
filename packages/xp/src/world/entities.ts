@@ -42,7 +42,7 @@ import {
   type Turn,
 } from '../document/blueprints'
 import type { Blocker } from './physics'
-import type { EntitySpec, XpDocument } from '../document/format'
+import { PLAYER_LOOKS, type EntitySpec, type XpDocument } from '../document/format'
 
 export type EntityId = number
 
@@ -1024,6 +1024,18 @@ export function bodiesFor(
    * and one mannequin among them reads as broken rather than as unset.
    */
   const wears = document.player.wears ?? 'dummy'
+
+  /**
+   * The level casting everybody itself, before anybody's profile is consulted.
+   *
+   * `wears` is a model id when it is none of the names - see `PlayerLook`. It
+   * is the strongest of the answers because it is the only one the *author*
+   * gave: a level that says everybody is a Knight is not asking a question.
+   */
+  if (!(PLAYER_LOOKS as readonly string[]).includes(wears)) {
+    return withBody(document, wears)
+  }
+
   /**
    * A bought skin is already a full address, so it skips the peepz mapping.
    * The shape test is deliberately local, like `PEEPZ` below: reaching into
@@ -1031,23 +1043,57 @@ export function bodiesFor(
    * refuses, and a skin id that stopped resolving degrades in the renderer
    * exactly the way any unknown model always has.
    *
-   * Worn under `dummy` as well as under `profile`, and that is the whole of
-   * why a bought skin shows up in a level at all. `wears: 'dummy'` is not a
-   * creator saying "everybody is the mannequin" - the parser stores the
+   * Worn under `dummy` as well as under `profile` and `choose`, and that is the
+   * whole of why a bought skin shows up in a level at all. `wears: 'dummy'` is
+   * not a creator saying "everybody is the mannequin" - the parser stores the
    * default *as* absence, so it is what every level that never thought about
    * the question says. The dummy is what a player is before they are anybody,
-   * and a skin is exactly the thing that replaces it.
+   * and an XP body is exactly the thing that replaces it.
    *
    * `random` is left out on purpose: a level that asked for a room full of
    * animals is a level that decided, and one Knight among the foxes is the
    * personal choice overriding the creator's that the note below refuses.
+   *
+   * `peep` is left out for the sharper version of the same reason. It is the
+   * level saying *animals only*, so a look that arrived as a skin - a peer who
+   * is in XP mode, a host that resolved before this rule existed - is not worn
+   * here. The animal underneath is what it falls through to.
    */
   const skin =
-    wears !== 'random' && avatar && QUALIFIED_MODEL.test(avatar) ? avatar : null
-  const chosen =
-    !skin && wears === 'profile' && avatar && PEEPZ.has(avatar)
+    wears !== 'random' && wears !== 'peep' && avatar && QUALIFIED_MODEL.test(avatar)
       ? avatar
-      : !skin && (wears === 'profile' || wears === 'random')
+      : null
+
+  /**
+   * And an animal, for the values that ask for one.
+   *
+   * `xp` is absent from this list on purpose and it is the mirror of `peep`
+   * above: a level that asked for XP bodies gets the dummy from somebody who
+   * has not got one, rather than quietly promoting their animal into the role.
+   * The dummy is what a player is before they are anybody, and being nobody is
+   * the honest answer there.
+   */
+  const wantsAnimal = wears === 'profile' || wears === 'random' || wears === 'peep'
+  /**
+   * Which of them wear an animal they are *handed*, rather than rolling one.
+   *
+   * `random` is the one that does not, and that is its whole definition: an
+   * animal per player *whatever their profile says*, so honouring the handed
+   * one would quietly turn it into "their animal, unless they have none".
+   * `choose` is the mirror - it wears what it is handed and never invents,
+   * because somebody who has chosen nothing choosing the dummy is a choice.
+   *
+   * The difference from `profile` is the whole of what "let them choose" means:
+   * somebody who chose an animal is that animal, somebody who chose an XP body
+   * is that body, and somebody who has chosen nothing is the dummy - which is
+   * a choice too, and the one every player starts from. Rolling a fox for them
+   * would be the level choosing after all.
+   */
+  const takesAnimal = wears === 'profile' || wears === 'peep' || wears === 'choose'
+  const chosen =
+    !skin && takesAnimal && avatar && PEEPZ.has(avatar)
+      ? avatar
+      : !skin && wantsAnimal
         ? animalFor(who ?? '')
         : null
   const peep = skin ?? (chosen ? `peepz/${chosen}` : null)
@@ -1061,6 +1107,18 @@ export function bodiesFor(
    * an opinion about which animal is doing it - so the model is swapped and the
    * rest is left exactly as the document wrote it.
    */
+  return withBody(document, peep)
+}
+
+/**
+ * The document's blueprints with one model swapped in, wherever the body is.
+ *
+ * The tail every branch of `bodiesFor` ends in, named because the level-casts-
+ * everybody case reaches it without asking anybody's profile first. `null` is
+ * "nothing to swap", which lands on the dummy or leaves a named blueprint
+ * exactly as it was written.
+ */
+function withBody(document: XpDocument, peep: string | null): Record<string, Blueprint> {
   if (document.player.blueprint) {
     const named = document.blueprints[document.player.blueprint]
     if (!peep || !named) return { ...document.blueprints }

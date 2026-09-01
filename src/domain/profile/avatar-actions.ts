@@ -1,7 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { DEFAULT_AVATAR, DUMMY_LOOK } from '@/domain/lounge/avatars'
 import { chooseAvatarSchema } from '@/domain/profile/avatar-commands'
+import { wearAvatar } from '@/domain/profile/looks'
 import { createClient } from '@/lib/supabase/server'
 import { requireTenant } from '@/lib/tenant'
 
@@ -35,48 +37,10 @@ export async function chooseAvatar(model: string): Promise<AvatarResult> {
 
   if (!user) return { ok: false, error: 'Sign in to choose an animal.' }
 
-  /**
-   * Upsert, so first choice and tenth are the same call.
-   *
-   * There is no "create" path to get wrong, and two tabs racing land on the same
-   * primary key - the later write wins rather than one of them failing, which is
-   * the right outcome for a preference. The old aggregate resolved that race
-   * through optimistic concurrency and an error message; there is nothing here
-   * worth making somebody retry for.
-   */
-  const { error } = await supabase.from('profile_avatars').upsert(
-    {
-      user_id: user.id,
-      model: parsed.data.model,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  )
-
-  if (error) {
-    return { ok: false, error: 'That change did not save. Try again.' }
-  }
-
-  /**
-   * And any space that was quietly overruling it.
-   *
-   * `readAvatarHere` prefers a space's row over the profile, so a profile
-   * changed while an override existed changed *nothing you could see* in that
-   * space - you picked a fox, walked into the room you play in, and were still
-   * the penguin. Two values, one of them invisible.
-   *
-   * Cleared rather than rewritten to the new animal, and the difference matters
-   * if you later want one space to be different: an override means "here, be
-   * this instead", and the honest way to make a new profile animal show up
-   * everywhere is for there to be no instead. Setting them all would leave rows
-   * saying "here, be exactly what you already are", which is a thing nobody
-   * asked for and everybody would have to un-ask later.
-   *
-   * A failure here is not worth failing the call over: the profile is saved,
-   * which is what was asked for, and the worst case is one space still showing
-   * an animal its owner can change from inside it.
-   */
-  await supabase.from('space_avatars').delete().eq('user_id', user.id)
+  // The write itself, including the dummy coming off and any space override
+  // being cleared, is in `./looks.ts` - the phone makes the identical one.
+  const result = await wearAvatar(supabase, user.id, parsed.data.model)
+  if (!result.ok) return result
 
   /**
    * Every page that draws you, not just the one the form is on.
@@ -89,6 +53,64 @@ export async function chooseAvatar(model: string): Promise<AvatarResult> {
   revalidatePath('/', 'layout')
 
   return { ok: true, model: parsed.data.model }
+}
+
+/**
+ * Stand in the dummy instead of your animal, or take it off again.
+ *
+ * The third body, and the only one that is nobody: the plain mannequin every
+ * player is in the games before they own a skin, and the one a visitor with no
+ * account already stands in. It could not be chosen from inside a room before
+ * this, which meant putting an animal on was a door that locked behind you.
+ *
+ * Here rather than beside `wearLoungeSkin` because the dummy is not a skin and
+ * cannot be stored as one - `profile_skins` refuses a model you do not own, and
+ * nobody owns this. It is a second answer to the question `profile_avatars`
+ * already asks, so it is written where that answer lives.
+ *
+ * Taking it off restores the animal on the row, which is why the flag is a flag
+ * rather than a value in `model`: the peep you had is still there underneath.
+ * A person who has never chosen an animal has no row at all, so wearing the
+ * dummy writes one at the default - the animal they would have had anyway.
+ */
+export async function wearDummy(wear: boolean): Promise<AvatarResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return { ok: false, error: 'Sign in to change your body.' }
+
+  const stamp = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('profile_avatars')
+    .update({ as_dummy: wear, updated_at: stamp })
+    .eq('user_id', user.id)
+    .select('model')
+    .maybeSingle()
+
+  if (error) return { ok: false, error: 'That change did not save. Try again.' }
+
+  /**
+   * Nothing to update means no row yet, which is the common case for somebody
+   * who has never picked an animal - and picking the dummy first is exactly
+   * what somebody who does not want an animal would do. Inserting at the
+   * default keeps "take the dummy off" meaning something afterwards.
+   *
+   * Not written when taking it off: no row already means no dummy.
+   */
+  if (!data && wear) {
+    const { error: insert } = await supabase
+      .from('profile_avatars')
+      .insert({ user_id: user.id, model: DEFAULT_AVATAR, as_dummy: true, updated_at: stamp })
+
+    if (insert) return { ok: false, error: 'That change did not save. Try again.' }
+  }
+
+  // Every page that draws you, for the reason `chooseAvatar` gives above.
+  revalidatePath('/', 'layout')
+
+  return { ok: true, model: wear ? DUMMY_LOOK : (data?.model ?? DEFAULT_AVATAR) }
 }
 
 /**

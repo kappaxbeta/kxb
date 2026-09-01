@@ -37,6 +37,7 @@ export type IconName =
   | 'garden'
   | 'world'
   | 'studio'
+  | 'thing'
   | 'streak'
   | 'fold'
   | 'unfold'
@@ -47,6 +48,11 @@ export type IconName =
   | 'switch'
   | 'signOut'
   | 'close'
+  | 'edit'
+  | 'copy'
+  | 'copied'
+  | 'code'
+  | 'revoke'
 
 export function Icon({ name }: { name: IconName }) {
   return ICONS[name]
@@ -166,6 +172,23 @@ const ICONS: Record<IconName, React.ReactElement> = {
    * row is a place you go, not a state, so it stays an outline like its
    * neighbours.
    */
+  /**
+   * A crate on a shelf line.
+   *
+   * A *thing*, drawn as the most thing-like object the packs contain - a box -
+   * standing on the line that makes it a shelf rather than a floating cube.
+   * Deliberately not another world glyph: the thingiverse is not a place you
+   * go, it is a drawer you open.
+   */
+  thing: (
+    <svg {...ICON}>
+      <path d="M1.8 13.5h12.4" />
+      <path d="M4 4.2h8v7H4z" />
+      <path d="M4 6.6h8" />
+      <path d="M8 4.2v7" />
+    </svg>
+  ),
+
   streak: (
     <svg {...ICON}>
       <path d="M8 1.8c.5 2.6 2.4 3.5 3.5 5.3a4.9 4.9 0 1 1-8.4 3.4c0-2.1 1.2-3.2 2-4.2.6 1.1 1.3 1.4 1.8 1.2C6.1 9.8 6.5 6.6 8 1.8Z" />
@@ -242,6 +265,60 @@ const ICONS: Record<IconName, React.ReactElement> = {
   close: (
     <svg {...ICON}>
       <path d="M4 4l8 8M12 4l-8 8" />
+    </svg>
+  ),
+
+  /*
+   * The three on a guest link's row.
+   *
+   * Drawings rather than the words they replace, and that is a translation
+   * decision before it is a visual one: `Copy / Show code / Revoke` is 22
+   * characters and `Kopieren / Code zeigen / Zurückziehen` is 36, on a row that
+   * has 15.5rem for all of it and a label on the other end. The verbs ran out
+   * of road in German and Bulgarian and pushed the card wider than the rail.
+   * A glyph is the same width in every language; the verb moves into the
+   * accessible name, where it is read out in full.
+   */
+
+  /** A pencil, laid on the line it is about to change. */
+  edit: (
+    <svg {...ICON}>
+      <path d="M10.4 2.9a1.5 1.5 0 0 1 2.1 2.1l-6.6 6.6-2.8.7.7-2.8z" />
+      <path d="M2.6 14h10.8" />
+    </svg>
+  ),
+
+  /** Two sheets, one behind the other. */
+  copy: (
+    <svg {...ICON}>
+      <rect x="5.4" y="5.4" width="8" height="8" rx="1.4" />
+      <path d="M10.6 5.4V4a1.4 1.4 0 0 0-1.4-1.4H4a1.4 1.4 0 0 0-1.4 1.4v5.2A1.4 1.4 0 0 0 4 10.6h1.4" />
+    </svg>
+  ),
+
+  /** It is on the clipboard: the same answer every copy button gives. */
+  copied: (
+    <svg {...ICON}>
+      <path d="M3 8.4 6.4 12 13 4.6" />
+    </svg>
+  ),
+
+  /** A QR square, said with the three finders that make one recognisable. */
+  code: (
+    <svg {...ICON}>
+      <rect x="2.4" y="2.4" width="4.4" height="4.4" rx="1" />
+      <rect x="9.2" y="2.4" width="4.4" height="4.4" rx="1" />
+      <rect x="2.4" y="9.2" width="4.4" height="4.4" rx="1" />
+      <path d="M9.2 9.2h1.8M13.6 9.2v1.8M11.4 11.6h2.2M9.2 13.6h4.4" />
+    </svg>
+  ),
+
+  /** A link with its middle cut: the chain, broken on purpose. */
+  revoke: (
+    <svg {...ICON}>
+      <path d="M6.6 9.4 4.9 11a2.6 2.6 0 0 1-3.7-3.7l1.7-1.7" />
+      <path d="M9.4 6.6 11.1 5a2.6 2.6 0 0 1 3.7 3.7l-1.7 1.7" />
+      <path d="m3.4 3.4 9.2 9.2" />
     </svg>
   ),
 }

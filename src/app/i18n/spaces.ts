@@ -119,6 +119,13 @@ export interface SpacesDict {
     search: string
     /** Summary label the collapsed create form hides behind. */
     newSpace: string
+    /**
+     * The switch under the roster: stand in the plain dummy instead of an
+     * animal. Reads as a body, not as an absence - it is what a player is in
+     * the games before they own a skin, and what a visitor with no account
+     * already stands in.
+     */
+    dummy: string
     /** The XP half of the locker. */
     skins: string
     shop: string
@@ -222,6 +229,7 @@ export const SPACES_EN: SpacesDict = {
     close: 'Close',
     search: 'Search spaces…',
     newSpace: 'New space',
+    dummy: 'Stand in the dummy',
     skins: 'Your skin',
     shop: 'Shop →',
     shopClosed: 'See the shelf →',
@@ -332,6 +340,7 @@ export const SPACES_DE: SpacesDict = {
     close: 'Schließen',
     search: 'Spaces durchsuchen …',
     newSpace: 'Neuer Space',
+    dummy: 'Als Dummy stehen',
     skins: 'Ihr Skin',
     shop: 'Shop →',
     shopClosed: 'Zum Regal →',
@@ -440,6 +449,7 @@ export const SPACES_BG: SpacesDict = {
     close: 'Затвори',
     search: 'Търсене на спейсове…',
     newSpace: 'Нов спейс',
+    dummy: 'Стой като дъми',
     skins: 'Вашият скин',
     shop: 'Магазин →',
     shopClosed: 'Към рафта →',

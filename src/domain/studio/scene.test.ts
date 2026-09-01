@@ -43,7 +43,7 @@ describe('a round trip', () => {
           say: 'Every field, non-default.',
         },
       ],
-      blocks: [{ model: 'lava', x: 2, top: 3, z: -1, rotation: 45 }],
+      blocks: [{ model: 'lava', x: 2, top: 3, z: -1, rotation: 45, time: 2.5, scale: 2.5, tint: '#ff00aa', pitch: 30, roll: -15 }],
       goals: [{ x: 1, z: -7, rotation: 90, width: 6, height: 3.5, colour: '#ff00aa' }],
       balls: [{ x: 0.5, y: 1.2, z: -2, radius: 0.5 }],
       light: { azimuth: -120, elevation: 20, sun: 3.1, ambient: 0.2, hemisphere: 0.4, rim: 0 },
@@ -220,5 +220,93 @@ describe('the rainbow', () => {
   test('survives the link', () => {
     const scene = { ...DEFAULT_SCENE, rainbow: { world: true, props: false, phase: 2.5 } }
     expect(decodeScene(encodeScene(scene)).rainbow).toEqual(scene.rainbow)
+  })
+})
+
+describe('the widened cast', () => {
+  test('a rigged look survives a link', () => {
+    const scene: StudioScene = {
+      ...DEFAULT_SCENE,
+      peeps: [{ ...DEFAULT_SCENE.peeps[0], avatar: 'kappa/Monster' }],
+    }
+    expect(decodeScene(encodeScene(scene)).peeps[0].avatar).toBe('kappa/Monster')
+  })
+
+  test('a look off the roster falls back to the default peep', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_SCENE)) as Record<string, unknown>
+    ;(raw.peeps as Record<string, unknown>[])[0].avatar = 'kappa/Godzilla'
+    expect(parseScene(raw).peeps[0].avatar).toBe('penguin')
+  })
+})
+
+describe('a posed peep in a still', () => {
+  const posed = (bones: Record<string, [number, number, number, number]>): StudioScene => ({
+    ...DEFAULT_SCENE,
+    peeps: [{ ...DEFAULT_SCENE.peeps[0], pose: { root: [0, 0.5, 0], bones } }],
+  })
+
+  test('survives a link', () => {
+    const back = decodeScene(encodeScene(posed({ head: [0, 0.7071, 0, 0.7071] })))
+    expect(back.peeps[0].pose?.root).toEqual([0, 0.5, 0])
+    expect(back.peeps[0].pose?.bones.head[1]).toBeCloseTo(0.7071)
+  })
+
+  test('keeps only the bones it names, so a clip drives the rest', () => {
+    const back = decodeScene(encodeScene(posed({ head: [0, 0.7071, 0, 0.7071] })))
+    expect(Object.keys(back.peeps[0].pose?.bones ?? {})).toEqual(['head'])
+  })
+
+  test('an unposed peep carries no pose at all', () => {
+    expect(decodeScene(encodeScene(DEFAULT_SCENE)).peeps[0].pose).toBeUndefined()
+  })
+
+  test('junk where the pose should be reads as unposed', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_SCENE)) as Record<string, unknown>
+    ;(raw.peeps as Record<string, unknown>[])[0].pose = { bones: 'nope', root: 'nope' }
+    expect(parseScene(raw).peeps[0].pose).toBeUndefined()
+  })
+
+  test('a degenerate rotation becomes identity rather than NaN', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_SCENE)) as Record<string, unknown>
+    ;(raw.peeps as Record<string, unknown>[])[0].pose = { root: [0, 0, 0], bones: { head: [0, 0, 0, 0] } }
+    expect(parseScene(raw).peeps[0].pose?.bones.head).toEqual([0, 0, 0, 1])
+  })
+})
+
+describe('a prop that is a thing off the shelf', () => {
+  const ID = '3f1a9c2e-5b6d-4a7f-8e90-1b2c3d4e5f60'
+  const withBlueprint = (blueprint: unknown): StudioScene => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_SCENE)) as Record<string, unknown>
+    ;(raw.blocks as Record<string, unknown>[])[0].blueprint = blueprint
+    return parseScene(raw)
+  }
+
+  test('keeps the reference through a link', () => {
+    const back = decodeScene(encodeScene(withBlueprint(ID)))
+    expect(back.blocks[0].blueprint).toBe(ID)
+  })
+
+  test('an id that is not one is dropped, and the prop stays its model', () => {
+    // The renderer resolves this against a shelf; anything hand-typed into a
+    // URL must not reach a query.
+    expect(withBlueprint('../../etc/passwd').blocks[0].blueprint).toBeUndefined()
+    expect(withBlueprint('').blocks[0].blueprint).toBeUndefined()
+    expect(withBlueprint(42).blocks[0].blueprint).toBeUndefined()
+    expect(withBlueprint(ID).blocks[0].model).toBe(DEFAULT_SCENE.blocks[0].model)
+  })
+
+  test('a plain prop carries neither key, so an old link re-encodes unchanged', () => {
+    const back = decodeScene(encodeScene(DEFAULT_SCENE))
+    expect('blueprint' in back.blocks[0]).toBe(false)
+    expect('triggered' in back.blocks[0]).toBe(false)
+    expect(encodeScene(back)).toBe(encodeScene(DEFAULT_SCENE))
+  })
+
+  test('being triggered is only ever true or absent', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_SCENE)) as Record<string, unknown>
+    ;(raw.blocks as Record<string, unknown>[])[0].triggered = 'yes please'
+    expect(parseScene(raw).blocks[0].triggered).toBeUndefined()
+    ;(raw.blocks as Record<string, unknown>[])[0].triggered = true
+    expect(parseScene(raw).blocks[0].triggered).toBe(true)
   })
 })

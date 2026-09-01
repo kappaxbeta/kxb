@@ -13,6 +13,7 @@ import {
   renameTenantSchema,
   type TenantCommand,
 } from '@/domain/tenants/commands'
+import { makeSpace } from '@/domain/tenants/create'
 import { isSpaceCapability, tokenInvitee, userInvitee } from '@/domain/tenants/events'
 import { findTenantIdBySlug } from '@/domain/tenants/queries'
 import { executeCommand } from '@/es/command'
@@ -22,7 +23,9 @@ import { requireUser } from '@/lib/auth'
 import {
   countOwnedTenants,
   entitlementMessage,
+  readLiveGrants,
   syncUserEntitlement,
+  unpaidSpaces,
 } from '@/domain/billing/entitlement'
 import { resolveFeatures } from '@/domain/flags/queries'
 import { freeSpaceLimit, tenantLimit } from '@/domain/billing/quota'
@@ -95,170 +98,22 @@ async function dispatch(
 }
 
 /**
- * Create a workspace.
+ * Create a workspace, and go and stand in it.
  *
- * The slug is claimed *before* the events are appended, because uniqueness
- * across tenants is not something an aggregate can decide - see the reservation
- * table in the tenants migration. If the command then fails, the claim is
- * released so the name does not stay burnt.
+ * Three lines, and the two that are not the call are the ones that are about
+ * being a browser. Everything that decides whether a space may exist - the
+ * visitor-pass refusal, the billing gate, the slug claim before the events, the
+ * release if the command fails - is in `./create.ts`, because the phone makes
+ * the identical space and none of that reasoning would have survived two copies.
  */
 export async function createTenant(name: string, slug: string): Promise<ActionResult> {
-  const parsed = createTenantSchema.safeParse({ name, slug })
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid space' }
-  }
-
   const { user, supabase } = await requireUser()
 
-  /**
-   * A visitor pass cannot own a space.
-   *
-   * `/tenants` and `/onboarding` both redirect an anonymous session away
-   * already, so this was reachable only by posting to the action directly - and
-   * a Server Action is a public endpoint, so "the page redirects" is not a
-   * gate. It *was* refused, but by accident: an anonymous user has no address,
-   * so they fell into the check below and were told their account has no email.
-   * True, unhelpful, and it describes a missing field rather than the actual
-   * rule.
-   *
-   * The rule is worth stating plainly because the consequence is not obvious.
-   * An anonymous session is a browser, not a person: it lives in one set of
-   * cookies and there is no way to sign back into it. A space owned by one is a
-   * space that becomes unreachable - along with anything anybody else put in it
-   * - the moment that browser clears its storage. Refusing is kinder than the
-   * alternative, which is somebody losing a room they invited friends into.
-   */
-  if (user.is_anonymous) {
-    return {
-      ok: false,
-      error:
-        'You are here on a visitor pass, which cannot own a space — there would be no way to sign back into it. Make an account first and the space will be waiting.',
-    }
-  }
-
-  if (!user.email) {
-    return { ok: false, error: 'Your account has no email address' }
-  }
-
-  // Outside any workspace, so only this person's override and the global
-  // default apply.
-  //
-  // Skipping the block below is the whole of "free someone from paying" on this
-  // path, and skipping it *entirely* is the point: with billing off there is
-  // nothing to verify, and the Stripe round trip exists only to answer a
-  // question that no longer has consequences. A comped account should not be
-  // able to fail to create a workspace because Stripe was down.
-  const { billing } = await resolveFeatures(supabase)
-
-  if (billing) {
-    // Entitlement, checked against Stripe rather than our cached mirror.
-    //
-    // This is the one moment where being a few hours stale actually costs money
-    // - someone who cancelled this morning could still mint workspaces until
-    // the nightly job noticed. So it asks Stripe, and refreshes the mirror on
-    // the way past, which means the check pays for the sync rather than the
-    // reverse.
-    try {
-      const admin = createAdminClient() as unknown as typeof supabase
-      const entitlement = await syncUserEntitlement(admin, user.id, user.email)
-      const owned = await countOwnedTenants(supabase, user.id)
-
-      /**
-       * The gate is now "too many spaces waiting for a plan", not "out of seats".
-       *
-       * Under tiers a space is free to make and picks xo or xp for itself
-       * afterwards, so there is no seat to spend here - see the note at the top
-       * of `billing/entitlement.ts`. What is left to prevent is somebody
-       * scripting a thousand empty spaces, and the things that legitimately
-       * hold a space up all count against that: its own subscription, a legacy
-       * seat, a granted month.
-       */
-      const covered = entitlement.seats + owned.subscribed
-      const unpaid = Math.max(0, owned.total - covered)
-
-      /*
-       * The number is resolved rather than constant now.
-       *
-       * It was a flat three - a spam guard from before the free tier, when a
-       * space with no plan was read-only and therefore nearly worthless to
-       * hoard. A free space is a working product, so this became a pricing
-       * number: one per account, raisable for one person from the backoffice
-       * without a deploy, and clamped by the installation's own ceiling.
-       *
-       * `withinLimit` rather than a comparison, so "unlimited" needs no
-       * sentinel and the off-by-one is decided in one tested place: `unpaid` is
-       * what they already hold, and this asks whether there is room for one
-       * more.
-       */
-      const freeSpaces = await freeSpaceLimit(supabase)
-
-      if (!withinLimit(unpaid, freeSpaces)) {
-        return { ok: false, error: entitlementMessage(freeSpaces ?? unpaid) }
-      }
-    } catch (error) {
-      // A Stripe outage must not silently hand out free workspaces, and must
-      // not pretend the person is unsubscribed either. Say what actually
-      // happened.
-      const message = error instanceof Error ? error.message : 'unknown error'
-      return {
-        ok: false,
-        error: `Could not verify your subscription just now (${message}). Please try again in a moment.`,
-      }
-    }
-  }
-
-  const tenantId = randomUUID()
-
-  const { error: claimError } = await supabase.from('tenant_slugs').insert({
-    slug: parsed.data.slug,
-    tenant_id: tenantId,
-    claimed_by: user.id,
-  })
-
-  if (claimError) {
-    if (claimError.code === UNIQUE_VIOLATION) {
-      return { ok: false, error: `The URL "${parsed.data.slug}" is already taken` }
-    }
-    return { ok: false, error: `Could not reserve that URL: ${claimError.message}` }
-  }
-
-  try {
-    await executeCommand({
-      supabase,
-      decider: tenantDecider,
-      tenantId,
-      streamId: tenantId,
-      command: {
-        type: 'CreateTenant',
-        actorId: user.id,
-        name: parsed.data.name,
-        slug: parsed.data.slug,
-      },
-      metadata: { actorId: user.id },
-    })
-  } catch (error) {
-    await releaseSlug(supabase, parsed.data.slug)
-    return toResult(error)
-  }
-
-  // Guarded, and it has to be. The events are committed and the membership
-  // trigger has already run, so the space is real and the caller is its owner -
-  // but a throw here would escape the action as a generic error, and by then
-  // the slug can no longer be released (`tenant_slugs_delete_unused` allows a
-  // delete only while the tenant has no events). Retrying the form would say
-  // "that URL is already taken" about a space the person owns and cannot see:
-  // /tenants drops memberships with no projected row, and nothing on that page
-  // runs this projection.
-  //
-  // So: succeed, and send them in. `loadTenant` re-projects on a read miss, so
-  // arriving at the space is itself the repair.
-  try {
-  } catch {
-    // Deliberately swallowed. The write side is done; a read model that has not
-    // caught up is the one failure this system is built to shrug off.
-  }
+  const made = await makeSpace(supabase, user, { name, slug })
+  if (!made.ok) return made
 
   revalidatePath('/tenants')
+
   /**
    * Into the space itself, not into a surface of it.
    *
@@ -271,14 +126,7 @@ export async function createTenant(name: string, slug: string): Promise<ActionRe
    * it is the board, it has no flag, and it is already documented as the thing
    * opening a workspace should land you on. See the note on that page.
    */
-  redirect(`/t/${parsed.data.slug}`)
-}
-
-/** Best-effort cleanup of a claim whose TenantCreated never landed. */
-async function releaseSlug(supabase: Client, slug: string): Promise<void> {
-  // The delete policy only permits this while the tenant has no events, so a
-  // partially-created workspace keeps its URL rather than being half-freed.
-  await supabase.from('tenant_slugs').delete().eq('slug', slug)
+  redirect(`/t/${made.slug}`)
 }
 
 export async function renameTenant(slug: string, name: string): Promise<ActionResult> {
@@ -406,6 +254,30 @@ export async function setSpaceCapability(
 
   if (result.ok) revalidatePath(`/t/${slug}`, 'layout')
   return result
+}
+
+/**
+ * Whether running costs anything, set from inside the room.
+ *
+ * The same command `setSpaceCapability` writes, and a separate action for one
+ * reason: **it must not revalidate**. That one revalidates the layout, which is
+ * right for a switch pressed on a settings page and catastrophic for one
+ * pressed in a rail beside a running world - the layout re-renders, the scene
+ * remounts, and the WebGL context everybody in the room is looking through is
+ * torn down and rebuilt. The lounge's own actions have never revalidated for
+ * exactly this reason; this is the same rule reaching a capability.
+ *
+ * What takes its place is the rail publishing the new value into a store the
+ * scene reads, so the switch takes effect immediately without anything
+ * remounting. The server's answer is what a later page load will agree with.
+ */
+export async function setStamina(slug: string, on: boolean): Promise<ActionResult> {
+  return dispatch(slug, (actorId) => ({
+    type: 'SetSpaceCapability',
+    actorId,
+    capability: 'stamina',
+    enabled: on,
+  }))
 }
 
 /**

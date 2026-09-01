@@ -266,6 +266,22 @@ export const FEATURES = {
    */
   renders: { label: 'Scene renders', fallback: false },
   /**
+   * The thingiverse: a shelf of object blueprints, and the things summoned
+   * from it into a space's rooms.
+   *
+   * `false`, like the other flags guarding new surface. What it gates is the
+   * whole feature - the rail tab, the `/thingiverse` command, the shelf itself
+   * and what the scene draws from it - rather than one control, because there
+   * is nothing coherent about half of it: a room drawing furniture nobody has
+   * a panel to move is worse than a room with no furniture.
+   *
+   * Things already summoned are kept. Turning this off withholds the feature
+   * and unplaces nothing, which is the same promise `pictures` makes about
+   * bytes already uploaded - and it is what makes switching it off during an
+   * incident a decision somebody can take without losing anybody's room.
+   */
+  thingiverse: { label: 'Thingiverse', fallback: false },
+  /**
    * The front door.
    *
    * On, anybody may create an account. Off, sign-up is by invitation, and

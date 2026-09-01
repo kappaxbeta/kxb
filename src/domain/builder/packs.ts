@@ -58,19 +58,37 @@ export interface Pack {
    * twice would sink every block half a cell into the floor.
    */
   lift: number
-  /** Who drew it. Shown in credits; none of them require it. */
+  /** Who drew it. Shown in credits; `cosmos` is the one that requires it. */
   author: string
   /**
-   * Every pack we ship is CC0, which is a waiver rather than a licence with
-   * conditions - commercial use, modification and redistribution of the files
-   * themselves, by us and by anyone we hand them to, with no attribution due.
+   * What we are allowed to do with the files, and what we owe for them.
    *
-   * Recorded per pack rather than assumed globally, because the day one of
-   * these is replaced by something with actual terms, the check has to have
-   * somewhere to fail. Typed as the literal so a pack with a different licence
-   * cannot be added without the compiler asking what that means.
+   * Every pack we downloaded is CC0, which is a waiver rather than a licence
+   * with conditions - commercial use, modification and redistribution of the
+   * files themselves, by us and by anyone we hand them to, with no attribution
+   * due. That was the whole list until `cosmos`, and it was typed as the single
+   * literal precisely so that the day it stopped being the whole list, the
+   * compiler would ask what the new thing meant rather than let it in quietly.
+   *
+   * This is that day, and the answer is `CC-BY-4.0`: the same freedoms with one
+   * condition attached, which is that the author is credited wherever the work
+   * goes. The condition is real and it travels - a world published with a
+   * `cosmos` model in it owes that credit, and so does anyone we hand the world
+   * to - so it is recorded here, per pack, next to the `author` and `source`
+   * that are what discharging it actually looks like.
+   *
+   * ---------------------------------------------------------------------------
+   * What this union is not permission to do
+   * ---------------------------------------------------------------------------
+   * Widening a type is not the same as clearing a pack, and the next entry
+   * should be harder to add than this one was rather than easier. Anything with
+   * a non-commercial or no-derivatives clause cannot go in this table at all:
+   * a space's world is commercial the moment somebody pays for the space, and
+   * `xo` copies and rescales what it holds, which is a derivative. Those are
+   * facts about the product rather than about the picker, so the honest place
+   * to refuse them is here, before a model id reaches an immutable log.
    */
-  licence: 'CC0'
+  licence: 'CC0' | 'CC-BY-4.0'
   /**
    * Where it came from, as the publisher's own address.
    *
@@ -92,6 +110,24 @@ export interface Pack {
 const KAY = { author: 'Kay Lousberg', licence: 'CC0', source: 'https://kaylousberg.itch.io/' } as const
 const ISA = { author: 'Isa Lousberg', licence: 'CC0', source: 'https://tinytreats.itch.io/' } as const
 const KENNEY = { author: 'Kenney', licence: 'CC0', source: 'https://kenney.nl/' } as const
+
+/**
+ * The one pack that is ours, and the one that owes somebody a credit.
+ *
+ * The geometry is written by `scripts/build-galaxy.ts` and belongs to us. The
+ * texture on it does not: it is the galaxy plate out of "Money makes the WORLD
+ * go round", with its black background cut to alpha, and that model is CC-BY.
+ * A derivative of a CC-BY work is CC-BY, so the whole pack is - which is why
+ * the author named here is the texture's author rather than us. Crediting
+ * ourselves for the half we wrote and nobody for the half we did not is the one
+ * way to get this wrong that also looks tidy.
+ */
+const ROSARIO = {
+  author: 'Miguelangelo Rosario',
+  licence: 'CC-BY-4.0',
+  source:
+    'https://sketchfab.com/3d-models/money-makes-the-world-go-round-095ba2f03768457b8cec0da88ce25196',
+} as const
 
 export const PACKS: Record<string, Pack> = {
   bb10: { label: 'Blocks', path: '/xo/bb10/gltf', ext: '.gltf', scale: 0.5, lift: 0.5, ...KAY },
@@ -134,6 +170,16 @@ export const PACKS: Record<string, Pack> = {
   livingroom: { label: 'Living room', path: '/tinyXO/livingroom', ext: '.gltf', scale: 0.5, lift: 0, ...ISA },
   park: { label: 'Park', path: '/tinyXO/park', ext: '.gltf', scale: 0.5, lift: 0, ...ISA },
   plants: { label: 'Plants', path: '/tinyXO/plants', ext: '.gltf', scale: 0.5, lift: 0, ...ISA },
+  /**
+   * Written rather than downloaded, and the only pack here that glows.
+   *
+   * `scale: 1` and `lift: 0` because the model is authored in cells and puts
+   * itself where it wants to be: the galaxy hangs half a cell up in its own
+   * geometry rather than through the pack's `lift`, which is multiplied by the
+   * placement's scale and would send a galaxy scaled to 4 two cells into the
+   * air. See `HOVER` in scripts/build-galaxy.ts.
+   */
+  cosmos: { label: 'Cosmos', path: '/xo/cosmos', ext: '.glb', scale: 1, lift: 0, ...ROSARIO },
 }
 
 /**
@@ -155,6 +201,7 @@ export const PACK_ORDER = [
   'cafe',
   'bakerygoods',
   'restaurant',
+  'cosmos',
 ] as const
 
 /** Split `pack/name` into its two halves, or null if it is not one. */

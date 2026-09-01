@@ -44,6 +44,16 @@ export interface WorldDict {
     rightClick: string
     dragAnywhere: string
     onScreenStick: string
+    /**
+     * What is said when the browser takes the drawing surface away.
+     *
+     * See `KeepContext`: it is not a crash and it is not the room's fault, so
+     * the line says what happened and what closes it rather than apologising
+     * for an error nobody made.
+     */
+    lostTitle: string
+    lostBody: string
+    lostReload: string
   }
 
   /** What each control does. The keycap beside it is never translated. */
@@ -70,6 +80,8 @@ export interface WorldDict {
     lookAtYourself: string
     seeTheRoom: string
     mouseLook: string
+    /** The Tab row, shown only to an owner or an admin. See `loungeControls`. */
+    switchMode: string
     controls: string
     leave: string
   }
@@ -83,6 +95,10 @@ export interface WorldDict {
     dash: string
     kick: string
     dance: string
+    /** The dance button's other life - what the thing in front of you offers. */
+    use: string
+    getUp: string
+    drive: string
     /** The sprint burst over the thumbstick. A name, because ⚡ says nothing aloud. */
     turbo: string
   }
@@ -165,9 +181,13 @@ export interface WorldDict {
     mirrorOn: string
     /** The peep switcher beside the mirror. */
     peep: string
-    /** The wardrobe's other half: your bought skin, worn here instead of the animal. */
+    /** The wardrobe's other half: the XP body you take into the games. */
     skin: string
     peepLabel: string
+    /** The plain mannequin - a body in both halves, named once. */
+    dummy: string
+    /** The mode switch: draw the XP body in this world rather than the peep. */
+    showXp: string
     /** Emotes have no names - see `emotes.ts` - so the number is the label. */
     emoteNumber: string
     say: string
@@ -323,6 +343,93 @@ export interface WorldDict {
     networkError: string
   }
 
+  /**
+   * The thingiverse, as the world draws it: the preview you carry before
+   * anything is written down, and the panel for whatever is selected.
+   *
+   * The *shelf* is not here - it is in `rail.ts`, with the rest of the rail -
+   * because these two surfaces are read in two different moods. This is what
+   * you read while holding a fountain over a floor; that is what you read while
+   * deciding which fountain.
+   */
+  things: {
+    heading: string
+    /** Held over the world, not yet placed. `{name}` is what it is. */
+    carrying: string
+    place: string
+    cancel: string
+    /** Leaving a picked-up thing where it was. Not "cancel" - see the panel. */
+    putBack: string
+    next: string
+    turn: string
+    bigger: string
+    smaller: string
+    size: string
+    /** How far one push of the stick moves it. */
+    step: string
+    move: string
+    dismiss: string
+    /** The two switches on a placed thing. */
+    blocks: string
+    /** What a thing that does not block is instead. See `knockable`. */
+    passes: string
+    falls: string
+    /** The other half of `falls`, for the chip that toggles it. */
+    floats: string
+    /**
+     * The E prompt, in its three moods. `{name}` is what you are standing next
+     * to. Creative mode picks a thing up; play mode gets into one.
+     */
+    useIt: string
+    leaveIt: string
+    pickUp: string
+    /**
+     * The same three sentences for a screen with no keyboard.
+     *
+     * Separate strings rather than a swapped-in word, because the shape of the
+     * sentence changes with the pointer and not only its subject: "E — pick up"
+     * is a key and its meaning, "Tap to pick up" is an instruction. German and
+     * Bulgarian put the two halves in different orders again.
+     */
+    tapUse: string
+    tapLeave: string
+    tapPickUp: string
+    /** Said for a few seconds after something is stood up. `{name}` is what. */
+    placed: string
+    /** The `/clip` menu: what this body can do, and what the chair adds to it. */
+    clips: string
+    inThis: string
+    /**
+     * The shelf, opened over the world by a bare `/xo`.
+     *
+     * The same browsing the page at /t/[slug]/thingiverse offers, drawn over
+     * the room instead of instead of it - see <ThingiverseView>.
+     */
+    browse: string
+    searchPacks: string
+    /** What picking one does. Said once, under the search. */
+    browseHint: string
+    /** How much there is to search. `{models}` and `{packs}` are counts. */
+    catalogue: string
+    yours: string
+    shared: string
+    nothingFound: string
+    working: string
+    /** Fallbacks for a refusal the server did not word itself. */
+    nothingCalledThat: string
+    /** There is nowhere near you to stand it - see `spotFor`. */
+    noRoom: string
+    readOnly: string
+    refused: string
+    /** The E prompt when the thing in front of you drives. */
+    driveIt: string
+    tapDrive: string
+    /** `/vehicle kart` found nothing drivable by that name on the shelf. */
+    noVehicleCalledThat: string
+    /** Bare `/vehicle` with nothing to put away. */
+    noVehicleOut: string
+  }
+
   /** The tab a lounge is opened in. */
   meta: { lounge: string }
 
@@ -413,6 +520,10 @@ export const WORLD_EN: WorldDict = {
     rightClick: 'right click',
     dragAnywhere: 'drag anywhere on the screen',
     onScreenStick: 'the on-screen stick',
+    lostTitle: 'The view stopped drawing',
+    lostBody:
+      'Your browser took the graphics away from this page, usually because too many 3D tabs are open at once. Close a few and reload.',
+    lostReload: 'Reload',
   },
 
   controls: {
@@ -438,6 +549,7 @@ export const WORLD_EN: WorldDict = {
     lookAtYourself: 'Look at yourself',
     seeTheRoom: 'See the whole room',
     mouseLook: 'Mouse look on / off',
+    switchMode: 'Build or battle',
     controls: 'Controls',
     leave: 'Leave',
   },
@@ -450,6 +562,9 @@ export const WORLD_EN: WorldDict = {
     dash: 'Dash',
     kick: 'Kick',
     dance: 'Dance',
+    use: 'Use',
+    getUp: 'Get up',
+    drive: 'Drive',
     turbo: 'Turbo',
   },
 
@@ -526,6 +641,51 @@ export const WORLD_EN: WorldDict = {
     refused: 'That change was refused',
     uploadFailed: 'Could not upload that image',
     networkError: 'Network error while uploading',
+  },
+
+  things: {
+    heading: 'Thing',
+    carrying: 'Holding {name}',
+    place: 'Put it down',
+    cancel: 'Cancel',
+    putBack: 'Put back',
+    next: 'Next',
+    turn: 'Turn',
+    bigger: 'Bigger',
+    smaller: 'Smaller',
+    size: 'Size',
+    step: 'Step',
+    move: 'Move here',
+    dismiss: 'Dismiss',
+    blocks: 'Blocks the way',
+    passes: 'Loose - kick it',
+    falls: 'Falls',
+    floats: 'Stays up',
+    useIt: 'G — use',
+    leaveIt: 'G — get up',
+    pickUp: 'G — pick up',
+    tapUse: 'Tap to use',
+    tapLeave: 'Tap to get up',
+    tapPickUp: 'Tap to pick up',
+    placed: '{name} — E to move it',
+    clips: 'What you can do',
+    inThis: 'In this',
+    browse: 'Thingiverse',
+    searchPacks: 'Search the packs',
+    browseHint: 'Pick one and it appears in front of you.',
+    catalogue: '{models} models across {packs} packs',
+    yours: 'Yours',
+    shared: 'Shared',
+    nothingFound: 'Nothing is called that',
+    working: 'Working…',
+    nothingCalledThat: 'Nothing on the shelf or in the packs is called that',
+    noRoom: 'No room here for that',
+    readOnly: 'You cannot summon anything here',
+    refused: 'That change was refused',
+    driveIt: 'G — drive',
+    tapDrive: 'Tap to drive',
+    noVehicleCalledThat: 'Nothing you can drive is called that — build one at the bench',
+    noVehicleOut: 'You have no vehicle out',
   },
 
   world: {
@@ -699,8 +859,10 @@ export const WORLD_EN: WorldDict = {
     mirror: 'Look at yourself',
     mirrorOn: 'on',
     peep: 'Change peep',
-    skin: 'Skins',
-    peepLabel: 'Peeps',
+    skin: 'XP body',
+    peepLabel: 'Peep',
+    dummy: 'Dummy',
+    showXp: 'Show in here',
     emoteNumber: 'Emote {n}',
     say: 'Say something',
     message: 'Message',
@@ -799,6 +961,10 @@ export const WORLD_DE: WorldDict = {
     rightClick: 'rechte Maustaste',
     dragAnywhere: 'irgendwo über den Bildschirm ziehen',
     onScreenStick: 'der Stick auf dem Bildschirm',
+    lostTitle: 'Die Ansicht zeichnet nicht mehr',
+    lostBody:
+      'Der Browser hat dieser Seite die Grafik entzogen - meist, weil zu viele 3D-Tabs offen sind. Schließe ein paar und lade neu.',
+    lostReload: 'Neu laden',
   },
 
   controls: {
@@ -824,6 +990,7 @@ export const WORLD_DE: WorldDict = {
     lookAtYourself: 'Sich selbst ansehen',
     seeTheRoom: 'Den ganzen Raum sehen',
     mouseLook: 'Mausblick an / aus',
+    switchMode: 'Bauen oder kämpfen',
     controls: 'Steuerung',
     leave: 'Verlassen',
   },
@@ -836,6 +1003,9 @@ export const WORLD_DE: WorldDict = {
     dash: 'Sturm',
     kick: 'Tritt',
     dance: 'Tanz',
+    use: 'Nutzen',
+    getUp: 'Aufstehen',
+    drive: 'Fahren',
     turbo: 'Turbo',
   },
 
@@ -914,6 +1084,51 @@ export const WORLD_DE: WorldDict = {
     refused: 'Diese Änderung wurde abgelehnt',
     uploadFailed: 'Dieses Bild konnte nicht hochgeladen werden',
     networkError: 'Netzwerkfehler beim Hochladen',
+  },
+
+  things: {
+    heading: 'Ding',
+    carrying: '{name} in der Hand',
+    place: 'Absetzen',
+    cancel: 'Abbrechen',
+    putBack: 'Zurücklegen',
+    next: 'Nächstes',
+    turn: 'Drehen',
+    bigger: 'Größer',
+    smaller: 'Kleiner',
+    size: 'Größe',
+    step: 'Schritt',
+    move: 'Hierher',
+    dismiss: 'Wegnehmen',
+    blocks: 'Versperrt den Weg',
+    passes: 'Lose - tritt dagegen',
+    falls: 'Fällt',
+    floats: 'Bleibt oben',
+    useIt: 'G — benutzen',
+    leaveIt: 'G — aufstehen',
+    pickUp: 'G — aufheben',
+    tapUse: 'Zum Benutzen tippen',
+    tapLeave: 'Zum Aufstehen tippen',
+    tapPickUp: 'Zum Aufheben tippen',
+    placed: '{name} — E zum Bewegen',
+    clips: 'Was du kannst',
+    inThis: 'Hierin',
+    browse: 'Thingiverse',
+    searchPacks: 'Pakete durchsuchen',
+    browseHint: 'Wählen Sie eines - es erscheint vor Ihnen.',
+    catalogue: '{models} Modelle in {packs} Paketen',
+    yours: 'Ihre',
+    shared: 'Geteilt',
+    nothingFound: 'So heißt nichts',
+    working: 'Wird erledigt …',
+    nothingCalledThat: 'So heißt nichts im Regal und nichts in den Paketen',
+    noRoom: 'Hier ist kein Platz dafür',
+    readOnly: 'Hier kannst du nichts herbeirufen',
+    refused: 'Diese Änderung wurde abgelehnt',
+    driveIt: 'G — fahren',
+    tapDrive: 'Tippen zum Fahren',
+    noVehicleCalledThat: 'So heißt nichts, was du fahren kannst — bau eins an der Werkbank',
+    noVehicleOut: 'Du hast kein Fahrzeug draußen',
   },
 
   world: {
@@ -1096,8 +1311,10 @@ export const WORLD_DE: WorldDict = {
     mirror: 'Sich selbst ansehen',
     mirrorOn: 'an',
     peep: 'Peep wechseln',
-    skin: 'Skins',
-    peepLabel: 'Peeps',
+    skin: 'XP-Körper',
+    peepLabel: 'Peep',
+    dummy: 'Dummy',
+    showXp: 'Hier zeigen',
     emoteNumber: 'Emote {n}',
     say: 'Sagen Sie etwas',
     message: 'Nachricht',
@@ -1197,6 +1414,10 @@ export const WORLD_BG: WorldDict = {
     rightClick: 'десен бутон',
     dragAnywhere: 'влачене където и да е по екрана',
     onScreenStick: 'стикът на екрана',
+    lostTitle: 'Изгледът спря да се рисува',
+    lostBody:
+      'Браузърът отне графиката на тази страница, обикновено защото са отворени твърде много 3D раздели. Затворете няколко и презаредете.',
+    lostReload: 'Презареди',
   },
 
   controls: {
@@ -1222,6 +1443,7 @@ export const WORLD_BG: WorldDict = {
     lookAtYourself: 'Погледнете себе си',
     seeTheRoom: 'Вижте цялата стая',
     mouseLook: 'Поглед с мишката вкл. / изкл.',
+    switchMode: 'Строене или битка',
     controls: 'Управление',
     leave: 'Излизане',
   },
@@ -1234,6 +1456,9 @@ export const WORLD_BG: WorldDict = {
     dash: 'Засилване',
     kick: 'Ритник',
     dance: 'Танц',
+    use: 'Ползвай',
+    getUp: 'Стани',
+    drive: 'Карай',
     turbo: 'Турбо',
   },
 
@@ -1311,6 +1536,51 @@ export const WORLD_BG: WorldDict = {
     refused: 'Тази промяна беше отказана',
     uploadFailed: 'Изображението не можа да се качи',
     networkError: 'Мрежова грешка при качването',
+  },
+
+  things: {
+    heading: 'Нещо',
+    carrying: 'Държиш {name}',
+    place: 'Постави',
+    cancel: 'Откажи',
+    putBack: 'Върни обратно',
+    next: 'Следващо',
+    turn: 'Завърти',
+    bigger: 'По-голямо',
+    smaller: 'По-малко',
+    size: 'Размер',
+    step: 'Стъпка',
+    move: 'Премести тук',
+    dismiss: 'Премахни',
+    blocks: 'Препречва пътя',
+    passes: 'Свободно - ритни го',
+    falls: 'Пада',
+    floats: 'Стои горе',
+    useIt: 'G — използвай',
+    leaveIt: 'G — стани',
+    pickUp: 'G — вземи',
+    tapUse: 'Докоснете, за да използвате',
+    tapLeave: 'Докоснете, за да станете',
+    tapPickUp: 'Докоснете, за да вземете',
+    placed: '{name} — E, за да го местиш',
+    clips: 'Какво можеш',
+    inThis: 'В това',
+    browse: 'Thingiverse',
+    searchPacks: 'Търсене в пакетите',
+    browseHint: 'Изберете нещо и то се появява пред вас.',
+    catalogue: '{models} модела в {packs} пакета',
+    yours: 'Ваши',
+    shared: 'Споделени',
+    nothingFound: 'Нищо не се казва така',
+    working: 'Изпълнява се…',
+    nothingCalledThat: 'Нищо на рафта и в пакетите не се казва така',
+    noRoom: 'Тук няма място за това',
+    readOnly: 'Тук не можеш да призоваваш нищо',
+    refused: 'Тази промяна беше отказана',
+    driveIt: 'G — карай',
+    tapDrive: 'Докосни, за да караш',
+    noVehicleCalledThat: 'Нищо, което можеш да караш, не се казва така — сглоби го на работната маса',
+    noVehicleOut: 'Нямаш изкарано превозно средство',
   },
 
   world: {
@@ -1485,8 +1755,10 @@ export const WORLD_BG: WorldDict = {
     mirror: 'Погледнете себе си',
     mirrorOn: 'вкл.',
     peep: 'Смяна на пийпа',
-    skin: 'Скинове',
-    peepLabel: 'Пийпове',
+    skin: 'XP тяло',
+    peepLabel: 'Пийп',
+    dummy: 'Манекен',
+    showXp: 'Покажи тук',
     emoteNumber: 'Жест {n}',
     say: 'Кажете нещо',
     message: 'Съобщение',

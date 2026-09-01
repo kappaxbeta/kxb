@@ -45,6 +45,14 @@ export interface RailDict {
     places: string
     people: string
     whoIsHere: string
+    /**
+     * The two halves of the folded panel, as one switch.
+     *
+     * Only drawn below `xl`, where the right-hand panel has come back into
+     * this one - see the note beside the switch itself.
+     */
+    peopleTools: string
+    backToPlaces: string
     /** "In the lounge" and friends. See the note above. */
     inPlace: Record<PlaceId, string>
   }
@@ -59,6 +67,7 @@ export interface RailDict {
     browse: string
     worlds: string
     studio: string
+    thingiverse: string
     streaks: string
     inMatch: string
   }
@@ -272,9 +281,15 @@ export interface RailDict {
   roomTab: {
     heading: string
     theLounge: string
-    /** `{name}` is the room. Both the button's title and the field's label. */
+    /** `{name}` is the room. Both the row's control and the field's label. */
     rename: string
-    renameShort: string
+    /** `{name}` is the room. The one control on a manageable row. */
+    editOf: string
+    /** Over the rooms nobody has put in a group. Drawn only beside one. */
+    ungrouped: string
+    /** `{n}` is how many more rooms the loose band is holding back. */
+    showAll: string
+    showFewer: string
     unlistedTag: string
     noneYet: string
 
@@ -327,14 +342,16 @@ export interface RailDict {
     pinForEveryone: string
     pinNote: string
     groupLabel: string
+    /** Inside the field that makes a caption nobody has used yet. */
     groupPlaceholder: string
     groupNote: string
     /** Above the captions this space already uses. */
     groupExisting: string
-    /** `{name}` is the room. The title on the row's face button. */
-    faceOf: string
-    /** The button's own word, beside "Rename". */
-    faceShort: string
+    /** The chip that takes a room out of every group. */
+    groupNone: string
+    /** The chip that opens the field, for a caption nobody has used yet. */
+    groupNew: string
+    nameLabel: string
     iconLabel: string
     colourLabel: string
     /** The swatch that takes the colour off again. */
@@ -451,6 +468,10 @@ export interface RailDict {
   chat: {
     talkingIn: string
     theLounge: string
+    /** The picker that opens behind the conversation you are reading. */
+    switchRoom: string
+    filterRooms: string
+    noRoomMatches: string
     catchingUp: string
     nothingSaid: string
     say: string
@@ -514,11 +535,31 @@ export interface RailDict {
   }
 
   /** The tools at the foot of the rail, and the door above them. */
+  /** The purse, and handing some of it to somebody in the space. */
+  purse: {
+    heading: string
+    send: string
+    close: string
+    pickPerson: string
+    howMuch: string
+    sendIt: string
+    /** `{n}` coins, once they have gone. */
+    sent: string
+  }
   tabs: {
     chat: string
     room: string
     visitors: string
+    /** The shelf, and what has been summoned off it. */
+    things: string
     toolsLabel: string
+    /** The app's own background loop, beside the radio in the Room tab. */
+    music: string
+    /** Whether running costs anything here. Owners and admins only. */
+    stamina: string
+    staminaOn: string
+    staminaOff: string
+    staminaFailed: string
     play: string
     playHint: string
     close: string
@@ -533,6 +574,69 @@ export interface RailDict {
       thisSpace: string
       letIn: string
       notNow: string
+    }
+    /**
+     * The thingiverse tab.
+     *
+     * The *shelf* half of the vocabulary. What you read while holding something
+     * over a floor is in `world.ts`, with the rest of the HUD - see the note
+     * there about why one feature's words are split across two dictionaries.
+     */
+    thingiverse: {
+      heading: string
+      /** The three bands. `{n}` is how many are in each. */
+      yours: string
+      shared: string
+      here: string
+      /** What to type, when the shelf is empty and there is nothing to press. */
+      hint: string
+      /** On the door itself, beside the name. A hint, not a sentence. */
+      hint2: string
+      search: string
+      summon: string
+      /** No world on screen, so nothing to summon into. */
+      away: string
+      /** The shelf is empty, or the room is. */
+      noneOnShelf: string
+      noneHere: string
+      /** A typed word that matches nothing on the shelf. `{q}` is the word. */
+      noMatch: string
+      /**
+       * Opens the shelf over the canvas, at tile size.
+       *
+       * The same panel a bare `/xo` opens - see `ask` - which is why the button
+       * shows the command beside it rather than hiding that they are one thing.
+       */
+      openInWorld: string
+      /**
+       * Why a selected thing has no controls.
+       *
+       * Furniture is moved in creative mode only - `canBuild` is `!readOnly &&
+       * mode === 'creative'` - and the switch is a chip over the canvas rather
+       * than anything in this panel, so the panel has to name it.
+       */
+      needCreative: string
+      /** Per-thing controls, once one is selected. */
+      move: string
+      turn: string
+      bigger: string
+      smaller: string
+      dismiss: string
+      blocks: string
+      falls: string
+      /** Whether a thing outlives whoever summoned it, and the same for the next. */
+      keep: string
+      keepDefault: string
+      /** Per-blueprint, and only for the ones that are yours. */
+      share: string
+      unshare: string
+      rename: string
+      retire: string
+      /** `{name}` is somebody standing in the room with you. */
+      handTo: string
+      hand: string
+      mine: string
+      working: string
     }
   }
 }
@@ -552,6 +656,8 @@ export const RAIL_EN: RailDict = {
     places: 'Places',
     people: 'People',
     whoIsHere: 'Who is here',
+    peopleTools: 'People & tools',
+    backToPlaces: 'Where to go',
     inPlace: {
       lounge: 'In the lounge',
       cafe: 'In the café',
@@ -569,6 +675,7 @@ export const RAIL_EN: RailDict = {
     browse: 'Browse',
     worlds: 'Worlds',
     studio: 'Studio',
+    thingiverse: 'Thingiverse',
     streaks: 'Streaks',
     inMatch: 'In the match',
   },
@@ -625,11 +732,26 @@ export const RAIL_EN: RailDict = {
     roles: { owner: 'owner', admin: 'admin', member: 'member', guest: 'guest' },
   },
 
+  purse: {
+    heading: 'Coins',
+    send: 'Send some',
+    close: 'Never mind',
+    pickPerson: 'Who?',
+    howMuch: 'How many',
+    sendIt: 'Send',
+    sent: 'Sent {n}.',
+  },
   tabs: {
     chat: 'Chat',
     room: 'Room',
     visitors: 'Visitors',
+    things: 'Things',
     toolsLabel: 'Rail tools',
+    music: 'Music',
+    stamina: 'Stamina',
+    staminaOn: 'Running costs breath. Walk to get it back.',
+    staminaOff: 'Run as long as you like.',
+    staminaFailed: 'That could not be changed',
     play: 'Play',
     playHint: 'a level →',
     close: 'Close',
@@ -654,11 +776,47 @@ export const RAIL_EN: RailDict = {
       letIn: 'Let in',
       notNow: 'Not now',
     },
+    thingiverse: {
+      heading: 'Thingiverse',
+      yours: 'Yours ({n})',
+      shared: 'Shared ({n})',
+      here: 'In this room ({n})',
+      hint: 'Type /thingiverse ball in the chat to summon one.',
+      hint2: 'things →',
+      search: 'Search the packs',
+      summon: 'Summon',
+      away: 'Walk into a world to summon anything.',
+      noneOnShelf: 'Nothing on the shelf yet.',
+      noneHere: 'Nothing has been summoned in here.',
+      noMatch: 'Nothing here matches “{q}”.',
+      openInWorld: 'Open the shelf in the room',
+      needCreative: 'Switch the world to creative mode to move this about.',
+      move: 'Move',
+      turn: 'Turn',
+      bigger: 'Bigger',
+      smaller: 'Smaller',
+      dismiss: 'Dismiss',
+      blocks: 'Blocks the way',
+      falls: 'Falls',
+      keep: 'Stays here',
+      keepDefault: 'New things stay when I leave',
+      share: 'Share with the space',
+      unshare: 'Keep to yourself',
+      rename: 'Rename',
+      retire: 'Retire',
+      handTo: 'Hand to {name}',
+      hand: 'Hand over',
+      mine: 'Yours',
+      working: 'Working…',
+    },
   },
 
   chat: {
     talkingIn: 'Talking in',
     theLounge: 'The lounge',
+    switchRoom: 'Switch conversation',
+    filterRooms: 'Filter rooms',
+    noRoomMatches: 'No room by that name.',
     catchingUp: 'Catching up…',
     nothingSaid: 'Nothing said yet.',
     say: 'Say something',
@@ -721,7 +879,10 @@ export const RAIL_EN: RailDict = {
     heading: 'Rooms',
     theLounge: 'The lounge',
     rename: 'Rename {name}',
-    renameShort: 'Rename',
+    editOf: 'Edit {name}',
+    ungrouped: 'Not in a group',
+    showAll: 'Show {n} more',
+    showFewer: 'Show fewer',
     unlistedTag: 'unlisted',
     noneYet: 'No rooms yet — just the lounge.',
 
@@ -777,11 +938,12 @@ export const RAIL_EN: RailDict = {
     pinForEveryone: 'Keep at the top for everyone',
     pinNote: 'Pinned rooms lead the Places list for everybody in the space.',
     groupLabel: 'Group',
-    groupPlaceholder: 'No group',
-    groupNote: 'Rooms sharing a group name are listed together. Empty for none.',
+    groupPlaceholder: 'Name the group',
+    groupNote: 'Rooms in the same group are listed together.',
     groupExisting: 'Already in use',
-    faceOf: 'How {name} is listed',
-    faceShort: 'Look',
+    groupNone: 'None',
+    groupNew: 'New group',
+    nameLabel: 'Name',
     iconLabel: 'Icon',
     colourLabel: 'Colour',
     colourNone: 'No colour',
@@ -1029,6 +1191,8 @@ export const RAIL_DE: RailDict = {
     places: 'Orte',
     people: 'Leute',
     whoIsHere: 'Wer ist da',
+    peopleTools: 'Leute & Werkzeuge',
+    backToPlaces: 'Wohin',
     inPlace: {
       lounge: 'In der Lounge',
       cafe: 'Im Café',
@@ -1046,6 +1210,7 @@ export const RAIL_DE: RailDict = {
     browse: 'Stöbern',
     worlds: 'Welten',
     studio: 'Studio',
+    thingiverse: 'Thingiverse',
     streaks: 'Serien',
     inMatch: 'Im Match',
   },
@@ -1107,11 +1272,26 @@ export const RAIL_DE: RailDict = {
     },
   },
 
+  purse: {
+    heading: 'Münzen',
+    send: 'Etwas senden',
+    close: 'Doch nicht',
+    pickPerson: 'An wen?',
+    howMuch: 'Wie viele',
+    sendIt: 'Senden',
+    sent: '{n} gesendet.',
+  },
   tabs: {
     chat: 'Chat',
     room: 'Raum',
     visitors: 'Besuch',
+    things: 'Dinge',
     toolsLabel: 'Werkzeuge der Leiste',
+    music: 'Musik',
+    stamina: 'Ausdauer',
+    staminaOn: 'Rennen kostet Puste. Gehen bringt sie zurück.',
+    staminaOff: 'Rennen, so lange Sie wollen.',
+    staminaFailed: 'Das ließ sich nicht ändern',
     play: 'Spielen',
     playHint: 'ein Level →',
     close: 'Schließen',
@@ -1136,11 +1316,47 @@ export const RAIL_DE: RailDict = {
       letIn: 'Hereinlassen',
       notNow: 'Jetzt nicht',
     },
+    thingiverse: {
+      heading: 'Thingiverse',
+      yours: 'Ihre ({n})',
+      shared: 'Geteilt ({n})',
+      here: 'In diesem Raum ({n})',
+      hint: 'Tippen Sie /thingiverse ball in den Chat, um etwas zu rufen.',
+      hint2: 'Dinge →',
+      search: 'Pakete durchsuchen',
+      summon: 'Rufen',
+      away: 'Gehen Sie in eine Welt, um etwas zu rufen.',
+      noneOnShelf: 'Noch nichts im Regal.',
+      noneHere: 'Hier wurde noch nichts gerufen.',
+      noMatch: 'Nichts hier passt zu „{q}“.',
+      openInWorld: 'Regal im Raum öffnen',
+      needCreative: 'Schalten Sie die Welt in den Kreativmodus, um das hier zu bewegen.',
+      move: 'Bewegen',
+      turn: 'Drehen',
+      bigger: 'Größer',
+      smaller: 'Kleiner',
+      dismiss: 'Wegnehmen',
+      blocks: 'Versperrt den Weg',
+      falls: 'Fällt',
+      keep: 'Bleibt hier',
+      keepDefault: 'Neues bleibt, wenn ich gehe',
+      share: 'Mit dem Space teilen',
+      unshare: 'Für sich behalten',
+      rename: 'Umbenennen',
+      retire: 'Aus dem Regal',
+      handTo: 'An {name} geben',
+      hand: 'Übergeben',
+      mine: 'Ihres',
+      working: 'Wird erledigt …',
+    },
   },
 
   chat: {
     talkingIn: 'Gespräch in',
     theLounge: 'Die Lounge',
+    switchRoom: 'Gespräch wechseln',
+    filterRooms: 'Räume filtern',
+    noRoomMatches: 'Kein Raum mit diesem Namen.',
     catchingUp: 'Wird nachgeladen …',
     nothingSaid: 'Noch nichts gesagt.',
     say: 'Nachricht …',
@@ -1205,7 +1421,10 @@ export const RAIL_DE: RailDict = {
     heading: 'Räume',
     theLounge: 'Die Lounge',
     rename: '{name} umbenennen',
-    renameShort: 'Umbenennen',
+    editOf: '{name} bearbeiten',
+    ungrouped: 'Ohne Gruppe',
+    showAll: '{n} weitere zeigen',
+    showFewer: 'Weniger zeigen',
     unlistedTag: 'ungelistet',
     noneYet: 'Noch keine Räume — nur die Lounge.',
 
@@ -1262,11 +1481,12 @@ export const RAIL_DE: RailDict = {
     pinForEveryone: 'Für alle oben behalten',
     pinNote: 'Angeheftete Räume stehen bei allen im Space ganz oben unter Orte.',
     groupLabel: 'Gruppe',
-    groupPlaceholder: 'Keine Gruppe',
-    groupNote: 'Räume mit demselben Gruppennamen stehen zusammen. Leer lassen für keine.',
+    groupPlaceholder: 'Name der Gruppe',
+    groupNote: 'Räume in derselben Gruppe stehen zusammen.',
     groupExisting: 'Bereits vergeben',
-    faceOf: 'Wie {name} gelistet wird',
-    faceShort: 'Aussehen',
+    groupNone: 'Keine',
+    groupNew: 'Neue Gruppe',
+    nameLabel: 'Name',
     iconLabel: 'Symbol',
     colourLabel: 'Farbe',
     colourNone: 'Keine Farbe',
@@ -1537,6 +1757,8 @@ export const RAIL_BG: RailDict = {
     places: 'Места',
     people: 'Хора',
     whoIsHere: 'Кой е тук',
+    peopleTools: 'Хора и инструменти',
+    backToPlaces: 'Накъде',
     inPlace: {
       lounge: 'В лоунджа',
       cafe: 'В кафенето',
@@ -1554,6 +1776,7 @@ export const RAIL_BG: RailDict = {
     browse: 'Разглеждане',
     worlds: 'Светове',
     studio: 'Студио',
+    thingiverse: 'Thingiverse',
     streaks: 'Серии',
     inMatch: 'В мача',
   },
@@ -1615,11 +1838,26 @@ export const RAIL_BG: RailDict = {
     },
   },
 
+  purse: {
+    heading: 'Монети',
+    send: 'Изпрати малко',
+    close: 'Няма нужда',
+    pickPerson: 'На кого?',
+    howMuch: 'Колко',
+    sendIt: 'Изпрати',
+    sent: 'Изпратени {n}.',
+  },
   tabs: {
     chat: 'Чат',
     room: 'Стая',
     visitors: 'Посетители',
+    things: 'Неща',
     toolsLabel: 'Инструменти на лентата',
+    music: 'Музика',
+    stamina: 'Издръжливост',
+    staminaOn: 'Тичането коства дъх. Ходенето го връща.',
+    staminaOff: 'Тичайте колкото искате.',
+    staminaFailed: 'Това не можа да се промени',
     play: 'Игра',
     playHint: 'ниво →',
     close: 'Затвори',
@@ -1644,11 +1882,47 @@ export const RAIL_BG: RailDict = {
       letIn: 'Пусни',
       notNow: 'Не сега',
     },
+    thingiverse: {
+      heading: 'Thingiverse',
+      yours: 'Ваши ({n})',
+      shared: 'Споделени ({n})',
+      here: 'В тази стая ({n})',
+      hint: 'Напишете /thingiverse ball в чата, за да призовете нещо.',
+      hint2: 'неща →',
+      search: 'Търсене в пакетите',
+      summon: 'Призови',
+      away: 'Влезте в свят, за да призовете нещо.',
+      noneOnShelf: 'Още нищо на рафта.',
+      noneHere: 'Тук още нищо не е призовано.',
+      noMatch: 'Тук нищо не съвпада с „{q}“.',
+      openInWorld: 'Отвори рафта в стаята',
+      needCreative: 'Превключете света в режим „творчество“, за да местите това.',
+      move: 'Премести',
+      turn: 'Завърти',
+      bigger: 'По-голямо',
+      smaller: 'По-малко',
+      dismiss: 'Премахни',
+      blocks: 'Препречва пътя',
+      falls: 'Пада',
+      keep: 'Остава тук',
+      keepDefault: 'Новите неща остават, щом изляза',
+      share: 'Сподели със спейса',
+      unshare: 'Запази за себе си',
+      rename: 'Преименувай',
+      retire: 'Свали от рафта',
+      handTo: 'Дай на {name}',
+      hand: 'Предай',
+      mine: 'Ваше',
+      working: 'Изпълнява се…',
+    },
   },
 
   chat: {
     talkingIn: 'Разговор в',
     theLounge: 'Лоунджът',
+    switchRoom: 'Смени разговора',
+    filterRooms: 'Филтрирай стаите',
+    noRoomMatches: 'Няма стая с това име.',
     catchingUp: 'Догонва се…',
     nothingSaid: 'Още нищо не е казано.',
     say: 'Съобщение…',
@@ -1713,7 +1987,10 @@ export const RAIL_BG: RailDict = {
     heading: 'Стаи',
     theLounge: 'Лоунджът',
     rename: 'Преименувай {name}',
-    renameShort: 'Преименувай',
+    editOf: 'Редактирай {name}',
+    ungrouped: 'Без група',
+    showAll: 'Покажи още {n}',
+    showFewer: 'Покажи по-малко',
     unlistedTag: 'скрита',
     noneYet: 'Още няма стаи — само лоунджът.',
 
@@ -1769,11 +2046,12 @@ export const RAIL_BG: RailDict = {
     pinForEveryone: 'Дръж най-отгоре за всички',
     pinNote: 'Закачените стаи водят списъка „Места“ за всички в екипа.',
     groupLabel: 'Група',
-    groupPlaceholder: 'Без група',
-    groupNote: 'Стаите с едно и също име на група стоят заедно. Празно — без група.',
+    groupPlaceholder: 'Име на групата',
+    groupNote: 'Стаите в една група стоят заедно.',
     groupExisting: 'Вече се използват',
-    faceOf: 'Как е показана {name}',
-    faceShort: 'Вид',
+    groupNone: 'Никаква',
+    groupNew: 'Нова група',
+    nameLabel: 'Име',
     iconLabel: 'Икона',
     colourLabel: 'Цвят',
     colourNone: 'Без цвят',

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
   codeIsLive,
+  compareSignupOffers,
+  isSignupOffer,
   daysLeft,
   describeGrantEnd,
   grantIsLive,
@@ -8,6 +10,7 @@ import {
   type PromoCodeRecord,
   refusalFor,
   refusalForLocale,
+  type SignupOffer,
 } from '@/domain/promo/application'
 import { mintPromoCode } from '@/domain/promo/mint'
 
@@ -172,5 +175,56 @@ describe('refusals', () => {
     // they reveal - so the check is that neither names the code's state.
     expect(refusalFor('unknown')).not.toMatch(/expired|used|claimed/i)
     expect(refusalFor('inactive')).not.toMatch(/expired|used|claimed/i)
+  })
+})
+
+
+describe('the sign-up offers', () => {
+  /** A code with only the fields the ordering cares about filled in. */
+  function offer(code: string, tier: SignupOffer['tier'], freeDays: number | null): SignupOffer {
+    return { code, label: null, tier, freeDays, spaces: null, closesAt: null, remaining: null }
+  }
+
+  test('the prefix is what publishes a code', () => {
+    expect(isSignupOffer('SIGNUP50')).toBe(true)
+    expect(isSignupOffer('SIGNUP-K3M9PQRS')).toBe(true)
+    expect(isSignupOffer('CAFE24')).toBe(false)
+    expect(isSignupOffer('GRANT-K3M9PQRS')).toBe(false)
+  })
+
+  test('it is asked of the normalised code, so how it was typed cannot matter', () => {
+    expect(isSignupOffer('signup50')).toBe(true)
+    expect(isSignupOffer('signup 50')).toBe(true)
+  })
+
+  test('a string that could not be a code is not an offer either', () => {
+    expect(isSignupOffer('')).toBe(false)
+    expect(isSignupOffer(null)).toBe(false)
+    // Underscores fail the column's own pattern, so this never reaches the
+    // prefix test at all - which is the point of normalising first.
+    expect(isSignupOffer('SIGNUP_50')).toBe(false)
+  })
+
+  test('the better plan leads, whatever the run lengths are', () => {
+    const sorted = [offer('A', 'xo', 90), offer('B', 'xp', 7)].sort(compareSignupOffers)
+    expect(sorted.map((row) => row.code)).toEqual(['B', 'A'])
+  })
+
+  test('and within one plan, the longer run', () => {
+    const sorted = [offer('A', 'xo', 14), offer('B', 'xo', 30)].sort(compareSignupOffers)
+    expect(sorted.map((row) => row.code)).toEqual(['B', 'A'])
+  })
+
+  test('a grant with no end beats every finite one', () => {
+    const sorted = [offer('A', 'xo', 365), offer('B', 'xo', null)].sort(compareSignupOffers)
+    expect(sorted.map((row) => row.code)).toEqual(['B', 'A'])
+  })
+
+  test('two identical offers keep a stable order rather than wandering', () => {
+    const rows = [offer('SIGNUPB', 'xo', 30), offer('SIGNUPA', 'xo', 30)]
+    expect([...rows].sort(compareSignupOffers).map((row) => row.code)).toEqual([
+      'SIGNUPA',
+      'SIGNUPB',
+    ])
   })
 })

@@ -1,4 +1,5 @@
 import 'server-only'
+import { hiddenAmong } from '@/domain/moderation/hidden'
 import { repairXp, isFinish, isHue, type Finish } from '@kxb/xp'
 import { HOST_CAPABILITIES, type HostCapability } from '@kxb/xp/host'
 import type { XpSpacePolicy, XpState } from '@/domain/xps/events'
@@ -126,7 +127,15 @@ export async function listOwnedXps(
   return (data ?? []).map((row) => toProject(row as Row))
 }
 
-/** The public store. Published only, and readable signed out. */
+/**
+ * The public store. Published only, and readable signed out.
+ *
+ * The one XP listing that is filtered for takedowns, and the split is
+ * `banned_worlds`' rule applied honestly: taking something down removes it from
+ * where strangers meet it, and does not confiscate it from the person who made
+ * it. `listSpaceXps` and `listOwnedXps` are the author's own shelves and stay
+ * as they were - what an author sees is that nobody else can see it.
+ */
 export async function listPublishedXps(supabase: Client): Promise<XpProjectRow[]> {
   const { data, error } = await supabase
     .from('xps_read_model')
@@ -135,7 +144,10 @@ export async function listPublishedXps(supabase: Client): Promise<XpProjectRow[]
     .order('updated_at', { ascending: false })
 
   if (error) throw new Error(`Failed to list published projects: ${error.message}`)
-  return (data ?? []).map((row) => toProject(row as Row))
+
+  const rows = data ?? []
+  const down = await hiddenAmong(supabase, rows.map((row) => (row as Row).id))
+  return rows.filter((row) => !down.has((row as Row).id)).map((row) => toProject(row as Row))
 }
 
 /** One project, or null when the caller may not see it. RLS decides, not this. */

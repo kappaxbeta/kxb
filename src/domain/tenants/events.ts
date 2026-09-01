@@ -164,6 +164,21 @@ export type SpaceCapability =
    * src/lib/tenant.ts, which is where that exception is argued.
    */
   | 'perf_display'
+  /**
+   * Whether running costs anything.
+   *
+   * The second capability in this list that is not a permission - `perf_display`
+   * is the first, and the argument is the same one: it is a per-space switch,
+   * written to the tenant's own stream, already projected, and inventing a
+   * column for one boolean would be a migration to say what this already says.
+   *
+   * Off is what every world has always been: hold shift and go, for as long as
+   * you like. On makes distance cost something, which is what turns a course
+   * into a course - so it defaults *off*, like `perf_display` and unlike the
+   * permissions above, because a space that has never asked for it has not
+   * asked for it.
+   */
+  | 'stamina'
 
 export const SPACE_CAPABILITIES: SpaceCapability[] = [
   'build',
@@ -174,6 +189,7 @@ export const SPACE_CAPABILITIES: SpaceCapability[] = [
   'battle',
   'agents',
   'perf_display',
+  'stamina',
 ]
 
 /**
@@ -184,10 +200,11 @@ export const SPACE_CAPABILITIES: SpaceCapability[] = [
  * screen. Split out rather than filtered at each of the two call sites, so
  * adding a capability makes somebody decide which list it is on.
  */
-export type GuestWriteCapability = Exclude<SpaceCapability, 'perf_display'>
+export type GuestWriteCapability = Exclude<SpaceCapability, 'perf_display' | 'stamina'>
 
 export const GUEST_WRITE_CAPABILITIES: GuestWriteCapability[] = SPACE_CAPABILITIES.filter(
-  (capability): capability is GuestWriteCapability => capability !== 'perf_display',
+  (capability): capability is GuestWriteCapability =>
+    capability !== 'perf_display' && capability !== 'stamina',
 )
 
 /** Human labels, for the console and the event desk. */
@@ -200,6 +217,7 @@ export const SPACE_CAPABILITY_LABELS: Record<SpaceCapability, string> = {
   battle: 'Matches',
   agents: 'Creatures',
   perf_display: 'Performance readout',
+  stamina: 'Stamina',
 }
 
 export function isSpaceCapability(value: string): value is SpaceCapability {

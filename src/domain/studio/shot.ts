@@ -1,5 +1,6 @@
-import { type AvatarClip, isKnownAvatar } from '@/domain/lounge/avatars'
+import type { AvatarClip } from '@/domain/lounge/avatars'
 import { jumpArc } from '@/domain/lounge/jump'
+import { type AnimationDoc, parseAnyDoc, samplePose } from '@/domain/animator/clip'
 import {
   type Action,
   type ActionKind,
@@ -17,6 +18,7 @@ import {
   type GlowSpec,
   type GoalSpec,
   type GroundSpec,
+  isStudioLook,
   type LightSpec,
   parseScene,
   type PeepSpec,
@@ -263,6 +265,23 @@ export interface Actor {
    * do not cover ground at the same rate on the same clip.
    */
   stride: number
+  /**
+   * A performance keyed in the animator, or null for a body the clips drive.
+   *
+   * The exception to "the clip is not stored" above, and a different thing
+   * from the clip that is not: that one is the *gait*, derived from speed so
+   * feet cannot moonwalk, and this one is authored - a wave, a bow, a sword
+   * swing - which is precisely what a gait cannot say. It plays during a
+   * `pose` action, sampled by `actorAt` and laid over whatever the gait is
+   * doing: bones the keys drive follow the keys, bones they never mention stay
+   * with the walk.
+   *
+   * The document keyed in the editor rather than a baked track, because a shot
+   * lives in a URL: a bake is one dense sample per frame and `samplePose` is
+   * happy to blend the keys directly. It is also what lets "edit this clip"
+   * reopen the animator on the real thing.
+   */
+  pose: AnimationDoc | null
 }
 
 /**
@@ -403,6 +422,7 @@ export const DEFAULT_ACTOR: Actor = {
   emoteHeight: 2.9,
   emoteSize: 0.9,
   stride: DEFAULT_STRIDE,
+  pose: null,
 }
 
 /** A still node lifted into a shot: itself, with nothing keyed on it yet. */
@@ -790,6 +810,27 @@ export function actorAt(actor: Actor, t: number, live?: LiveMotion): PeepSpec {
 
   const emote = running(actions, 'emote', t)
   const talk = running(actions, 'talk', t)
+  const gone = running(actions, 'hide', t)
+
+  /**
+   * The authored clip, sampled at how far into the beat we are.
+   *
+   * Looping when the document says to, so a two-second wave fills a six-second
+   * beat with three waves rather than one wave and four seconds of the last
+   * key held. A beat with no clip behind it plays nothing at all - the actor
+   * simply keeps doing what the gait says, which is also what the editor shows
+   * the moment the clip is authored.
+   */
+  const posing = running(actions, 'pose', t)
+  const pose =
+    posing && actor.pose
+      ? samplePose(
+          actor.pose,
+          actor.pose.loop && actor.pose.duration > 0
+            ? (t - posing.t) % actor.pose.duration
+            : Math.min(t - posing.t, actor.pose.duration),
+        )
+      : undefined
 
   const base: PeepSpec = {
     avatar: actor.avatar,
@@ -818,6 +859,10 @@ export function actorAt(actor: Actor, t: number, live?: LiveMotion): PeepSpec {
     emoteSize: actor.emoteSize,
     glow: glowAt(actor.glow, t),
     say: talk ? talk.text : null,
+    // Spread rather than set, so an actor who is never hidden carries no key
+    // and a shot composed before this existed re-encodes byte for byte.
+    ...(gone ? { hidden: true } : {}),
+    ...(pose ? { pose } : {}),
   }
 
   // Keys last, and unconditionally - see the note at the top about why an
@@ -878,7 +923,12 @@ export function sceneAt(shot: ShotSpec, t: number): StudioScene {
     // Resolved here rather than carried across, unlike the set: the sweep moves
     // and this function is where moving happens.
     rainbow: rainbowAt(shot.rainbow, t),
-    blocks: shot.blocks.map((block) => resolve(block, t)),
+    // `+ t` rather than `= t`: the block's own `time` is a phase, so a galaxy
+    // set a second ahead stays a second ahead for the whole shot.
+    blocks: shot.blocks.map((block) => {
+      const at = resolve(block, t)
+      return { ...at, time: at.time + t }
+    }),
     goals: shot.goals.map((goal) => resolve(goal, t)),
     balls: shot.balls.map((ball) => resolve(ball, t)),
     light: resolve(shot.light, t),
@@ -1021,7 +1071,7 @@ function actor(value: unknown): Actor {
   return {
     name: typeof raw.name === 'string' ? raw.name.slice(0, 24) : '',
     avatar:
-      typeof raw.avatar === 'string' && isKnownAvatar(raw.avatar)
+      typeof raw.avatar === 'string' && isStudioLook(raw.avatar)
         ? raw.avatar
         : DEFAULT_ACTOR.avatar,
     x: number(raw.x, legacyStart ? number(legacyStart.x, 0, -40, 40) : 0, -40, 40),
@@ -1035,6 +1085,7 @@ function actor(value: unknown): Actor {
     emoteHeight: number(raw.emoteHeight, DEFAULT_ACTOR.emoteHeight, 0, 12),
     emoteSize: number(raw.emoteSize, DEFAULT_ACTOR.emoteSize, 0.2, 3),
     stride: number(raw.stride, DEFAULT_STRIDE, 0.2, 8),
+    pose: parseAnyDoc(raw.pose),
   }
 }
 
@@ -1298,6 +1349,7 @@ export function shotFromScene(scene: StudioScene, duration = DEFAULT_SHOT.durati
         ? { mode: 'colour', colour: peep.glow.colour, sparkle: peep.glow.sparkle, strength: peep.glow.strength }
         : DEFAULT_GLOW,
       stride: DEFAULT_STRIDE,
+      pose: null,
     })),
     blocks: scene.blocks.map(still),
     goals: scene.goals.map(still),

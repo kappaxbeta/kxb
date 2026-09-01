@@ -57,6 +57,8 @@ export function SelfAvatar({
   tone,
   visible,
   dancing,
+  posing = null,
+  pose = null,
   party,
   partyHost,
 }: {
@@ -65,6 +67,29 @@ export function SelfAvatar({
   tone?: PlateTone
   visible: boolean
   dancing: boolean
+  /**
+   * A clip a *thing* is making the body play, or null for its own gait.
+   *
+   * Sitting in a chair, pulling a lever, whatever the blueprint's `use` block
+   * names. It overrides the gait outright rather than blending with it, which
+   * is the honest shape: somebody in a chair is not also walking, and the speed
+   * the gait is computed from is zero anyway while the body is pinned to a seat.
+   *
+   * Narrower than what a blueprint may name - a `UseSpec` clip is any string,
+   * because which clips exist is the body's business and this app has two kinds
+   * of body. The scene is what maps a name onto one of the four this rig has;
+   * a name it does not recognise arrives here as null and the body stands there.
+   */
+  posing?: AvatarClip | null
+  /**
+   * A clip the space made, built by the scene and handed down ready to play.
+   *
+   * Beside `posing` rather than folded into it, because the two are resolved in
+   * different places and only one of them can be: a pack clip is one of four
+   * names this rig carries, and a space clip is an object nobody can name their
+   * way to. See `BodyModel.pose`.
+   */
+  pose?: THREE.AnimationClip | null
   /** Our own id while the lights are on, null otherwise. It picks the hue. */
   party: string | null
   /** Whether we are the one who started it, and so cycle rather than sit still. */
@@ -94,13 +119,15 @@ export function SelfAvatar({
     const speed = player.distanceTo(previous.current) / Math.max(delta, 0.0001)
     previous.current.copy(player)
 
-    const next: AvatarClip = dancing
-      ? 'dance'
-      : speed > RUN_SPEED
-        ? 'run'
-        : speed > WALK_SPEED
-          ? 'walk'
-          : 'idle'
+    const next: AvatarClip = posing
+      ? posing
+      : dancing
+        ? 'dance'
+        : speed > RUN_SPEED
+          ? 'run'
+          : speed > WALK_SPEED
+            ? 'walk'
+            : 'idle'
     if (next !== clip) setClip(next)
 
     // The lunge clock, ticked here for the same reason the gait is: a kick
@@ -158,7 +185,13 @@ export function SelfAvatar({
           mirror have something standing where you are from the first frame -
           an empty mirror reads as a broken camera, not as a pending download. */}
       <Suspense fallback={<AvatarPlaceholder />}>
-        <BodyModel look={model} clip={clip} ignoreRay rim={party ? partyColour : null} />
+        <BodyModel
+          look={model}
+          clip={clip}
+          pose={pose}
+          ignoreRay
+          rim={party ? partyColour : null}
+        />
       </Suspense>
 
       {/* Inside the visibility gate with the body, because it is drawn at our

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { recordBackofficeAction } from '@/domain/backoffice/audit'
 import { resolveFeatures } from '@/domain/flags/queries'
 import { mintPromoCode } from '@/domain/promo/mint'
+import { showSkinInLounge, wearSkin } from '@/domain/profile/looks'
 import { requireUser } from '@/lib/auth'
 import { requireBackofficeSection } from '@/lib/backoffice'
 import { env } from '@/lib/env'
@@ -33,7 +34,18 @@ const SHOP_CLOSED = 'The skin shop is not open.'
 // ---------------------------------------------------------------------------
 
 /**
- * Equip a skin, or `null` to go back to the dummy.
+ * Dress your XP body, or `null` to strip it back to the dummy.
+ *
+ * The *other* body. Everybody has two - the peep on `profile_avatars` and this
+ * one - and they are kept side by side rather than one over the other: picking
+ * a Knight here does not spend the fox, and nothing in this function touches
+ * the peep's table. Which of the two a given player draws is a mode, and the
+ * mode lives in `wearSkinInLounge`.
+ *
+ * Deliberately *not* flipping that mode, which is the bug this shape exists to
+ * make impossible: equipping used to turn "show me in the lounge" on in the
+ * same write, so buying a body for the games quietly replaced the peep in every
+ * space the account walked into.
  *
  * The ownership check lives in the row policy on profile_skins, not here - the
  * database refuses a skin you do not own, and this action only has to turn
@@ -43,95 +55,39 @@ const SHOP_CLOSED = 'The skin shop is not open.'
 export async function chooseSkin(model: string | null): Promise<SkinActionResult> {
   const { user, supabase } = await requireUser()
 
-  if (model === null) {
-    const { error } = await supabase.from('profile_skins').delete().eq('user_id', user.id)
-    if (error) return { ok: false, error: 'That change did not save. Try again.' }
-    revalidatePath('/skins')
-    return { ok: true }
-  }
+  const result = await wearSkin(supabase, user.id, model)
+  if (!result.ok) return result
 
-  const { error } = await supabase.from('profile_skins').upsert(
-    {
-      user_id: user.id,
-      model,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  )
-
-  if (error) {
-    return { ok: false, error: 'You can only wear a skin you own.' }
-  }
-
-  revalidatePath('/skins')
-  return { ok: true }
-}
-
-/**
- * Wear a skin in the lounge, or take it off and be your peep again.
- *
- * One action rather than `chooseSkin` followed by `wearSkinInLounge`, because
- * the two together are one intent - "be the Knight in here" - and doing them
- * as two round trips leaves a visible middle state where somebody is wearing
- * a skin they did not ask to wear in the games yet.
- *
- * Passing null clears the lounge flag and leaves the skin equipped: taking the
- * Knight out of the café is not taking him out of the arcade.
- */
-export async function wearLoungeSkin(model: string | null): Promise<SkinActionResult> {
-  const { user, supabase } = await requireUser()
-
-  if (model === null) {
-    const { error } = await supabase
-      .from('profile_skins')
-      .update({ in_lounge: false, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id)
-
-    if (error) return { ok: false, error: 'That change did not save. Try again.' }
-    revalidatePath('/', 'layout')
-    return { ok: true }
-  }
-
-  // The row policy is what refuses a skin you do not own - see the migration.
-  const { error } = await supabase.from('profile_skins').upsert(
-    {
-      user_id: user.id,
-      model,
-      in_lounge: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  )
-
-  if (error) return { ok: false, error: 'You can only wear a skin you own.' }
-
+  // Everywhere a body is drawn from the server, not just the shop: the XP
+  // player reads this row, and so does any world left in XP mode.
   revalidatePath('/', 'layout')
   return { ok: true }
 }
 
 /**
- * Wear your skin in the lounge too, or go back to the peep.
+ * Which of your two bodies this world draws: the peep, or the XP body.
  *
- * A flag on the skin you already have on rather than a second choice of body:
- * there is nothing to decide until you own one, and taking the skin off should
- * take this with it. The animal is never touched, so switching back is
- * switching back rather than picking again.
+ * A mode switch, not a choice of costume, and that distinction is the whole
+ * point of this being its own action. You always have both - the peep on
+ * `profile_avatars`, the XP body on `profile_skins` - and neither one is
+ * spent by the other. This flag only says which one a player shows.
  *
- * Refuses when there is no skin equipped, because a lounge told to draw
+ * It used to be flipped as a side effect of *equipping* a skin, which meant
+ * buying a Knight for the games silently replaced the peep everywhere: one
+ * click answered two questions, and only one of them had been asked. Equipping
+ * is `chooseSkin`; being seen in here is this.
+ *
+ * Off is the default and stays the default, so a space draws a peep until
+ * somebody deliberately asks it not to.
+ *
+ * Refuses when there is no XP body to show, because a world told to draw
  * "nothing, but in the lounge" would draw nothing.
  */
 export async function wearSkinInLounge(wear: boolean): Promise<SkinActionResult> {
   const { user, supabase } = await requireUser()
 
-  const { data, error } = await supabase
-    .from('profile_skins')
-    .update({ in_lounge: wear, updated_at: new Date().toISOString() })
-    .eq('user_id', user.id)
-    .select('model')
-    .maybeSingle()
-
-  if (error) return { ok: false, error: 'That change did not save. Try again.' }
-  if (!data) return { ok: false, error: 'Put a skin on first, then wear it here.' }
+  const result = await showSkinInLounge(supabase, user.id, wear)
+  if (!result.ok) return result
 
   // Everywhere a body is drawn from the server: the lounge, the rooms, the
   // lobby's podium.

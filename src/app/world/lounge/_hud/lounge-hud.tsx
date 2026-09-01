@@ -43,12 +43,21 @@ export function loungeControls({
   flying,
   canBuild,
   combat,
+  canSetMode,
   dict,
 }: {
   isTouch: boolean
   flying: boolean
   canBuild: boolean
   combat: boolean
+  /**
+   * Whether this person may flip the world between building and fighting.
+   *
+   * The owner/admin pair, and the same answer the chip in the corner is drawn
+   * from - so the Tab row appears for exactly the people whose Tab does
+   * something. Everybody else keeps the key as the browser's.
+   */
+  canSetMode: boolean
   /**
    * The words, passed in rather than read here.
    *
@@ -110,6 +119,9 @@ export function loungeControls({
   rows.push(row([key('O')], t.seeTheRoom))
   rows.push(row([actionKey('G')], t.dance))
   rows.push(row([key('L')], t.mouseLook))
+  // Above the housekeeping pair below, because it changes the world rather
+  // than the way you are looking at it.
+  if (canSetMode) rows.push(row([key('Tab')], t.switchMode))
   rows.push(row([key('H')], t.controls))
   rows.push(row([key('Esc')], t.leave))
   return rows
@@ -238,6 +250,8 @@ export function Hud({
   onHideHelp,
   selected,
   onOpenPicker,
+  near,
+  onAct,
   onCapture,
   shot,
   presence,
@@ -282,6 +296,14 @@ export function Hud({
   onHideHelp: () => void
   selected: string
   onOpenPicker: () => void
+  /**
+   * The thing you are standing next to, and what E would do to it.
+   *
+   * The HUD does not decide this - it draws it. See `SelectedBlockChip`, which
+   * is one chip for the block and the thing because there is only one key.
+   */
+  near?: { name: string; model: string; line: string } | null
+  onAct?: () => void
   /** 'off' for the public showcase, which has no presence channel. */
   presence: PresenceStatus | 'off'
   peerCount: number
@@ -651,8 +673,19 @@ export function Hud({
             : 'pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2'
         }
       >
-        {canBuild && (
-          <SelectedBlockChip selected={selected} onOpen={onOpenPicker} isTouch={isTouch} />
+        {/*
+          Also when you cannot build: in play mode there is no palette to open,
+          but there is still a thing in front of you and still one key that acts
+          on it, and this chip is now where that key is announced.
+        */}
+        {(canBuild || near) && (
+          <SelectedBlockChip
+            selected={selected}
+            near={near}
+            onOpen={onOpenPicker}
+            onAct={onAct}
+            isTouch={isTouch}
+          />
         )}
       </div>
     </>

@@ -9,8 +9,10 @@ import { listGoals } from '@/domain/lounge/goal-queries'
 import { loungeImagesProjection } from '@/domain/lounge/image-projection'
 import { listLoungeImages } from '@/domain/lounge/image-queries'
 import { listLoungeBlocks } from '@/domain/lounge/queries'
-import { readProfileAvatar } from '@/domain/profile/avatar-queries'
-import { readLookFor, shopFor } from '@/domain/skins/queries'
+import { thingiverseProjection } from '@/domain/thingiverse/projection'
+import { listBlueprints, listClips, listThings } from '@/domain/thingiverse/queries'
+import { readAsDummy, readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { readLookFor, readXpBody, shopFor } from '@/domain/skins/queries'
 import { readSceneIdentity } from '@/domain/guests/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
 import { findWorldSpawn } from '@/domain/worlds/queries'
@@ -19,6 +21,7 @@ import {
   battleOpen,
   canWrite,
   hasRole,
+  hasTier,
   isGuest,
   perfDisplayOn,
   requireFeature,
@@ -67,6 +70,20 @@ export default async function LoungePage({
   // goals when somebody wanders in to build.
   await runProjection(supabase, loungeGoalsProjection, tenant.id)
 
+  /**
+   * The thingiverse, when this space has one.
+   *
+   * Behind the flag *and* the tier - the same pair the rail's tab is behind -
+   * and behind them because both the projection run and the two queries are
+   * work for nothing in a space that cannot summon anything. A space with the
+   * feature off draws no furniture, which is what `initialThings` defaulting to
+   * empty in the scene means.
+   */
+  const summoning = context.features.thingiverse && hasTier(context, 'xo')
+  if (summoning) {
+    await runProjection(supabase, thingiverseProjection, tenant.id)
+  }
+
   // Saved arenas, for the panel that swaps one into the lounge. Only when the
   // battle feature is on for this caller - without it there are no arenas to
   // save to or load from, and the projection run would be work for nothing.
@@ -74,7 +91,8 @@ export default async function LoungePage({
     await runProjection(supabase, battlefieldsProjection, tenant.id)
   }
 
-  const [blocks, images, goals, avatar, name, arenas] = await Promise.all([
+  const [blocks, images, goals, avatar, name, arenas, things, shelf, clips] =
+    await Promise.all([
     listLoungeBlocks(supabase, tenant.id),
     listLoungeImages(supabase, tenant.id),
     // The lounge's own world id is the tenant id - see `worldOf`.
@@ -84,6 +102,9 @@ export default async function LoungePage({
     battleOpen(context)
       ? listBattlefields(supabase, tenant.id)
       : Promise.resolve([]),
+    summoning ? listThings(supabase, tenant.id, tenant.id, user.id) : Promise.resolve([]),
+    summoning ? listBlueprints(supabase, tenant.id, user.id) : Promise.resolve([]),
+    summoning ? listClips(supabase, tenant.id, user.id) : Promise.resolve([]),
   ])
 
   /**
@@ -102,6 +123,22 @@ export default async function LoungePage({
    * gave at the door. What changes is only what is standing under it.
    */
   const look = await readLookFor(supabase, user, tenant.id)
+
+  /**
+   * The wardrobe's three parts, from the rows that own them.
+   *
+   * `look` above is what the room *draws*; these are what the picker has to
+   * highlight, and they are not the same question. Somebody in peep mode still
+   * owns a Knight and the grid has to say so, and somebody in XP mode still has
+   * an animal underneath. Reading one from the other is how the two bodies
+   * became one and the peep got overwritten.
+   *
+   * An anonymous visitor has neither row: they stand in the dummy and the XP
+   * half is not offered at all.
+   */
+  const [xp, dummy] = user.is_anonymous
+    ? ([{ model: null, inLounge: false }, false] as const)
+    : await Promise.all([readXpBody(supabase, user.id), readAsDummy(supabase, user.id)])
 
   /**
    * The wardrobe's other half, for anybody who has one.
@@ -135,6 +172,15 @@ export default async function LoungePage({
       initialBlocks={blocks}
       initialImages={images}
       initialGoals={goals}
+      initialThings={things}
+      initialShelf={shelf}
+      initialClips={clips}
+      /*
+        Whether running costs anything here. Defaults off - every world this
+        product has ever had lets you run as long as you like, so a space that
+        has never touched the switch has not asked for the rule.
+      */
+      stamina={context.tenant.capabilities.stamina ?? false}
       readOnly={!canWrite(context)}
       /**
        * A guest walks.
@@ -169,7 +215,20 @@ export default async function LoungePage({
       avatar={look}
       animal={identity.avatar}
       skins={ownedSkins}
-      wearingSkin={wardrobe?.chosen && look === wardrobe.chosen ? wardrobe.chosen : null}
+      /*
+       * Both bodies and the mode, rather than one answer with the other half
+       * inferred from it.
+       *
+       * It used to be `isSkinLook(look)`, which read "is what we are drawing a
+       * skin" and called that the wardrobe's state - so the two questions the
+       * wardrobe actually asks ("which XP body do I own" and "which body does
+       * this room draw") had one answer between them. Equipping wrote the mode,
+       * and the peep vanished from every space at once. These three are read
+       * from the rows that own them.
+       */
+      xpBody={xp.model}
+      showXp={xp.inLounge}
+      asDummy={dummy}
       /*
         Measuring, when an operator has turned it on for this space. Off for
         everybody by default, and invisible in the room either way - see the

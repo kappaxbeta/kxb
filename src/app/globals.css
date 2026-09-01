@@ -425,6 +425,50 @@ body::after {
 }
 
 /* ---------------------------------------------------------------------------
+ * A surface that takes the window
+ * ---------------------------------------------------------------------------
+ * Marked with `.page-bare` by the editors: the composer, and anything else that
+ * is a viewport with controls beside it rather than a document in a column.
+ *
+ * Written here rather than as utilities on the page because none of the three
+ * things it changes are in the page's own subtree - the roster panel is a
+ * sibling of `<main>`, the gutter it reserves is on the shell above that, and
+ * the width cap is on `<main>` itself.
+ *
+ * `:has()` rather than a flag written onto the root element from an effect, and
+ * the difference is one that matters here: a class in the markup is true in the
+ * server's first byte, so the editor is never drawn once at document width and
+ * then snapped to full width a frame later. It is also the idiom this file
+ * already uses one screen up - see `.page-main:not(:has(.h-viewport-inset))`.
+ *
+ * The left navigation is untouched on purpose. It is the only way out of an
+ * editor that is always in the same place, and an editor you can only leave by
+ * finding the one link in its own header is one people close the tab on. It
+ * folds away by itself for anybody who wants the width.
+ *
+ * The roster is the right thing to lose: it answers "who is around" and "what
+ * is being said", neither of which is a question anybody has while placing a
+ * lamp, and it costs a fifth of a 1600px window - most of which the viewport
+ * wanted.
+ * ------------------------------------------------------------------------- */
+.min-h-dvh:has(.page-bare) .rail-panel-right {
+  display: none;
+}
+
+.rail-shell:has(.page-bare) {
+  /* The gutter the panel was reserving. Logical, so it undoes the shell's own
+   * `xl:pr-[...]` rather than fighting it in one writing direction only. */
+  padding-inline-end: 0;
+}
+
+.page-main:has(.page-bare) {
+  max-width: none;
+  /* The document padding is sized for a measure of text. A stage wants glass. */
+  padding-inline: 1rem;
+  padding-block: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
  * Token-driven components
  * ---------------------------------------------------------------------------
  * These rules are deliberately unlayered: Tailwind's utilities live in
@@ -541,6 +585,34 @@ body::after {
   textarea,
   select {
     font-size: max(16px, 1em);
+  }
+}
+
+/*
+ * And the one place the floor cannot be applied to the field alone.
+ *
+ * A code pane is a transparent-text `textarea` laid exactly over a painted
+ * `pre` (the sketch project view and the scripts panel; see `_sketch/editor`
+ * for the technique). Both layers are written at `text-[11px]`, so the floor
+ * above - which reaches the textarea and nothing else - raised the caret's
+ * text to 16px while the glyphs behind it stayed at 11. Measured at 375px:
+ * the textarea laid out its 909px-tall box over 1315px of 16px text and
+ * 783px of it sideways, so the caret sat a growing distance right of and
+ * below the character it was on, and the textarea started scrolling inside
+ * itself again - the very slip `h-max min-h-full` was sized to stop.
+ *
+ * So the floor is applied to the whole stack instead of to the field in it:
+ * on a phone the code is 16px in both layers, which is the size a phone
+ * wanted to read code at anyway, and the caret is back on its glyph. A flat
+ * 16px rather than `max(16px, 1em)` because the two layers must agree
+ * exactly and they do not share a parent - the gutter hangs off the scroll
+ * row, the paint off the box the textarea covers. The leading is a ratio
+ * (`leading-[1.45]`), so it follows on its own.
+ */
+@media (pointer: coarse) {
+  .code-stack pre,
+  .code-stack textarea {
+    font-size: 16px;
   }
 }
 
@@ -1207,6 +1279,23 @@ body::after {
   background-color: oklch(0.98 0.02 280 / 0.06);
 }
 
+/* A row with something parked over its right end.
+ *
+ * The pin sits *over* the link rather than beside it, so that a row does not
+ * reflow when the control appears on hover - and a room that is a level draws
+ * an `XP` pill at that same right end. On an unpinned room the two take turns:
+ * the pill fades as the pin arrives. On a pinned one the pin never leaves, and
+ * the two were simply drawn on top of each other.
+ *
+ * So the row gives the mark its own road when the mark is permanent. Here in
+ * CSS rather than as a `pr-8` on the element, because `.rail-link` is unlayered
+ * and sets `padding` as a shorthand: Tailwind's utilities live in
+ * `@layer utilities`, unlayered CSS outranks any layer, and the utility would
+ * have lost silently. Same trap `.rail-panel` documents above. */
+.rail-link-marked {
+  padding-right: 2rem;
+}
+
 /* Where you are: a pale pane rather than a coloured one.
  *
  * The fill is near-white at a very low alpha, which over this gradient reads as
@@ -1232,6 +1321,103 @@ body::after {
   border-radius: 999px;
   background: var(--color-accent-2);
   box-shadow: 0 0 0.7rem oklch(0.85 0.15 195 / 0.9);
+}
+
+/* A small, wordless control on a dense rail row.
+ *
+ * The rail is 15.5rem and a row can carry three of these, so what they cost in
+ * width has to be the same in every language - which a verb is not: `Copy /
+ * Show code / Revoke` becomes `Kopieren / Code zeigen / Zurückziehen` and the
+ * card overflowed the panel. The word moves to the accessible name and the
+ * title, so nothing is lost to a screen reader or to a hover.
+ *
+ * The touch floor is the house rule from DESIGN.md: 2.75rem under a coarse
+ * pointer, through min-height rather than height so a thumb gets its target
+ * and a mouse keeps the density these rows were composed at. */
+.rail-tool {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: 0.6rem;
+  color: var(--color-ink-muted);
+  transition:
+    color var(--dur-fast) var(--ease-out-soft),
+    background-color var(--dur-fast) var(--ease-out-soft);
+}
+
+.rail-tool:hover:not(:disabled) {
+  color: var(--color-ink);
+  background-color: oklch(0.98 0.02 280 / 0.08);
+}
+
+.rail-tool:disabled {
+  opacity: 0.5;
+}
+
+/* The one that takes something away. Red on hover only: a row of controls one
+ * of which is permanently red reads as a warning about the row. */
+.rail-tool-danger:hover:not(:disabled) {
+  color: oklch(0.72 0.19 22);
+  background-color: oklch(0.72 0.19 22 / 0.12);
+}
+
+/* Held open. The QR is showing, so the control that opened it is lit rather
+ * than merely hovered - the panel below is otherwise the only thing that says
+ * which of four rows is unfolded. */
+.rail-tool[aria-expanded='true'] {
+  color: var(--color-ink);
+  background-color: oklch(0.98 0.02 280 / 0.1);
+}
+
+/* The one that waits until you look at the row.
+ *
+ * A control beside every room turns a list of places to walk into into a list
+ * of things to administer, so it is invisible until the row is hovered - and
+ * reachable by keyboard, and lit while its own panel is open, or it would be a
+ * panel with no way to shut it.
+ *
+ * Never hidden on a touch screen. There is no hover there, so `opacity: 0` is
+ * not "quiet", it is "gone" - which is how the rename control on these rows
+ * came to be unreachable on a phone. */
+.rail-tool-quiet {
+  opacity: 0;
+}
+
+.rail-row:hover .rail-tool-quiet,
+.rail-tool-quiet:focus-visible,
+.rail-tool-quiet[aria-expanded='true'] {
+  opacity: 1;
+}
+
+/* A caption you can press. The house floor from DESIGN.md applies - it names
+ * chips - and it is padding rather than height so the label stays optically
+ * centred and a mouse keeps the density this panel was composed at. */
+.rail-chip {
+  border-radius: 999px;
+  border: 1px solid;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.6875rem;
+  transition:
+    color var(--dur-fast) var(--ease-out-soft),
+    border-color var(--dur-fast) var(--ease-out-soft),
+    background-color var(--dur-fast) var(--ease-out-soft);
+}
+
+@media (pointer: coarse) {
+  .rail-tool {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .rail-tool-quiet {
+    opacity: 1;
+  }
+
+  .rail-chip {
+    padding-block: 0.7rem;
+  }
 }
 
 .rail-link-icon {
@@ -1540,6 +1726,154 @@ body::after {
 
 @media (prefers-reduced-motion: reduce) {
   .rail-play::after {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The Thingiverse door, directly under the Play one.
+ *
+ * Its own coat rather than a second `.rail-play`, and the reason is what the
+ * rail looked like with two of them: two fuchsia-outlined pills the same width,
+ * the same height and the same shimmer, stacked, distinguishable only by
+ * reading the word inside. A door is a promise about where you end up, and two
+ * doors painted identically make that promise twice and keep it differently.
+ *
+ * So this one is *painted* rather than outlined - the `.summon-cta` treatment,
+ * which is the loudest control this product has and is reserved for the thing
+ * it wants you to press - and it is **green**, which is the one hue in the
+ * palette nothing else in the rail uses. Play stays fuchsia. Across a room the
+ * two are now told apart by colour, which is how somebody actually finds a
+ * button they have pressed before.
+ *
+ * It was quietened once, to an outlined pill with a green wash and a halo, on
+ * the reasonable-sounding argument that two painted controls in one rail is a
+ * lot. Put back, because the argument is wrong about what the rail contains:
+ * Play is *outlined* and this is the only painted thing in the column, so the
+ * pair reads as one edge and one surface rather than as two of anything. Asked
+ * for by name - "put the thingiverse back, it was good" - which is the only
+ * evidence that settles a question like this one.
+ * --------------------------------------------------------------------------- */
+.rail-things {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  border-radius: 0.75rem;
+  /* No border. The fill is the edge - an outline on a painted button reads as a
+   * second, misaligned rectangle at this size. */
+  border: 1px solid transparent;
+  padding: 0.5rem 0.75rem;
+  text-align: start;
+  /* Dark ink on lit green, exactly as `.summon-cta` puts dark ink on lit
+   * fuchsia. Ink-on-colour rather than colour-on-dark is what makes a painted
+   * control read as pressable rather than as a coloured label. */
+  color: oklch(0.18 0.05 165);
+  background: linear-gradient(
+    100deg,
+    oklch(0.78 0.18 165),
+    oklch(0.88 0.2 148),
+    oklch(0.85 0.15 195)
+  );
+  box-shadow: 0 0.4rem 1.2rem oklch(0.78 0.18 165 / 0.3);
+  transition: box-shadow var(--dur-base) var(--ease-out-soft);
+}
+
+.rail-things:hover {
+  box-shadow: 0 0.5rem 1.6rem oklch(0.78 0.18 165 / 0.45);
+}
+
+/* The same travelling band both other doors have, in white rather than in a
+ * hue: the button is already the colour, so a coloured band on it is invisible.
+ * `-1` puts it over the fill and under the label.
+ *
+ * Three passes and then it settles, rather than the forever loop the other two
+ * doors run. That is the difference between a control that *arrives* and one
+ * that is permanently trying to be noticed: this button is bright green in a
+ * column of hairlines, so it does not need the shimmer to be found - it needs
+ * it once, to say the panel has changed under you, and then it should stop
+ * moving and let you read the rest of the rail.
+ *
+ * `forwards` is what makes "stop" mean stopped: without it the band snaps back
+ * to its start position on the last frame and parks there, lit, in the middle
+ * of the button. The keyframe ends off the right edge, so held there it is
+ * simply gone. */
+.rail-things::after {
+  content: "";
+  position: absolute;
+  inset-block: -50%;
+  inset-inline-start: 0;
+  width: 40%;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.4), transparent);
+  animation: summon-wave 3.6s var(--ease-out-soft) 3 forwards;
+}
+
+/* Hover brings it back once, and it has to be a *different* name to do so: an
+ * animation that has finished does not restart because its duration changed,
+ * only because the browser is handed an animation it was not already running. */
+.rail-things:hover::after {
+  animation: rail-things-wave 1.5s var(--ease-out-soft) 1 forwards;
+}
+
+@keyframes rail-things-wave {
+  from { transform: translateX(-120%) skewX(-18deg); }
+  to { transform: translateX(320%) skewX(-18deg); }
+}
+
+/*
+ * Open, it goes rainbow.
+ *
+ * The wave stops and the whole fill starts moving instead, which is the same
+ * rule `.rail-play` follows and a louder version of it: a door that has been
+ * taken should stop advertising, and this one has a panel under it that is
+ * *about* colour and models and things. The green says "in here"; the rainbow
+ * says "you are in here now".
+ *
+ * Deliberately the party rail's own two keyframes rather than a private pair.
+ * They are two clocks on purpose - the sweep is the light traveling along the
+ * band, the hue rotation is the colour changing under it - and a rainbow in the
+ * rail drifting at a different speed from the one across the top of the page
+ * would read as a second, unrelated effect rather than as the same idea twice.
+ *
+ * `filter: hue-rotate` lands on the label too, and that is harmless here for
+ * the reason it would not be anywhere else: the ink is near-neutral, so there
+ * is almost no chroma for the rotation to move.
+ */
+.rail-things[aria-expanded='true'] {
+  color: oklch(0.18 0.04 300);
+  background: linear-gradient(
+    90deg,
+    oklch(0.72 0.27 322),
+    oklch(0.85 0.19 195),
+    oklch(0.86 0.2 145),
+    oklch(0.88 0.19 95),
+    oklch(0.72 0.27 322)
+  );
+  background-size: 300% 100%;
+  box-shadow: 0 0.4rem 1.4rem oklch(0.72 0.27 322 / 0.4);
+  animation:
+    party-rail-sweep 6s linear infinite,
+    party-rail-hue 12s linear infinite;
+}
+
+.rail-things[aria-expanded='true']::after {
+  animation: none;
+  opacity: 0;
+}
+
+/* Still a painted button, just not a moving one. The open state keeps its
+ * rainbow - it is the only thing distinguishing open from shut - and simply
+ * stops drifting. */
+@media (prefers-reduced-motion: reduce) {
+  .rail-things::after,
+  .rail-things:hover::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .rail-things[aria-expanded='true'] {
     animation: none;
   }
 }
@@ -3896,6 +4230,38 @@ a.box:active,
 }
 
 /*
+ * The same button, in the rail rather than in a screen corner.
+ *
+ * A world puts the corner over the canvas, so the music control moves into the
+ * panel with the radio and the party lights - see `CornerMusic`. What changes
+ * is only the size: a pill sized for an empty corner is a slab in a 14rem
+ * column, and the row it sits in already carries the word "Music".
+ */
+.rail-music {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+/*
+ * A key on a HUD panel, on a device with a thumb.
+ *
+ * The panels that float over a scene are the one place in this product a
+ * control is drawn small on purpose - they sit over a world somebody is
+ * looking at, and a row of 44px slabs would cover it. So the target grows only
+ * where it has to: under a coarse pointer, through padding rather than height,
+ * which keeps the glyph optically centred and leaves the desktop density
+ * exactly where it was.
+ *
+ * The same trade `.rail-*` makes above, applied to the layer over the canvas.
+ */
+@media (pointer: coarse) {
+  .hud-key {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+}
+
+/*
  * The icon-only variant.
  *
  * Square padding so a lone glyph sits in a circle rather than in a stretched
@@ -4408,6 +4774,37 @@ a.box:active,
 
 .hud-key-pink {
   --key: var(--color-accent);
+}
+
+/*
+ * The filled one: a key that is the panel's answer rather than one of its
+ * options.
+ *
+ * `.hud-key` is written unlayered - it has to be, it is a look that Tailwind's
+ * utilities would otherwise nibble at from a dozen call sites - and unlayered
+ * beats layered whatever the specificity, so a `bg-*` utility on a `.hud-key`
+ * silently does nothing. The thing panel's "Put it down" had exactly that:
+ * `bg-accent` for a fuchsia fill and an arbitrary near-black `text-[...]` for
+ * the ink on it. Measured, the fill lost to `.hud-key`'s cyan wash and the ink
+ * won, which is how the one button you press to finish the job ended up as
+ * near-black text on a dark chip - the only unreadable control on the panel.
+ *
+ * So the fill is a variant here rather than a utility over there, next to the
+ * hue variant it pairs with. Ink is stated as a constant, not derived: these
+ * keys are lit colours, so the readable ink on all of them is the same near
+ * black, and `--key` may be any hue a caller points it at.
+ */
+.hud-key-filled {
+  background: var(--key);
+  color: oklch(0.16 0.04 300);
+  box-shadow:
+    0 0 0.75rem color-mix(in oklch, var(--key) 45%, transparent),
+    inset 0 0 0.5rem color-mix(in oklch, var(--key) 25%, transparent);
+  text-shadow: none;
+}
+
+.hud-key-filled:hover:not(:disabled) {
+  filter: brightness(1.1);
 }
 
 /* Long labels - "Spacebar", "Right-click" - stop being keys at a point and
@@ -6385,6 +6782,7 @@ body:has([data-look='dusk']) {
 .band-body > .traits + p,
 .band-body > .figures + p,
 .band-body > .steps + p,
+.band-body > .rack + p,
 .band-body > .tagfield + p {
   margin-top: 1.6rem;
 }
@@ -6453,6 +6851,23 @@ body:has([data-look='dusk']) {
 
 /* Mono and small, like every other caption on the site that names a real
  * artefact rather than describing a picture. */
+/*
+ * A portrait capture, at about the size of the thing it was taken on.
+ *
+ * The only screenshot shape on these pages that must *not* take the width it is
+ * given. Everything else here is a 2:1 frame of the whole app, where full width
+ * is what makes the left rail readable; a phone capture stretched to the same
+ * measure is a picture taller than the viewport, and a reader meets its caption
+ * two scrolls after they have stopped caring.
+ *
+ * The caption stays under it rather than beside it, because at this width a
+ * two-column arrangement gives the prose about thirty characters a line.
+ */
+.band-shot-phone {
+  max-width: 19rem;
+  margin-inline: auto;
+}
+
 .band-shot-note {
   margin-top: 0.75rem;
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -6669,6 +7084,301 @@ body:has([data-look='dusk']) {
   font-size: 0.75rem;
   background: oklch(0.7 0.15 var(--box-hue) / 0.08);
   box-shadow: inset 0 0 0 1px oklch(0.75 0.14 var(--box-hue) / 0.26);
+}
+
+/* --- The open-source band, and the summon standing in it ----------------- */
+
+/*
+ * Not a box, and it used to be one.
+ *
+ * As a card it was the fourth item in a row of three doors: same wash, same lit
+ * edge, same beaver leaning on the corner, and a reader skimming the page filed
+ * it as one more feature panel. The one fact it carries - the whole thing is
+ * open, here is the repository - is not a feature, and it is the only claim on
+ * this page that a competitor cannot answer.
+ *
+ * So it loses the card and takes the room instead: type at section scale, a
+ * picture beside it standing on the same neon floor everything else in this
+ * world stands on, and nothing drawn around either. `.usecases` makes the same
+ * argument two sections down and made it first.
+ */
+.opensource {
+  display: grid;
+  gap: 2rem;
+  align-items: center;
+  padding-block: 1rem;
+}
+
+@media (min-width: 900px) {
+  /* The picture takes the larger half. It is the thing that makes somebody
+   * stop, and the paragraph next to it is four lines - at a even split the
+   * copy got a measure it did not need and the render got one it did.
+   *
+   * `align-items: center` on the grid rather than a fixed height, so the two
+   * columns stay optically level whichever of them the copy makes taller. */
+  .opensource {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    gap: 3rem;
+  }
+}
+
+/* Past the layout's own width on a phone, deliberately.
+ *
+ * The rendered frames are 16:9 with a lot of air around the subject - it fills
+ * about half the width of its own file - so a picture fitted to the text column
+ * draws the fox at about ninety pixels. Bleeding it into the page's side
+ * padding is the cheapest way to give the subject its real size back, and it
+ * costs nothing: every pixel it gains is transparent. */
+@media (max-width: 899px) {
+  .summon-scene {
+    width: calc(100% + 2rem);
+    margin-inline: -1rem;
+  }
+}
+
+/*
+ * The stage: a floor, and one cell of a 4x4 sheet standing on it.
+ *
+ * `background-size: 400%` is the whole trick. The sheet is four cells wide and
+ * four tall, so drawing it at four times the box in both directions puts
+ * exactly one cell in the box, and `background-position` in percentages steps
+ * between them. Nothing in the stylesheet knows how many frames there are.
+ */
+.summon-scene {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* Room under the picture for the floor's far half, which is drawn in
+   * perspective and masked out - without it the grid stops dead behind the
+   * scene and reads as a stripe rather than as a room. */
+  padding-bottom: 2.5rem;
+}
+
+.summon-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /*
+   * The hash in the filename is not decoration.
+   *
+   * This sheet was re-rendered several times while its playing order was being
+   * settled, under one unchanging name - and every browser that had already
+   * loaded it kept showing the previous cut, which looks exactly like the
+   * animation running the wrong way round. A name derived from the bytes makes
+   * that impossible: a new cut is a new URL, and an old one cannot be served in
+   * its place. Rebuild the sheet, rename it to its own md5 prefix, and change
+   * this line.
+   */
+  background-image: url('/enter/hero/summon.5dddb431.webp');
+  background-size: 400% 400%;
+  background-repeat: no-repeat;
+  /* The pair every render on this site gets: a tight dark contact shadow to sit
+     it down, and a wide tinted one for the room's light. Green rather than the
+     section hue, because the light in this picture is the summon's own. */
+  filter:
+    drop-shadow(0 0.9rem 1.1rem oklch(0.12 0.05 290 / 0.45))
+    drop-shadow(0 0 3.5rem oklch(0.8 0.2 145 / 0.32));
+  /* Scrubbed frame by frame from rAF, so nothing here transitions: a duration
+     on `background-position` would lag the playhead by its own length. */
+  will-change: background-position;
+}
+
+/*
+ * After the arrival, it breathes.
+ *
+ * The class only appears once the playhead has reached the last frame, which is
+ * what keeps the two from fighting: the arrival owns `background-position` and
+ * the float owns `transform`, and neither ever holds the other's property.
+ *
+ * Thirteen seconds and about a centimetre, which is the same figure
+ * `pile-float` uses on the landing hero's heap - deliberately, because these
+ * are two objects in the same room and two ambient drifts at different speeds
+ * read as one of them being wrong. The half-degree of roll is what stops it
+ * reading as a lift rather than as a hover.
+ *
+ * Delayed by its own settle: starting the bob on the frame the arrival lands
+ * puts a moving thing under somebody's eye at the exact moment they were about
+ * to look at what arrived.
+ */
+@keyframes summon-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.35deg);
+  }
+  50% {
+    transform: translateY(-0.9rem) rotate(0.35deg);
+  }
+}
+
+.summon-frame-landed {
+  animation: summon-float 13s var(--ease-out-soft) 0.6s infinite;
+  /* The frame never changes again once it has landed, so the hint moves to the
+     property that is actually being animated from here on. */
+  will-change: transform;
+}
+
+/* The arrival never runs under reduced motion - the component leaves the frame
+ * on the assembled cell and never rewinds - but the float would, because it is
+ * a stylesheet animation on an element that is always in the tree. So it is
+ * stopped here rather than shortened: this is ambient movement with no state
+ * behind it, and nothing is lost by it simply not happening. */
+@media (prefers-reduced-motion: reduce) {
+  .summon-frame-landed {
+    animation: none;
+  }
+}
+
+/* --- Rack: real things, shot, as the picture ----------------------------- */
+
+/*
+ * A field of the product's own model renders.
+ *
+ * The sibling of `.tagfield` and the argument is the same one: some sections
+ * are about a *set*, and prose describing a set is a reader taking your word
+ * for how many there are. Where a tagfield spells the set out in words, this
+ * one shows it - which is only available to a section whose set happens to be
+ * made of things that were already rendered.
+ *
+ * And they were. Every tile here is a file out of `public/thumbs` or
+ * `public/xp/thumbs`, drawn by the thumbnail pass off the same glTF the room
+ * loads, which is `pictures are shot, not drawn` at its strictest: the page
+ * cannot show a kart the catalogue does not have, because the file would not
+ * exist.
+ *
+ * Sized off the tile rather than off a column count, so the same rack is five
+ * across in a full band, three in a half one and two on a phone with nothing
+ * restated anywhere.
+ */
+/*
+ * Column counts rather than `auto-fit`, and the reason is arithmetic.
+ *
+ * `auto-fit` with a minimum picked ten columns for a rack of twelve, which is
+ * ten tiles and then a stranded pair - a grid that looks like it lost a fight
+ * rather than like a set. Six, four and three all divide twelve, so every
+ * breakpoint draws whole rows. A rack is a set being shown off; an orphan row
+ * is the one thing that undermines that.
+ */
+.rack {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (min-width: 480px) {
+  .rack { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Six only where a full-width band has the room for it. A half band keeps four
+ * all the way up, because six tiles across three columns is a row of stamps. */
+@media (min-width: 900px) {
+  .band:not(.band-half) .rack,
+  .box:not(.band) .rack { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+.rack-cell {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  padding: 0.5rem 0.4rem 0.55rem;
+  border-radius: 0.85rem;
+  background: oklch(0.7 0.15 var(--box-hue) / 0.07);
+  box-shadow: inset 0 0 0 1px oklch(0.75 0.14 var(--box-hue) / 0.2);
+  transition:
+    background var(--dur-base) var(--ease-out-soft),
+    box-shadow var(--dur-base) var(--ease-out-soft);
+}
+
+/* The object itself lifts; the tile stays put. A tile that moves is a button,
+ * and none of these are pressable - the point being made is that the thing is
+ * real, not that you can open it. */
+.rack-img {
+  width: 100%;
+  height: auto;
+  /* The pair `DESIGN.md` asks every render for: a tight dark contact shadow to
+     sit it on the tile, and a wide hue-tinted one for the room's light. */
+  filter:
+    drop-shadow(0 0.15rem 0.2rem oklch(0.05 0.03 285 / 0.55))
+    drop-shadow(0 0.5rem 1.4rem oklch(0.7 0.18 var(--box-hue) / 0.35));
+  transition: transform var(--dur-base) var(--ease-out-soft);
+}
+
+/* `0.75rem`, matching `.figure-note` - the caption step this page already has
+ * in the main column. The 10px rail step is for the rails, and a rack is
+ * content: see the note on the type scale in DESIGN.md. */
+.rack-label {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--color-ink-muted);
+  /* One line, always. A rack whose cells are two different heights because one
+     model is called "garbage-truck" reads as a broken grid rather than as a
+     long word. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .rack-cell:hover {
+    background: oklch(0.72 0.17 var(--box-hue) / 0.12);
+    box-shadow: inset 0 0 0 1px oklch(0.8 0.16 var(--box-hue) / 0.4);
+  }
+
+  .rack-cell:hover .rack-img { transform: translateY(-0.2rem) scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rack-img,
+  .rack-cell:hover .rack-img { transition: none; transform: none; }
+}
+
+/* The dusk look has no cards, so a tile with a wash on it is the one thing in
+ * a band that still looks like one. Kept, and quieter: the models need
+ * *something* behind them or they float on the violet with no floor. */
+[data-look='dusk'] .rack-cell {
+  background: oklch(0.78 0.09 var(--box-hue) / 0.1);
+  box-shadow: inset 0 0 0 1px oklch(0.8 0.08 var(--box-hue) / 0.22);
+}
+
+/* --- BandScene: a cut-out render standing in a band ---------------------- */
+
+/*
+ * The third picture shape these pages have, and the one the other two could not
+ * carry.
+ *
+ * `.band-shot` frames a *screenshot*: opaque to the edges, plated, captioned
+ * underneath. `.usecase-art` frames a render beside its own paragraph in a
+ * two-column row. Neither is right for a cut-out that is the subject of the
+ * section it is in - a shot of somebody actually doing the thing the heading
+ * claims - which wants the width, no frame at all, and a floor to stand on.
+ *
+ * So: no plate, the shared `.neon-floor` under it rather than a new grid, and
+ * the same two drop-shadows every other render on this site gets. The negative
+ * bottom margin is the floor doing its job - the grid is drawn in perspective
+ * and its far half is masked out, so the element's box is taller than the
+ * picture looks and the gap below it would otherwise read as a mistake.
+ */
+.band-scene {
+  position: relative;
+  margin: 1.75rem auto 0;
+  width: min(34rem, 100%);
+  display: grid;
+  place-items: center;
+}
+
+.band-scene-img {
+  position: relative;
+  width: 100%;
+  height: auto;
+  filter:
+    drop-shadow(0 1.25rem 1.25rem oklch(0.12 0.05 290 / 0.5))
+    drop-shadow(0 0 3.5rem oklch(0.72 0.18 var(--box-hue) / 0.32));
+}
+
+.band-body > .band-scene + p,
+.band-body > .band-scene + .rack {
+  margin-top: 1.6rem;
 }
 
 /* --- the honesty section and the outro ----------------------------------- */
@@ -7420,5 +8130,677 @@ body:has([data-look='dusk']) {
 @media (prefers-reduced-motion: reduce) {
   .lobby-card {
     transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The front door
+ * ---------------------------------------------------------------------------
+ * Sign-in and sign-up were a narrow column of grey outlines floating in the
+ * middle of the starfield - a default form pasted onto a good background, on
+ * the one page where the product has said nothing about itself yet.
+ *
+ * What replaces it is the argument the whole product makes, drawn once: this is
+ * a room with people already in it. The page is the room. The floor runs to a
+ * horizon across the full width of the viewport, some of the cast are standing
+ * along it at different depths, and the form is what gets you past them. Nothing
+ * is in a card, because a card would make the room a picture of a room.
+ *
+ * Every figure is a real render out of `/world/shots`, shot off the same GLBs
+ * the lounge loads - the rule that stops a page advertising an animal the
+ * product does not have.
+ * ------------------------------------------------------------------------- */
+
+.auth-page {
+  --box-hue: 275;
+  position: relative;
+  display: grid;
+  /* `clip`, not `hidden`. Hidden would make this a scroll container and the
+   * sticky stance inside it would stick to a box that never scrolls; clip just
+   * refuses to let a bloom or a bled-out floor widen the document. */
+  overflow-x: clip;
+  gap: 2rem;
+  min-height: 100vh;
+  padding: 1.25rem 1.5rem 0;
+  align-content: start;
+}
+
+@supports (min-height: 100dvh) {
+  /* Same two-rule shape as `.h-viewport`, for the reason spelled out there: one
+   * rule with both units loses the fallback to the minifier. */
+  .auth-page { min-height: 100dvh; }
+}
+
+/* Fuchsia is the colour of a thing you can do, and creating an account is the
+ * only thing on this surface that makes something exist. Coming back to a room
+ * that is already yours is the cold half of the palette. */
+.auth-page[data-mode='signup'] { --box-hue: 322; }
+
+/* The furniture: the mark on one side, the other door on the other. Both are
+ * ways out, so they sit together at the top rather than one at each end of a
+ * long scroll. */
+.auth-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+
+.auth-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * What the door says
+ * ------------------------------------------------------------------------- */
+
+/* The one display face, in caps, at the one weight it ships - and finally at a
+ * size worth using it at. Fluid because the pixel face runs about a third wider
+ * than its size suggests: "CREATE ACCOUNT" is the longest line either door
+ * carries and it has to clear 360px. */
+.auth-title {
+  font-family: var(--font-pixel);
+  max-width: 20ch;
+  font-size: clamp(1.75rem, 6.4vw, 3.5rem);
+  line-height: 1.15;
+  text-transform: uppercase;
+  text-shadow: 0 0 1.8rem oklch(0.8 0.2 var(--box-hue) / 0.4);
+}
+
+/* The form's own heading, in the column rather than over the page. A step down
+ * from the stance in every direction - size, tracking, glow - so the two never
+ * read as competing headlines. */
+.auth-form-title {
+  font-family: var(--font-pixel);
+  font-size: clamp(1.05rem, 3.4vw, 1.35rem);
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.auth-lede {
+  margin-top: 1rem;
+  max-width: 34ch;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-ink-muted);
+}
+
+/* ---------------------------------------------------------------------------
+ * The form, on the sky
+ * ---------------------------------------------------------------------------
+ * No panel, no edge, no card. What gives the column its own weight is a bloom
+ * of the door's hue behind it - light rather than a container, which is the
+ * same move the rest of the design makes with elevation.
+ * ------------------------------------------------------------------------- */
+.auth-column {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 24rem;
+}
+
+.auth-column::before {
+  content: '';
+  position: absolute;
+  inset: -3rem -1.5rem;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    58% 52% at 55% 38%,
+    oklch(0.5 0.2 var(--box-hue) / 0.22),
+    transparent 72%
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * The room, and who is already in it
+ * ---------------------------------------------------------------------------
+ * A horizon across the whole width with the cast standing along it at different
+ * depths. Depth is one custom property per figure and everything derives from
+ * it: the near ones are bigger, brighter and lower in the frame, the far ones
+ * are small, hazy and sitting up near the line. That is the entire trick, and
+ * it is why the row reads as a crowd with distance in it rather than as a strip
+ * of stickers at three sizes.
+ *
+ * The band sits at the end of the flow rather than being fixed to the viewport.
+ * Fixed would put a fox over the password field the moment a phone scrolled.
+ * ------------------------------------------------------------------------- */
+.auth-crowd {
+  /*
+    Where the far distance is, as a share of the band's height.
+
+    Every figure's geometry is measured off this one number: the horizon line is
+    drawn at it, the floor runs from the bottom edge up to it, and a figure's
+    feet land somewhere between the two according to how near it is. One token
+    rather than three constants, because the moment the line and the feet are
+    set independently somebody is standing in the sky.
+  */
+  --horizon: 62%;
+  position: relative;
+  margin-top: 2rem;
+  /* The floor and the horizon sit at `z-index: -1` by their own definition, and
+   * without a stacking context here they would land in the root one alongside
+   * the page's own floor - which is generated as the last child of `body` and
+   * would therefore paint over both. Isolating keeps this room's ground above
+   * the building's. */
+  isolation: isolate;
+  min-height: clamp(9rem, 24vh, 14rem);
+  margin: 0 -1.5rem;
+  /* The one thing on the page allowed to be cut off by the window: a figure
+   * running off the left edge is what makes the row read as wider than the
+   * screen rather than as a line-up posed for it. */
+  overflow: hidden;
+}
+
+/*
+ * The ground, as one layer.
+ *
+ * The floor and the horizon are a single drawing and the far end of it has to
+ * dissolve rather than stop on the edge of a box - but the mask that does the
+ * dissolving cannot go on the band itself. Masking an element masks everything
+ * in it, and here that silently took the figures with it: the floor and the
+ * horizon still painted, the five animals did not, and nothing in the DOM said
+ * anything was wrong. Measured, they were all present, positioned and at full
+ * opacity. Only the pixels were missing.
+ *
+ * So the mask goes on a layer that holds the ground and nothing else, and the
+ * figures stand on it as siblings. The band keeps its `overflow: hidden` for the
+ * left edge and the floor, which is a clip rather than a fade and is meant to be.
+ */
+.auth-ground {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  -webkit-mask-image: linear-gradient(to right, black 76%, transparent 99%);
+  mask-image: linear-gradient(to right, black 76%, transparent 99%);
+}
+
+/* The line they stand on, full width. `.neon-horizon` positions itself inside a
+ * card by default; here it is the horizon of the page. */
+.auth-crowd .neon-horizon {
+  left: 0;
+  right: 0;
+  bottom: var(--horizon);
+  animation: auth-strike var(--dur-slow) var(--ease-out-snap) 120ms backwards;
+}
+
+@keyframes auth-strike {
+  from { transform: scaleX(0); opacity: 0; }
+}
+
+/* The floor under them, hue-tinted and brighter than the page's own - this is
+ * the one surface where the room is the subject rather than the backdrop. It
+ * runs from the bottom edge exactly to the horizon, so the grid and the line
+ * are two halves of one drawing. */
+/* The floor is cut off by the band's own overflow, and a ruled grid that stops
+ * dead is a cut-out rather than a distance. Faded on the right, where the form
+ * column is: the room carries on, it is just no longer lit. */
+.auth-crowd .neon-floor {
+  height: calc(var(--horizon) * 1.8);
+  /*
+    Same grid, seen from further away.
+
+    `.neon-floor` is drawn for a card, and at a card's width `perspective(20rem)`
+    is a room. Across a window it is a catastrophe: the vanishing point ends up
+    nearer than the floor is wide, and the whole grid collapses into a band a few
+    pixels deep that reads as a smudge above the page edge. Pushing the camera
+    back is the fix, and it is a modifier on the shared drawing rather than a
+    second grid - the rule is one floor, not one per surface.
+  */
+  transform: perspective(56rem) rotateX(66deg);
+  /* Brightened for the one surface where the room is the subject rather than
+   * the backdrop. */
+  filter: brightness(1.6) saturate(1.15);
+}
+
+.auth-peep {
+  position: absolute;
+  /*
+    Feet on the ground, and the ground is a function of distance: a figure at
+    the far end stands on the horizon itself, a figure at the near end stands on
+    the bottom edge of the band. Everything between is interpolated.
+  */
+  bottom: calc((1 - var(--z)) * var(--horizon));
+  left: var(--x);
+  width: calc(clamp(6rem, 16vw, 13rem) * (0.34 + var(--z) * 0.9));
+  height: auto;
+  /*
+    Half its width back for the anchor, and a seventh of its height down for the
+    padding. The shots are square and the animal does not fill the frame - it
+    sits in the lower middle with air underneath - so an image whose box bottom
+    is on the horizon is an animal hovering above it. This is the correction, and
+    it is a share of the element rather than a length so it scales with depth.
+  */
+  translate: -50% 14%;
+  opacity: calc(0.55 + var(--z) * 0.45);
+  pointer-events: none;
+  /* Three effects, all of them distance. Two shadows the way every render on
+   * the site is lit - a tight dark one to sit the figure on the floor, a wide
+   * hue-tinted one for the room's light - and, on the far ones only, a little
+   * lost focus. The blur sells the depth harder than the size does. */
+  filter:
+    blur(calc((1 - var(--z)) * 1.1px))
+    drop-shadow(0 0.3rem 0.4rem oklch(0.04 0.02 265 / 0.6))
+    drop-shadow(0 0 1.4rem oklch(0.72 0.24 var(--box-hue) / 0.45));
+  /* They walk up as the page settles, nearest first - the one authored moment
+   * on the surface. `--i` is the order, set per figure. */
+  animation: auth-walk-up 700ms var(--ease-spring) backwards;
+  animation-delay: calc(240ms + var(--i) * 90ms);
+}
+
+@keyframes auth-walk-up {
+  from {
+    opacity: 0;
+    /* Up from below the floor, keeping the two corrections the resting rule
+       applies - a keyframe that only names the travel would snap the figure
+       half its own width sideways on the first frame. */
+    translate: -50% calc(14% + 1.25rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Removed outright rather than shortened: both hold an `opacity: 0`
+   * from-state under `backwards` fill, so a zero duration is not the same thing
+   * as no animation. */
+  .auth-peep,
+  .auth-crowd .neon-horizon { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * Wide
+ * ---------------------------------------------------------------------------
+ * Two compositions out of one markup order. Stacked, the crowd sits between the
+ * title and the form, so a phone meets the room before it meets the fields.
+ * Wide, it spans the foot of the page and the two columns stand over it.
+ * ------------------------------------------------------------------------- */
+@media (min-width: 60rem) {
+  /*
+    The room is the floor of the window, and the page scrolls over it.
+
+    Sign-up is a long column - two offers, three ways in, a code field and the
+    terms - so on any laptop it is taller than the screen. Two things were tried
+    before this and both were worse. Left in the flow, the room ends up at the
+    bottom of a scroll nobody makes, and the one thing this surface exists to say
+    is the one thing never seen. Given its own scrolling column, the form grows a
+    scrollbar down the middle of the composition - and, because a non-visible
+    overflow on one axis computes to `auto` on the other, a second one along the
+    bottom.
+
+    Fixed to the window, the room is simply always there. The document scrolls
+    the way a document does, with one scrollbar in the place everybody expects
+    it, and the floor does not move because floors do not.
+
+    Below this width it goes back into the flow between the stance and the form,
+    which is the right reading order on a phone and the wrong one to pin: a
+    fixed band on a short screen is a band sitting on top of the password field.
+  */
+  .auth-page {
+    grid-template-columns: minmax(0, 1fr) 24rem;
+    grid-template-areas:
+      'bar   bar'
+      'stage form';
+    gap: clamp(1rem, 3.5vh, 2.25rem) 4rem;
+    /* No clearance needed at the foot: the room stops short of the form column
+       horizontally, so nothing scrolls in behind it. */
+    padding: 1.5rem clamp(2rem, 6vw, 5rem) 2rem;
+  }
+
+  .auth-bar { grid-area: bar; }
+  .auth-column { grid-area: form; justify-self: end; }
+
+  /* The stance stays with you the whole way down, the way the floor does. */
+  /* Sized against the column it sits in rather than the window.
+
+     The base clamp is tuned for a phone, where the headline has the full width;
+     up here it only ever has the left column, and 6.4vw of a wide window put
+     "NOT HERE TO CHAT <3" onto three lines in a 400px track. The pixel face runs
+     about a third wider than its size suggests, which is what makes this a
+     bigger correction than it looks. */
+  .auth-title { font-size: clamp(1.9rem, 3.6vw, 3.5rem); }
+
+  .auth-stage {
+    grid-area: stage;
+    position: sticky;
+    top: clamp(1.5rem, 8vh, 4.5rem);
+    align-self: start;
+  }
+
+  .auth-crowd {
+    position: fixed;
+    /*
+      Stopped short of the form column rather than run under it. The mask fades
+      the last quarter, so what the eye gets is a room carrying on into the dark
+      behind the fields - not a grid sliding under an input box.
+    */
+    inset: auto calc(24rem + clamp(2rem, 6vw, 5rem) + 2rem) 0 0;
+    margin: 0;
+    height: clamp(11rem, 30vh, 17rem);
+    min-height: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The two ways in
+ * ---------------------------------------------------------------------------
+ * A segmented control rather than two tabs in a box. The selected half is a lit
+ * plate, the other half is ground. Nothing here is fuchsia: choosing between a
+ * password and a mailed link is not the action on this form - the button under
+ * it is.
+ * ------------------------------------------------------------------------- */
+.auth-methods {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid oklch(0.66 0.16 275 / 0.35);
+  border-radius: 999px;
+  background: oklch(0.09 0.03 285 / 0.7);
+}
+
+.auth-method {
+  flex: 1;
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-ink-muted);
+  transition:
+    color var(--dur-fast) var(--ease-out-soft),
+    background-color var(--dur-fast) var(--ease-out-soft),
+    box-shadow var(--dur-fast) var(--ease-out-soft);
+}
+
+.auth-method:hover { color: var(--color-ink); }
+
+.auth-method[aria-selected='true'] {
+  color: var(--color-ink);
+  font-weight: 500;
+  background: oklch(0.22 0.05 285);
+  box-shadow:
+    inset 0 1px 0 oklch(0.9 0.12 240 / 0.16),
+    0 0.25rem 0.75rem oklch(0.04 0.02 265 / 0.7);
+}
+
+/* ---------------------------------------------------------------------------
+ * The offer
+ * ---------------------------------------------------------------------------
+ * A code named `SIGNUP…` is a standing offer, and this is where it is read. It
+ * is the one thing on the page with an edge around it, which is the point: on a
+ * surface with no containers, drawing one is how something gets said out loud.
+ *
+ * Cyan on everything except the button. The offer is a fact about what is
+ * available; taking it is the only action in the strip, and the palette has
+ * exactly one colour for that.
+ * ------------------------------------------------------------------------- */
+.auth-offer {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid oklch(0.75 0.14 200 / 0.4);
+  border-radius: 0.85rem;
+  padding: 0.85rem 0.9rem;
+  background:
+    radial-gradient(120% 140% at 100% 0%, oklch(0.6 0.16 200 / 0.16), transparent 60%),
+    oklch(0.12 0.035 265 / 0.9);
+  box-shadow: inset 0 1px 0 oklch(0.9 0.12 200 / 0.14);
+}
+
+/* Already on the form. The edge warms to the accent so the strip matches the
+ * field it just filled in - two things saying one thing. */
+.auth-offer[data-applied='true'] {
+  border-color: oklch(0.72 0.23 322 / 0.5);
+  background:
+    radial-gradient(120% 140% at 100% 0%, oklch(0.66 0.24 322 / 0.16), transparent 60%),
+    oklch(0.12 0.035 285 / 0.9);
+}
+
+.auth-offer-code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--color-accent-2);
+  /* A code is read off a screen and typed into a phone, so it has to be able to
+   * break rather than push the strip wide. */
+  overflow-wrap: anywhere;
+}
+
+/* The claims left and the closing date. Tabular, so two offers stacked do not
+ * have their numbers dancing. */
+.auth-offer-meta { font-variant-numeric: tabular-nums; }
+
+.auth-offer-take {
+  flex: none;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: oklch(0.16 0.04 300);
+  background: var(--color-accent);
+  box-shadow: 0 0.25rem 0.9rem oklch(0.72 0.23 355 / 0.35);
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-fast) var(--ease-out-soft);
+}
+
+.auth-offer-take:hover { box-shadow: 0 0.35rem 1.4rem oklch(0.72 0.23 355 / 0.55); }
+
+.auth-offer-take:active {
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
+
+/* Taken. Not a button any more, so it stops looking like one - the tick and the
+ * word are the receipt, and the strip's edge has already turned to match. */
+.auth-offer-done {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------------------
+ * The studio doors
+ * ---------------------------------------------------------------------------
+ * Four cards at the top of the studio, one per thing you can make. They were
+ * four identical rectangles that changed their border colour when you pointed
+ * at them, which is the least a card can do and still be a link - and on a
+ * screen whose whole job is "pick what to make", the pick is the page.
+ *
+ * So the card is given a face and a light.
+ *
+ * The face is its own icon, blown up to the size of the card and hung off the
+ * top-right corner where the copy is not. At rest it is barely there - a
+ * watermark at a tenth of the ink - and it is the only thing that differs
+ * between the four, which is deliberate: the *colour* cannot differ, because
+ * fuchsia is this app's word for "you can press this" and four hues in a row
+ * would spend the only wayfinding system it has on decoration. A clapperboard
+ * and a gamepad are told apart by their silhouette at a glance, which is what
+ * an icon is for.
+ *
+ * The light is the bento's, borrowed. Every `.box` on the landing page has one
+ * coloured source burning under its bottom edge; here that source sits *below*
+ * the card at rest and rises into it on hover, so pointing at a door reads as
+ * a room lighting up rather than as a rectangle changing colour. The glyph
+ * catches the light on its way past - it warms, turns a few degrees and grows
+ * - and the blurb goes from muted to full ink, which it has to: over the risen
+ * wash, muted violet drops under 3:1 and stops being readable.
+ *
+ * The wash peaks at `50% 116%`, below the card's bottom edge rather than
+ * inside it. That is what makes it read as floor light, and it is also what
+ * keeps the lit state legible: measured, ink sits at 16:1 on the text line and
+ * 12:1 against the brightest pixel the card ever shows.
+ *
+ * `:focus-visible` lights the same card the same way. The keyboard is how this
+ * grid is read by anybody who does not point, and a hover-only reveal would
+ * hide the one thing that was added.
+ * ------------------------------------------------------------------------- */
+
+.studio-door {
+  --door-hue: 322;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  height: 100%;
+  min-width: 0;
+  border-radius: 1rem;
+  padding: 1rem;
+  /* Cold at rest, warm when pointed at: an edge is structure until it is an
+   * action. See the two-neon rule in DESIGN.md. */
+  border: 1px solid oklch(0.66 0.16 275 / 0.42);
+  background: oklch(0.16 0.04 285 / 0.3);
+  box-shadow: inset 0 1px 0 oklch(0.9 0.1 var(--door-hue) / 0.08);
+  transition:
+    border-color var(--dur-base) var(--ease-out-soft),
+    box-shadow var(--dur-base) var(--ease-out-soft),
+    translate var(--dur-fast) var(--ease-out-soft);
+}
+
+/* The rising light. `-2` rather than `-1` so it stays under the glyph: both
+ * paint above the card's own background and below its text, and among negative
+ * layers the smaller number is further back. */
+.studio-door::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  translate: 0 100%;
+  background:
+    radial-gradient(
+      120% 88% at 50% 116%,
+      oklch(0.56 0.27 var(--door-hue) / 0.95),
+      transparent 72%
+    ),
+    linear-gradient(to top, oklch(0.32 0.15 var(--door-hue) / 0.7), transparent 78%);
+  transition: translate var(--dur-base) var(--ease-out-snap);
+}
+
+.studio-door-ghost {
+  position: absolute;
+  z-index: -1;
+  top: -1.6rem;
+  right: -1.6rem;
+  width: 7.5rem;
+  height: 7.5rem;
+  pointer-events: none;
+  color: oklch(0.8 0.09 var(--door-hue) / 0.1);
+  transition:
+    color var(--dur-base) var(--ease-out-soft),
+    rotate var(--dur-base) var(--ease-out-snap),
+    scale var(--dur-base) var(--ease-out-snap);
+}
+
+.studio-door-plate {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid oklch(0.7 0.27 var(--door-hue) / 0.5);
+  color: var(--color-accent);
+  transition:
+    color var(--dur-fast) var(--ease-out-soft),
+    border-color var(--dur-fast) var(--ease-out-soft),
+    background-color var(--dur-fast) var(--ease-out-soft);
+}
+
+.studio-door-title {
+  font-weight: 500;
+}
+
+.studio-door-blurb {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-ink-muted);
+  transition: color var(--dur-base) var(--ease-out-soft);
+}
+
+.studio-door:hover,
+.studio-door:focus-visible {
+  translate: 0 -2px;
+  border-color: oklch(0.72 0.24 var(--door-hue) / 0.7);
+  box-shadow:
+    inset 0 1px 0 oklch(0.95 0.1 var(--door-hue) / 0.2),
+    0 1rem 2.5rem oklch(0.45 0.2 var(--door-hue) / 0.3);
+}
+
+.studio-door:hover::after,
+.studio-door:focus-visible::after {
+  translate: 0 0;
+}
+
+.studio-door:hover .studio-door-ghost,
+.studio-door:focus-visible .studio-door-ghost {
+  color: oklch(0.96 0.09 var(--door-hue) / 0.4);
+  rotate: 8deg;
+  scale: 1.08;
+}
+
+/* The plate stays warm when the card lights. A white-on-white chip parked next
+ * to three fuchsia ones read as the one thing on the row you could not press,
+ * which is the opposite of what it is. */
+.studio-door:hover .studio-door-plate,
+.studio-door:focus-visible .studio-door-plate {
+  border-color: oklch(0.9 0.18 var(--door-hue) / 0.95);
+  background-color: oklch(0.7 0.27 var(--door-hue) / 0.22);
+  color: oklch(0.97 0.06 var(--door-hue));
+}
+
+.studio-door:hover .studio-door-blurb,
+.studio-door:focus-visible .studio-door-blurb {
+  color: var(--color-ink);
+}
+
+/* Pressing pushes it back past its resting place, so the lift and the press
+ * are one axis rather than two effects. Same grammar as `.box`. */
+.studio-door:active {
+  translate: 0 -1px;
+  transition-duration: 60ms;
+}
+
+/* A finger has no hover, so on a touch screen the light would never be seen at
+ * all. `:active` is the whole of the pointer story there - it fires on
+ * touchdown and holds for the tap - so the press lights the card the same way
+ * the hover does, and the door answers the finger on the way in rather than
+ * only on the way out. Scoped to coarse pointers because on a mouse this would
+ * fight the press, which is a *downward* move. */
+@media (pointer: coarse) {
+  .studio-door:active::after {
+    translate: 0 0;
+  }
+
+  .studio-door:active .studio-door-plate {
+    border-color: oklch(0.9 0.18 var(--door-hue) / 0.95);
+    background-color: oklch(0.7 0.27 var(--door-hue) / 0.22);
+    color: oklch(0.97 0.06 var(--door-hue));
+  }
+
+  .studio-door:active .studio-door-blurb {
+    color: var(--color-ink);
+  }
+}
+
+/* The lit state is a state, not an entrance: with the transitions off it
+ * simply arrives, and nothing is left holding an `opacity: 0`. */
+@media (prefers-reduced-motion: reduce) {
+  .studio-door,
+  .studio-door::after,
+  .studio-door-ghost,
+  .studio-door-plate,
+  .studio-door-blurb {
+    transition: none;
+  }
+
+  .studio-door:hover .studio-door-ghost,
+  .studio-door:focus-visible .studio-door-ghost {
+    rotate: none;
+    scale: none;
   }
 }

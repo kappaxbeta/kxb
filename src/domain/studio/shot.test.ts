@@ -471,6 +471,11 @@ describe('keyframes, which override whatever a verb had in mind', () => {
           top: 1,
           z: 0,
           rotation: 0,
+          time: 0,
+          scale: 1,
+          tint: null,
+          pitch: 0,
+          roll: 0,
           tracks: {
             top: [
               { t: 0, value: 1, ease: 'linear' },
@@ -969,5 +974,131 @@ describe('a still with a rainbow, lifted into a shot', () => {
 
   test('a still without one lifts into a shot without one', () => {
     expect(sceneAt(shotFromScene(DEFAULT_SCENE), 2).rainbow).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('the authored clip, which is the one exception to "never authored"', () => {
+  /** A one-second clip that turns the head a quarter turn and raises the root. */
+  const wave = {
+    version: 1,
+    name: 'wave',
+    fps: 24,
+    duration: 1,
+    loop: true,
+    keys: [
+      {
+        time: 0,
+        ease: 'linear' as const,
+        pose: { root: [0, 0, 0] as [number, number, number], bones: { head: [0, 0, 0, 1] as [number, number, number, number] } },
+      },
+      {
+        time: 1,
+        ease: 'linear' as const,
+        pose: { root: [0, 0.5, 0] as [number, number, number], bones: { head: [0, 0.7071, 0, 0.7071] as [number, number, number, number] } },
+      },
+    ],
+  }
+
+  const performing = (loop = true): ShotSpec => {
+    const shot = one([{ kind: 'pose', t: 2, duration: 4 }])
+    shot.cast[0].pose = { ...wave, loop }
+    return shot
+  }
+
+  test('plays only while the beat runs', () => {
+    const shot = performing()
+    expect(only(shot, 1).pose).toBeUndefined()
+    expect(only(shot, 3).pose).toBeDefined()
+    expect(only(shot, 7).pose).toBeUndefined()
+  })
+
+  test('is sampled at how far into the beat we are', () => {
+    // Half a second into the beat is half a second into the clip: halfway
+    // between rest and the raised root.
+    expect(only(performing(), 2.5).pose?.root[1]).toBeCloseTo(0.25)
+  })
+
+  test('loops to fill a beat longer than itself', () => {
+    // 3.5s into the beat, on a one-second looping clip, is its own half-second.
+    expect(only(performing(), 5.5).pose?.root[1]).toBeCloseTo(0.25)
+  })
+
+  test('holds its last key instead, when the document says not to loop', () => {
+    expect(only(performing(false), 5.5).pose?.root[1]).toBeCloseTo(0.5)
+  })
+
+  test('a pose beat with no clip behind it poses nothing', () => {
+    expect(only(one([{ kind: 'pose', t: 2, duration: 4 }]), 3).pose).toBeUndefined()
+  })
+
+  test('survives the trip through a link', () => {
+    const back = decodeShot(encodeShot(performing()))
+    expect(back.cast[0].pose?.keys).toHaveLength(2)
+    expect(back.cast[0].pose?.keys[1].pose.bones.head[1]).toBeCloseTo(0.7071)
+    expect(only(back, 3).pose).toBeDefined()
+  })
+
+  test('junk where the clip should be reads as no clip', () => {
+    const raw = JSON.parse(JSON.stringify(performing())) as Record<string, unknown>
+    ;(raw.cast as Record<string, unknown>[])[0].pose = { keys: 'nope' }
+    expect(parseShot(raw).cast[0].pose).toBeNull()
+  })
+})
+
+describe('the widened cast', () => {
+  test('a rigged look survives the parse', () => {
+    const shot = one([])
+    shot.cast[0].avatar = 'adventurers/Knight'
+    expect(decodeShot(encodeShot(shot)).cast[0].avatar).toBe('adventurers/Knight')
+  })
+
+  test('a look off the roster still falls back to the default peep', () => {
+    const raw = JSON.parse(JSON.stringify(one([]))) as Record<string, unknown>
+    ;(raw.cast as Record<string, unknown>[])[0].avatar = 'adventurers/Nobody'
+    expect(parseShot(raw).cast[0].avatar).toBe(DEFAULT_ACTOR.avatar)
+  })
+})
+
+describe('hiding somebody', () => {
+  const vanishing = one([{ kind: 'hide', t: 2, duration: 3 }])
+
+  test('is drawn before the beat, gone during it, and back after', () => {
+    expect(only(vanishing, 1).hidden).toBeUndefined()
+    expect(only(vanishing, 3).hidden).toBe(true)
+    expect(only(vanishing, 6).hidden).toBeUndefined()
+  })
+
+  test('keeps their place in the cast, so nobody is renumbered mid-shot', () => {
+    const shot: ShotSpec = {
+      ...one([]),
+      cast: [
+        { ...DEFAULT_ACTOR, name: 'A', actions: [{ kind: 'hide', t: 0, duration: 4 }] },
+        { ...DEFAULT_ACTOR, name: 'B' },
+      ],
+    }
+    const scene = sceneAt(shot, 2)
+    expect(scene.peeps).toHaveLength(2)
+    expect(scene.peeps[0].hidden).toBe(true)
+    expect(scene.peeps[1].hidden).toBeUndefined()
+  })
+
+  test('survives a link', () => {
+    const back = decodeShot(encodeShot(vanishing))
+    expect(back.cast[0].actions[0].kind).toBe('hide')
+    expect(only(back, 3).hidden).toBe(true)
+  })
+
+  test('an actor who never hides carries no flag at all', () => {
+    expect('hidden' in only(one([]), 1)).toBe(false)
+  })
+})
+
+describe('a shot with no ground', () => {
+  test('keeps the emptiness through a link', () => {
+    const bare: ShotSpec = { ...DEFAULT_SHOT, ground: null }
+    expect(decodeShot(encodeShot(bare)).ground).toBeNull()
+    expect(sceneAt(bare, 0).ground).toBeNull()
   })
 })

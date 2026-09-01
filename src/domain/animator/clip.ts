@@ -389,6 +389,20 @@ export interface BakedClip {
   bones: Record<string, number[]>
   /** Flattened `[x,y,z, ...]`, one per time. */
   root: number[]
+  /**
+   * The pose this clip's numbers are measured from, when the baker knew it.
+   *
+   * Carried so that a player laying this clip *over* another one has something
+   * true to subtract. three's `makeClipAdditive` defaults to using the clip's
+   * own first frame as that reference, which is right only if frame one is the
+   * rest pose - and it is not, for any clip that opens on a pose. A roll set at
+   * frame one and held is then subtracted out of every frame and disappears,
+   * which is exactly what it did. See `toClip`.
+   *
+   * Optional because every clip written before this has none, and those keep
+   * playing the way they always have rather than changing under somebody.
+   */
+  rest?: { root: number[]; bones: Record<string, number[]> }
 }
 
 /**
@@ -403,9 +417,11 @@ export interface BakedClip {
  * the exporter quantises anything. Sparseness is not worth a format's worth of
  * disagreement about easing.
  *
- * Bones that never move are dropped. On a clip that only waves, that is 20 of
- * the 23 tracks gone, and a player with nothing to bind for the legs leaves
- * them wherever the model's own rest pose put them - which is where they were.
+ * Bones that never leave the rest pose are dropped. On a clip that only waves,
+ * that is 20 of the 23 tracks gone, and a player with nothing to bind for the
+ * legs leaves them wherever the model's own rest pose put them - which is
+ * where they were. A bone held away from rest is kept, because for that one
+ * the same sentence is false.
  */
 export function bake(doc: AnimationDoc, rest?: Pose): BakedClip {
   const frames = Math.max(1, Math.round(doc.duration * doc.fps))
@@ -424,20 +440,53 @@ export function bake(doc: AnimationDoc, rest?: Pose): BakedClip {
   const bones: Record<string, number[]> = {}
   for (const name of names) {
     const values: number[] = []
-    let moves = false
-    const first = samples[0].bones[name] ?? IDENTITY
+    let drives = false
+    /*
+      Measured against the *rest* pose, not against the clip's own first frame.
+      
+      This is the whole of what makes dropping a track safe, and it used to
+      compare the wrong thing. A bone that is posed and then held is constant
+      for the length of the clip, so against its own first frame it looks like
+      a bone nothing touched - and it was dropped, leaving the player nothing
+      to bind and the bone back at the model's rest. A roll set once and held
+      simply vanished on export.
+
+      Against rest the two cases separate properly: constant *at rest* is a
+      bone the model already places, and constant *anywhere else* is a pose
+      somebody made.
+    */
+    const base = rest?.bones[name] ?? IDENTITY
     for (const sample of samples) {
       const q = sample.bones[name] ?? IDENTITY
       values.push(q[0], q[1], q[2], q[3])
-      if (!moves && !same(q, first)) moves = true
+      if (!drives && !same(q, base)) drives = true
     }
-    if (moves) bones[name] = values
+    if (drives) bones[name] = values
   }
 
   const root: number[] = []
   for (const sample of samples) root.push(sample.root[0], sample.root[1], sample.root[2])
 
-  return { name: doc.name, duration: doc.duration, times, bones, root }
+  return {
+    name: doc.name,
+    duration: doc.duration,
+    times,
+    bones,
+    root,
+    // Only the bones this clip actually drives, because that is all a reference
+    // is ever asked about - and a rest pose for tracks nobody wrote would be
+    // twenty-three quaternions of padding in every saved clip.
+    ...(rest
+      ? {
+          rest: {
+            root: [rest.root[0], rest.root[1], rest.root[2]],
+            bones: Object.fromEntries(
+              Object.keys(bones).map((name) => [name, [...(rest.bones[name] ?? IDENTITY)]]),
+            ),
+          },
+        }
+      : {}),
+  }
 }
 
 function same(a: Quat, b: Quat): boolean {
@@ -517,6 +566,122 @@ export function parseDoc(value: unknown, rest: Pose): AnimationDoc {
     loop: typeof raw.loop === 'boolean' ? raw.loop : base.loop,
     keys: keys.length ? keys : base.keys,
   }
+}
+
+/**
+ * A document parsed with no rig to hold it against.
+ *
+ * `parseDoc` above fills every key out to the rest pose, because the animator
+ * has a model loaded and the model is the authority on what bones exist. The
+ * shot document has neither: an actor's authored clip is parsed wherever the
+ * shot is decoded, long before any glTF arrives, so the only honest reading is
+ * to keep exactly the bones the file names and let the renderer drive those.
+ * `samplePose` already treats an absent bone as "leave it alone", which on a
+ * body that is also playing a walk cycle is the right meaning.
+ *
+ * Null rather than a default when there is nothing usable, because the caller
+ * is a field on a larger document and "no clip" is an ordinary value there -
+ * unlike the animator, which must open on *something*.
+ */
+export function parseAnyDoc(value: unknown): AnimationDoc | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  if (!Array.isArray(raw.keys)) return null
+
+  const fps = Math.round(number(raw.fps, 24, MIN_FPS, MAX_FPS))
+
+  const keys: Keyframe[] = []
+  for (const entry of raw.keys.slice(0, 200)) {
+    if (!entry || typeof entry !== 'object') continue
+    const key = entry as Record<string, unknown>
+    const pose = key.pose as Record<string, unknown> | undefined
+    if (!pose || typeof pose !== 'object') continue
+
+    const bones: Record<string, Quat> = {}
+    const source = (pose.bones ?? {}) as Record<string, unknown>
+    // More names than any rig here has is a hand-made file; the cap only keeps
+    // it from being a hand-made denial of service.
+    for (const name of Object.keys(source).slice(0, 64)) {
+      const rotation = quat(source[name])
+      if (rotation) bones[name] = rotation
+    }
+
+    keys.push({
+      time: snapTime(number(key.time, 0, 0, MAX_DURATION), fps),
+      ease: EASES.includes(key.ease as Ease) ? (key.ease as Ease) : 'smooth',
+      pose: { root: vec3(pose.root) ?? [0, 0, 0], bones },
+    })
+  }
+  if (keys.length === 0) return null
+  keys.sort((a, b) => a.time - b.time)
+
+  const last = keys[keys.length - 1].time
+  return {
+    version: CLIP_VERSION,
+    name:
+      typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 60) : 'clip',
+    fps,
+    duration: Math.max(number(raw.duration, 2, 1 / fps, MAX_DURATION), last),
+    loop: raw.loop !== false,
+    keys,
+  }
+}
+
+/**
+ * One pose on its own, with no rig and no document around it.
+ *
+ * What a *still* stores. A shot keeps the whole keyed document, because it has
+ * a clock to play it against; a still is one instant by definition, so the only
+ * thing worth keeping is where the bones ended up.
+ *
+ * Forgiving in the same way `parseAnyDoc` is and for the same reason - this
+ * comes out of a link somebody may have truncated - and null when there is
+ * nothing usable, because "not posed" is an ordinary answer for a peep.
+ */
+export function parsePose(value: unknown): Pose | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+
+  const bones: Record<string, Quat> = {}
+  const source = (raw.bones ?? {}) as Record<string, unknown>
+  if (source && typeof source === 'object') {
+    // Capped for the reason `parseAnyDoc` caps its keys: more bones than any
+    // rig here has means a hand-made file, and this is the only guard between
+    // one and the renderer.
+    for (const name of Object.keys(source).slice(0, 64)) {
+      const rotation = quat(source[name])
+      if (rotation) bones[name] = rotation
+    }
+  }
+
+  const root = vec3(raw.root)
+  if (!root && Object.keys(bones).length === 0) return null
+  return { root: root ?? [0, 0, 0], bones }
+}
+
+/**
+ * The same pose, rounded, for a document that lives in the address bar.
+ *
+ * A pose is twenty-three quaternions, and at full float precision each number
+ * is twenty characters of `0.7071067811865476`. That is about two kilobytes
+ * per posed body before base64, which a still with a cast of six turns into a
+ * link no server will accept - the same 16KB header budget that made a set a
+ * reference rather than a copy.
+ *
+ * Four places is under a hundredth of a degree, which is far finer than
+ * anything a hand on a handle can express, and cuts the number to seven
+ * characters. Applied where a pose is *written*, so nothing downstream has to
+ * know the link is why.
+ */
+export function trimPose(pose: Pose, places = 4): Pose {
+  const factor = 10 ** places
+  const round = (value: number) => Math.round(value * factor) / factor
+  const bones: Record<string, Quat> = {}
+  for (const name of Object.keys(pose.bones)) {
+    const q = pose.bones[name]
+    bones[name] = [round(q[0]), round(q[1]), round(q[2]), round(q[3])]
+  }
+  return { root: [round(pose.root[0]), round(pose.root[1]), round(pose.root[2])], bones }
 }
 
 function parseKey(value: unknown, fps: number, rest: Pose): Keyframe | null {

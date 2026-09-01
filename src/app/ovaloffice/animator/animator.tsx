@@ -52,8 +52,11 @@ import {
 import { Timeline } from '@/app/ovaloffice/animator/timeline'
 import { Num, Pick, Slide } from '@/app/ovaloffice/studio/parts'
 import { Button } from '@/components/ui/button'
+import { AXIS, BoneList, PosePad } from '@/app/ovaloffice/animator/bone-panel'
 import {
   type AnimationDoc,
+  bake,
+  type BakedClip,
   CLIP_VERSION,
   type Ease,
   EASES,
@@ -74,7 +77,14 @@ import {
   setFps,
   snapTime,
 } from '@/domain/animator/clip'
-import { type BoneSpec, DUMMY_BONES, GROUP_LABELS } from '@/domain/animator/rig'
+import { searchModels } from '@/domain/thingiverse/models'
+import {
+  type Rig as BodyRig,
+  isRigId,
+  type RigId,
+  RIG_IDS,
+  RIGS,
+} from '@/domain/animator/rig'
 import { PRESETS, type Preset, stamp, stampLength } from '@/domain/animator/presets'
 
 /**
@@ -118,6 +128,19 @@ const MOVE_ICONS: Record<string, LucideIcon> = {
 /** Where the working file lives between visits. Same bargain as the builder. */
 const STORE = 'ovaloffice:animator'
 
+/**
+ * The draft, per body.
+ *
+ * One key was enough while there was one rig. It is not now: a document is a
+ * list of whole *poses*, keyed by bone name, so a person's draft loaded onto a
+ * fox is every bone missing and every key a rest pose. `parseDoc` fills the
+ * gaps from the model rather than failing, which makes the failure silent -
+ * you open the peep and find an animation of nothing.
+ */
+function draftKey(rig: RigId): string {
+  return `${STORE}:${rig}`
+}
+
 const NO_REST: Pose = { root: [0, 0, 0], bones: {} }
 
 /**
@@ -147,8 +170,119 @@ interface History {
   future: AnimationDoc[]
 }
 
-export function Animator() {
+/**
+ * Somewhere for a clip to go, when this editor is not the backoffice's.
+ *
+ * The animator was written as a working file in a browser: it poses the dummy,
+ * bakes the keys and hands back a `.glb` you keep wherever you keep files. That
+ * is still the whole of what /ovaloffice/animator does, and it is right for an
+ * admin's tool.
+ *
+ * A *space* wants the other thing - a clip on its own shelf, that a blueprint
+ * can name - and the way to give it one is not a second animator. It is one
+ * optional prop: the editor stays the editor, and where a clip lands becomes
+ * the caller's business. See `/t/[slug]/thingiverse/clips`.
+ */
+export interface ClipShelf {
+  /** What the button says. The caller's, because it is the caller's shelf. */
+  label: string
+  /** True while the save is in flight; the button says so and goes dead. */
+  saving: boolean
+  /** Whatever the last save said, good or bad. Drawn under the button. */
+  note: string | null
+  /** The name, held by the caller so it can be edited beside the button. */
+  name: string
+  onName: (name: string) => void
+  /** Bake and store. The baked half is what plays; the doc is what reopens. */
+  onSave: (baked: BakedClip, doc: AnimationDoc) => void
+  /**
+   * A clip being reopened, rather than a new one.
+   *
+   * Parsed against the rig's rest pose when the model loads - see `onReady`,
+   * where the same thing happens to the working file in localStorage and for
+   * the same reason: a bone the document does not mention has to come from
+   * somewhere, and the model is the only authority.
+   */
+  initial?: unknown
+}
+
+export function Animator({
+  shelf,
+  skin = null,
+  initialRig = 'dummy',
+}: {
+  shelf?: ClipShelf
+  /**
+   * The body this account actually wears, as a catalogue id.
+   *
+   * Posing a grey mannequin and then watching the clip play on a knight is a
+   * small, constant translation somebody has to do in their head - and the two
+   * are not even the same shape, so an arm that cleared the body on the dummy
+   * can end up inside a pauldron. The skins share the dummy's skeleton exactly
+   * (`hips`, `spine`, `upperarm.l`, `handslot.r` - every name), so this is a
+   * different *file* on the same rig and nothing else changes.
+   *
+   * Null is the dummy, which is what an account with no skin wears anyway.
+   */
+  skin?: string | null
+  /**
+   * Which rig to open on. The choice stays the editor's - the Body panel still
+   * switches - but a caller that already knows what the clip will play on (the
+   * video studio, animating a fox) opens on that body rather than making
+   * somebody find the toggle first.
+   */
+  initialRig?: RigId
+} = {}) {
   const [rig, setRig] = useState<RigHandle | null>(null)
+
+  /**
+   * Which body is being posed, and what is in its hand.
+   *
+   * Both are the editor's own state rather than part of the document: a clip is
+   * bones and times, and the body it was keyed on is recorded once, on the way
+   * to the shelf. What a body happens to be holding is never recorded at all -
+   * see `AnimatorStage.hold`.
+   */
+  const [rigId, setRigId] = useState<RigId>(initialRig)
+  const [holding, setHolding] = useState<{ model: string; socket: string } | null>(null)
+  const [holdQuery, setHoldQuery] = useState('')
+
+  /**
+   * A few things to put in a hand.
+   *
+   * Six, off the same search the thingiverse uses - which reaches the level
+   * packs as well as the world's, and that is where the swords are. Not a
+   * picker with thumbnails: this is a posing aid, the panel is 22rem wide, and
+   * somebody looking for a sword types "sword".
+   */
+  const holdHits = useMemo(() => {
+    if (holdQuery.trim().length < 2) return []
+    return searchModels(holdQuery).slice(0, 6)
+  }, [holdQuery])
+
+  const body = useMemo<BodyRig>(() => {
+    const base = RIGS[rigId]
+    // The skin is a person, so it only replaces the person. Wearing a knight
+    // does not change what a fox looks like.
+    if (rigId !== 'dummy' || !skin) return base
+    return { ...base, url: `/xp/packs/${skin}.glb` }
+  }, [rigId, skin])
+  /**
+   * The shelf, mirrored into a ref.
+   *
+   * `onReady` fires once, when the model finishes loading, and it is memoised
+   * on `replace` alone - deliberately, because a callback that changed identity
+   * whenever the save note changed would re-run the "adopt what was left here"
+   * branch and throw away whatever had been keyed since.
+   */
+  const shelfRef = useRef<ClipShelf | undefined>(shelf)
+  /** The same trick for the rig: `onReady` must not change identity for it. */
+  const rigRef = useRef<RigId>(rigId)
+  useEffect(() => {
+    shelfRef.current = shelf
+    rigRef.current = rigId
+  })
+
   const [history, setHistory] = useState<History>(() => ({
     doc: emptyDoc(NO_REST, 'idle'),
     past: [],
@@ -296,9 +430,27 @@ export function Animator() {
     setRig(handle)
     setPose(handle.rest)
 
+    /**
+     * A clip being reopened wins over the working file.
+     *
+     * Somebody who clicked a clip on the shelf means *that* clip, and the
+     * localStorage draft is whatever they happened to be doing last time in a
+     * different tab. The draft is not cleared - it is still there when they
+     * come back to a blank editor.
+     */
+    if (shelfRef.current?.initial) {
+      try {
+        replace(parseDoc(shelfRef.current.initial, handle.rest))
+        return
+      } catch {
+        // A stored document the parser will not have opens as a new one, for
+        // the same reason a corrupt draft does.
+      }
+    }
+
     let stored: AnimationDoc | null = null
     try {
-      const raw = window.localStorage.getItem(STORE)
+      const raw = window.localStorage.getItem(draftKey(rigRef.current))
       if (raw) stored = parseDoc(JSON.parse(raw), handle.rest)
     } catch {
       // A corrupt working file opens as a new one rather than as a blank page
@@ -312,11 +464,11 @@ export function Animator() {
   useEffect(() => {
     if (!rig) return
     try {
-      window.localStorage.setItem(STORE, JSON.stringify(doc))
+      window.localStorage.setItem(draftKey(rigId), JSON.stringify(doc))
     } catch {
       // Quota, private mode. Not worth interrupting anybody over.
     }
-  }, [doc, rig])
+  }, [doc, rig, rigId])
 
   /**
    * A pose arriving from the viewport.
@@ -564,7 +716,7 @@ export function Animator() {
     }
   }, [fullscreen])
 
-  const spec = selected ? DUMMY_BONES.find((bone) => bone.name === selected) ?? null : null
+  const spec = selected ? body.bones.find((bone) => bone.name === selected) ?? null : null
   const onKeyframe = keyAt(doc, time) >= 0
   const angles = useMemo(
     () => (rig && selected ? boneEuler(rig, pose, selected) : { x: 0, y: 0, z: 0 }),
@@ -608,6 +760,10 @@ export function Animator() {
         onSaveWork={() => saveDoc(doc)}
         onDownload={downloadGlb}
         onToggleFullscreen={() => setFullscreen((on) => !on)}
+        onCopyKey={copyKey}
+        onPasteKey={pasteKey}
+        onResetPose={resetAll}
+        canPaste={!!clipboard && !!rig}
       />
 
       <Timeline
@@ -632,13 +788,55 @@ export function Animator() {
   )
 
   return (
-    <div className={fullscreen ? 'block' : 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'}>
-      <div className={fullscreen ? 'fixed inset-0 z-50 flex flex-col bg-background p-2' : 'flex flex-col gap-3'}>
+    /*
+      The stage holds still and the panel scrolls past it.
+
+      `items-start` and a sticky first column, which between them are the whole
+      of it: the sidebar is a column of a dozen panels and is taller than any
+      screen, and reading the bottom of it used to scroll the body you were
+      posing off the top. Sticky rather than a fixed-height pane with its own
+      scrollbar, because a page with two scrollbars is a page where the wheel
+      does different things depending on where the pointer happens to be.
+
+      It is the same answer on a phone, where the columns stack: the viewport
+      sits at the top and stays there while the panels move under it. Which is
+      why the stage is capped in height below `xl` - a sticky element taller
+      than the screen is an element that cannot stick.
+    */
+    <div
+      className={
+        fullscreen ? 'block' : 'grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'
+      }
+    >
+      <div
+        className={
+          fullscreen
+            ? 'fixed inset-0 z-50 flex flex-col bg-background p-2'
+            : /*
+                Capped and scrollable, which is what makes the timeline
+                reachable.
+
+                A `sticky` element taller than the viewport is a trap: the page
+                scrolls, the element stays pinned at `top-2`, and whatever hangs
+                off its bottom can never be brought into view. Here that bottom
+                is the timeline - reported as cut off, with scrolling to the end
+                doing nothing, because there was nothing further to scroll to.
+
+                So the column takes at most the window and scrolls inside
+                itself, which is the same pattern the scene editor's control
+                panel uses one directory over. `overscroll-contain` keeps a
+                wheel that reaches the end of this column from carrying on into
+                the page behind it, which on an editor you are working inside is
+                the difference between a limit and a lurch.
+              */
+              'sticky top-2 z-20 flex max-h-[calc(100dvh-1rem)] flex-col gap-3 self-start overflow-y-auto overscroll-contain bg-background pb-2'
+        }
+      >
         <div
           className={
             fullscreen
               ? 'relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-secondary/30'
-              : 'relative aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-secondary/30'
+              : 'relative h-[56vh] min-h-[16rem] overflow-hidden rounded-2xl border border-border bg-secondary/30 sm:h-[46vh] xl:aspect-[4/3] xl:h-auto xl:min-h-0'
           }
           style={{ touchAction: 'none' }}
           onContextMenu={(event) => event.preventDefault()}
@@ -687,6 +885,8 @@ export function Animator() {
             />
             <Suspense fallback={null}>
               <AnimatorStage
+                body={body}
+                hold={holding}
                 grabbable={!looking}
                 slideMode={slideMode}
                 doc={doc}
@@ -706,8 +906,18 @@ export function Animator() {
           </Canvas>
 
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2">
+            {/*
+              Three lines of it, over the body, on the screen with the least
+              room for either. The short form keeps the one thing somebody
+              cannot guess - that the dots are the control - and drops the two
+              they will find by trying: Slide is a labelled button already, and
+              pinching to zoom is what fingers do everywhere.
+            */}
             <p className="rounded-lg bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground backdrop-blur">
-              drag a dot to pose · shift-drag or Slide moves along the floor · wheel or pinch to zoom
+              drag a dot to pose
+              <span className="hidden sm:inline">
+                {' '}· shift-drag or Slide moves along the floor · wheel or pinch to zoom
+              </span>
             </p>
             <div className="flex shrink-0 gap-1.5">
               <Button
@@ -826,31 +1036,60 @@ export function Animator() {
         >
           {spec && rig && (
             <>
-              <div className="flex flex-col gap-0.5">
-                {(['x', 'y', 'z'] as const).map((axis) => (
-                  <Slide
-                    key={axis}
-                    label={axis === 'x' ? 'Pitch' : axis === 'y' ? 'Turn' : 'Roll'}
-                    value={angles[axis]}
-                    min={-180}
-                    max={180}
-                    step={1}
-                    unit="°"
-                    onChange={(value) => {
-                      const next = setBoneEuler(rig, spec.name, { ...angles, [axis]: value })
-                      if (!next) return
-                      setPose(next)
-                      if (autoKey) {
-                        edit(
-                          (current) => putKey(current, timeRef.current, next),
-                          // Tagged per bone and axis, so dragging one slider is
-                          // one step back but moving on to the next is another.
-                          `slider:${spec.name}:${axis}`,
-                        )
-                      }
-                    }}
-                  />
-                ))}
+              {/*
+                The pad and the numbers, side by side rather than one under the
+                other: they are two ways of saying the same thing, and a column
+                would read as two steps.
+              */}
+              <div className="flex items-start gap-3">
+                <PosePad
+                  pitch={angles.x}
+                  turn={angles.y}
+                  roll={angles.z}
+                  onChange={(next) => {
+                    const turned = setBoneEuler(rig, spec.name, {
+                      ...angles,
+                      x: next.pitch,
+                      y: next.turn,
+                      z: next.roll,
+                    })
+                    if (!turned) return
+                    setPose(turned)
+                    if (autoKey) {
+                      edit((current) => putKey(current, timeRef.current, turned), `pad:${spec.name}`)
+                    }
+                  }}
+                />
+
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  {(['x', 'y', 'z'] as const).map((axis) => (
+                    <Slide
+                      key={axis}
+                      label={axis === 'x' ? 'Pitch' : axis === 'y' ? 'Turn' : 'Roll'}
+                      value={angles[axis]}
+                      min={-180}
+                      max={180}
+                      step={1}
+                      unit="°"
+                      /* The pad's own two colours, and blue for the one it has
+                         no surface for. See `AXIS`. */
+                      tint={axis === 'x' ? AXIS.pitch : axis === 'y' ? AXIS.turn : AXIS.roll}
+                      onChange={(value) => {
+                        const next = setBoneEuler(rig, spec.name, { ...angles, [axis]: value })
+                        if (!next) return
+                        setPose(next)
+                        if (autoKey) {
+                          edit(
+                            (current) => putKey(current, timeRef.current, next),
+                            // Tagged per bone and axis, so dragging one slider is
+                            // one step back but moving on to the next is another.
+                            `slider:${spec.name}:${axis}`,
+                          )
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button type="button" size="sm" variant="secondary" onClick={resetBone}>
@@ -870,8 +1109,89 @@ export function Animator() {
             </>
           )}
 
-          <BoneList selected={selected} pins={pins} onSelect={setSelected} onPin={togglePin} />
+          <BoneList
+            bones={body.bones}
+            selected={selected}
+            pins={pins}
+            onSelect={setSelected}
+            onPin={togglePin}
+          />
         </Panel>
+
+        {/*
+          Saving it to the space, when there is a space to save it to.
+
+          First in the panel, above even the body, because it is the *point* of
+          the editor when it is opened from a workspace: everything below is how
+          you get there. The backoffice's animator passes no shelf and this is
+          not drawn at all - its clip comes out as a file, which is the right
+          shape for an admin's tool and the reason this is a prop rather than a
+          second editor.
+        */}
+        {shelf && (
+          <Panel
+            title="Shelf"
+            icon={Clapperboard}
+            hint="Saved to this space, where a blueprint can name it."
+          >
+            <div className="flex flex-col gap-2">
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                Name
+                <input
+                  value={shelf.name}
+                  onChange={(event) => shelf.onName(event.target.value)}
+                  className="rounded-lg border border-border bg-secondary px-2 py-1 text-sm text-foreground"
+                />
+              </label>
+
+              <Button
+                type="button"
+                size="sm"
+                disabled={!rig || shelf.saving}
+                onClick={() => {
+                  if (!rig) return
+                  /*
+                   * Baked here rather than on the server, and that is where it
+                   * belongs: baking needs the rig's *rest pose*, which is a
+                   * property of a glTF that only the browser has loaded. The
+                   * server would have to parse a model to check the arithmetic
+                   * it was being handed, which is a great deal of machinery to
+                   * re-derive a number the editor is holding.
+                   */
+                  shelf.onSave(bake(doc, rig.rest), doc)
+                }}
+              >
+                {shelf.saving ? 'Saving…' : shelf.label}
+              </Button>
+
+              {shelf.note && (
+                <p className="text-[11px] text-muted-foreground">{shelf.note}</p>
+              )}
+
+              <p className="text-[11px] text-muted-foreground">
+                Keyed on the {RIGS[rigId].label.toLowerCase()}. A clip binds to bones by
+                name, so it plays on that body and stands still on the other.
+              </p>
+            </div>
+          </Panel>
+        )}
+
+        <BodyPanel
+          rigId={rigId}
+          skin={skin}
+          holding={holding}
+          holdQuery={holdQuery}
+          holdHits={holdHits}
+          onQuery={setHoldQuery}
+          onHold={setHolding}
+          onRig={(next) => {
+            if (next === rigId) return
+            setSelected(null)
+            setPins(new Set())
+            setHolding(null)
+            setRigId(next)
+          }}
+        />
 
         <Panel
           title="Moves"
@@ -944,7 +1264,7 @@ export function Animator() {
         <Panel
           title="Save"
           icon={Download}
-          hint="Download and Save work live in the transport bar now — reachable even in fullscreen. This is where a file comes back in."
+          hint="Also in the transport bar on a wide screen, and in fullscreen anywhere — so saving never depends on this panel. This is where a file comes back in."
         >
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" size="sm" onClick={downloadGlb} disabled={!rig || busy}>
@@ -1109,6 +1429,10 @@ function Transport({
   onSaveWork,
   onDownload,
   onToggleFullscreen,
+  onCopyKey,
+  onPasteKey,
+  onResetPose,
+  canPaste,
 }: {
   doc: AnimationDoc
   time: number
@@ -1135,6 +1459,11 @@ function Transport({
   onSaveWork: () => void
   onDownload: () => void
   onToggleFullscreen: () => void
+  onCopyKey: () => void
+  onPasteKey: () => void
+  onResetPose: () => void
+  /** Whether there is a key held and a rig to paste it on to. */
+  canPaste: boolean
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -1202,8 +1531,16 @@ function Transport({
 
       <span className="mx-1 h-5 w-px bg-border" />
 
-      <Button type="button" size="sm" variant={autoKey ? 'default' : 'ghost'} onClick={onAutoKey}>
-        Auto-key {autoKey ? 'on' : 'off'}
+      <Button
+        type="button"
+        size="sm"
+        variant={autoKey ? 'default' : 'ghost'}
+        onClick={onAutoKey}
+        title={`Auto-key ${autoKey ? 'on' : 'off'} — whether a drag writes a key by itself`}
+      >
+        {/* The state is carried by the button lighting up, so the word for it
+            is what goes first when the row is short. */}
+        Auto<span className="hidden sm:inline">-key {autoKey ? 'on' : 'off'}</span>
       </Button>
       <Button type="button" size="sm" variant={doc.loop ? 'default' : 'ghost'} onClick={onLoop} aria-label="Loop">
         <Repeat className="size-3.5" aria-hidden />
@@ -1211,6 +1548,64 @@ function Transport({
 
       <span className="mx-1 h-5 w-px bg-border" />
 
+      {/*
+        The pose clipboard, in the transport's own wrap rather than under it.
+
+        It was a row of its own, which on a phone is a row the viewport pays
+        for: four bands of chrome between the body you are posing and the strip
+        you are scrubbing, on the one screen where there is no room for them.
+        Here the three buttons fill whatever the wrap has left over - a full
+        line on a desktop, tucked in beside the others on a phone - and the
+        labels go below `sm`, where an icon and a tooltip say as much as a word
+        does and cost a third of the width.
+      */}
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        onClick={onCopyKey}
+        aria-label="Copy key"
+        title="Copy the whole key — the pose and its easing"
+      >
+        <Clipboard className="size-3.5" aria-hidden />
+        <span className="hidden sm:inline">Copy</span>
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        onClick={onPasteKey}
+        disabled={!canPaste}
+        aria-label="Paste key"
+        title="Paste the held key at the playhead"
+      >
+        <ClipboardCheck className="size-3.5" aria-hidden />
+        <span className="hidden sm:inline">Paste</span>
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        onClick={onResetPose}
+        aria-label="Back to the rest pose"
+        title="Back to the rest pose"
+      >
+        <RotateCcw className="size-3.5" aria-hidden />
+        <span className="hidden sm:inline">Rest</span>
+      </Button>
+
+      <span className="mx-1 h-5 w-px bg-border" />
+
+      {/*
+        The two file buttons, on a phone only while fullscreen.
+
+        They were put in this bar so that saving never depended on a dock that
+        fullscreen removes, and that reason holds exactly as far as fullscreen:
+        in the ordinary layout the Save panel is a short scroll below and has
+        both, while here they are two more things wrapping the row onto a third
+        line above a viewport that wanted the height. So they stay for the case
+        they were added for and step out of the one they crowd.
+      */}
       <Button
         type="button"
         size="sm"
@@ -1218,6 +1613,7 @@ function Transport({
         onClick={onSaveWork}
         aria-label="Save work"
         title="Save work — the editable .json"
+        className={fullscreen ? undefined : 'hidden sm:inline-flex'}
       >
         <Save className="size-3.5" aria-hidden />
       </Button>
@@ -1229,6 +1625,7 @@ function Transport({
         disabled={!canDownload || busy}
         aria-label={busy ? 'Building the GLB' : 'Download .glb'}
         title={busy ? 'Building…' : 'Download .glb — the file you ship'}
+        className={fullscreen ? undefined : 'hidden sm:inline-flex'}
       >
         <Download className="size-3.5" aria-hidden />
       </Button>
@@ -1251,68 +1648,107 @@ function Transport({
   )
 }
 
-/** Every handle, by name, for when a dot is behind something. */
-function BoneList({
-  selected,
-  pins,
-  onSelect,
-  onPin,
+/**
+ * Which body, and what is in its hand.
+ *
+ * Its own component rather than eighty more lines in `Animator`, which was
+ * already the longest function in the file - and because everything in here is
+ * about the *editor's* state rather than the document's: nothing it touches
+ * ends up in a clip.
+ */
+function BodyPanel({
+  rigId,
+  skin,
+  holding,
+  holdQuery,
+  holdHits,
+  onQuery,
+  onHold,
+  onRig,
 }: {
-  selected: string | null
-  pins: ReadonlySet<string>
-  onSelect: (bone: string) => void
-  onPin: (bone: string) => void
+  rigId: RigId
+  skin: string | null
+  holding: { model: string; socket: string } | null
+  holdQuery: string
+  holdHits: { id: string; label: string }[]
+  onQuery: (query: string) => void
+  onHold: (hold: { model: string; socket: string } | null) => void
+  onRig: (rig: RigId) => void
 }) {
-  const groups = useMemo(() => {
-    const out = new Map<BoneSpec['group'], BoneSpec[]>()
-    for (const bone of DUMMY_BONES) {
-      const list = out.get(bone.group) ?? []
-      list.push(bone)
-      out.set(bone.group, list)
-    }
-    return [...out]
-  }, [])
-
   return (
-    <div className="flex flex-col gap-2">
-      {groups.map(([group, bones]) => (
-        <div key={group}>
-          <p className="mb-1 font-mono text-[10px] text-muted-foreground uppercase">
-            {GROUP_LABELS[group]}
+    <Panel
+      title="Body"
+      icon={PersonStanding}
+      hint="A clip binds to bones by name, so it only plays on the body it was keyed on."
+    >
+      <div className="flex flex-col gap-2">
+        <Pick
+          label="Posing"
+          value={rigId}
+          options={RIG_IDS}
+          onChange={(value) => {
+            if (isRigId(value)) onRig(value)
+          }}
+        />
+
+        {skin && rigId === 'dummy' && (
+          <p className="text-[11px] text-muted-foreground">
+            Wearing your own body. It is the same skeleton as the dummy, so the clip
+            plays on either.
           </p>
-          <div className="flex flex-wrap gap-1">
-            {bones.map((bone) => (
-              <span key={bone.name} className="inline-flex">
-                <button
-                  type="button"
-                  onClick={() => onSelect(bone.name)}
-                  className={`rounded-l-md border px-2 py-0.5 text-[11px] transition ${
-                    selected === bone.name
-                      ? 'border-accent bg-accent/20 text-foreground'
-                      : 'border-border bg-secondary/40 text-muted-foreground hover:text-foreground'
-                  } ${bone.pinnable ? '' : 'rounded-r-md'}`}
-                >
-                  {bone.label}
-                </button>
-                {bone.pinnable && (
-                  <button
-                    type="button"
-                    onClick={() => onPin(bone.name)}
-                    aria-label={`${pins.has(bone.name) ? 'Unpin' : 'Pin'} ${bone.label}`}
-                    className={`rounded-r-md border border-l-0 px-1 py-0.5 transition ${
-                      pins.has(bone.name)
-                        ? 'border-accent bg-accent/30 text-foreground'
-                        : 'border-border bg-secondary/40 text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Pin className="size-3" aria-hidden />
-                  </button>
-                )}
-              </span>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
+        )}
+
+        {/*
+          Something in a hand, and only on a rig that has hands.
+
+          A posing aid and nothing else: it is drawn, it is never keyed, and it
+          does not travel with the clip. What a thing is holding in a world is
+          the world's business - see `AnimatorStage.hold`.
+        */}
+        {rigId === 'dummy' && (
+          <>
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              Holding
+              <input
+                value={holdQuery}
+                onChange={(event) => onQuery(event.target.value)}
+                placeholder="sword, cup, book…"
+                className="rounded-lg border border-border bg-secondary px-2 py-1 text-sm text-foreground"
+              />
+            </label>
+
+            {holding && (
+              <button
+                type="button"
+                onClick={() => onHold(null)}
+                className="rounded-lg border border-border px-2 py-1 text-left text-xs text-muted-foreground transition hover:text-foreground"
+              >
+                Put down {holding.model}
+              </button>
+            )}
+
+            <div className="flex flex-wrap gap-1">
+              {holdHits.map((entry) => (
+                <span key={entry.id} className="flex gap-1">
+                  {(['handslot.l', 'handslot.r'] as const).map((socket) => (
+                    <button
+                      key={socket}
+                      type="button"
+                      onClick={() => onHold({ model: entry.id, socket })}
+                      title={`${entry.label} in the ${socket === 'handslot.l' ? 'left' : 'right'} hand`}
+                      className="rounded-lg border border-border bg-secondary/40 px-2 py-1 text-[11px] text-muted-foreground transition hover:border-accent hover:text-foreground"
+                    >
+                      {entry.label} {socket === 'handslot.l' ? 'L' : 'R'}
+                    </button>
+                  ))}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </Panel>
   )
 }
+
+/** Every handle, by name, for when a dot is behind something. */

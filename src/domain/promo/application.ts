@@ -15,7 +15,7 @@
  * the same table rather than from a second copy of the reasoning.
  */
 
-import type { Tier } from '@/domain/billing/tiers'
+import { type Tier, TIERS } from '@/domain/billing/tiers'
 import { DEFAULT_LOCALE, type Locale } from '@/domain/i18n/locale'
 
 // ---------------------------------------------------------------------------
@@ -284,4 +284,85 @@ export function codeIsLive(
   if (record.expiresAt && new Date(record.expiresAt).getTime() <= now.getTime()) return false
   if (record.maxUses !== null && record.uses >= record.maxUses) return false
   return true
+}
+
+// ---------------------------------------------------------------------------
+// Offers on the sign-up form
+// ---------------------------------------------------------------------------
+
+/**
+ * The prefix that publishes a code.
+ *
+ * Most codes are handed out: printed on a flyer, pasted into a thread, mailed
+ * to one person. A few are the opposite - a standing offer meant to be read by
+ * anybody who reaches the sign-up form, which only works if the form knows
+ * which ones those are.
+ *
+ * The naming convention *is* the switch. `SIGNUP-K3M9PQRS` or `SIGNUP50` shows
+ * up on /signup; `HBF-2K4M` does not. A column would be the tidier answer and
+ * was not chosen: an operator minting a code is already typing its name, and a
+ * convention they can see in the list beats a checkbox they have to remember
+ * the meaning of. The backoffice says so on the form, and badges the codes it
+ * applies to, so the rule is never something you have to know in advance.
+ *
+ * The consequence to keep in mind: a code named this way is public the moment
+ * it goes live. There is nothing else keeping it off a stranger's screen.
+ */
+export const SIGNUP_OFFER_PREFIX = 'SIGNUP'
+
+/**
+ * Would this code be shown on the sign-up form?
+ *
+ * Normalises first, so the question is asked of the code as it is stored rather
+ * than as it was typed - `signup 50` is `SIGNUP50` and is an offer, the same
+ * way it is the same code everywhere else.
+ */
+export function isSignupOffer(code: unknown): boolean {
+  return normaliseCode(code)?.startsWith(SIGNUP_OFFER_PREFIX) ?? false
+}
+
+/**
+ * One published offer, as the sign-up form needs it.
+ *
+ * Here rather than beside the query that builds it because a Client Component
+ * renders it, and `offers.ts` is `server-only` - a type import would be erased
+ * and work, right up until somebody reached for the comparator next to it.
+ */
+export interface SignupOffer {
+  code: string
+  /** The operator's own words for it, if they wrote any. */
+  label: string | null
+  tier: Tier
+  /** Days granted, or `null` for an offer with no end. */
+  freeDays: number | null
+  /** How many of the holder's spaces it covers, or `null` for all of them. */
+  spaces: number | null
+  /** When the offer itself stops being claimable, or `null` if it does not. */
+  closesAt: string | null
+  /** Claims left, or `null` when the code is uncapped. */
+  remaining: number | null
+}
+
+/**
+ * Best first.
+ *
+ * "Best" is the higher plan before the longer run, because the difference
+ * between a month of xo and a month of xp is which half of the product opens -
+ * a much bigger fact than fourteen days either way. `null` days is a grant with
+ * no end, so it sorts above every finite one.
+ *
+ * Ties break on the code itself, which is only there so the order does not
+ * wander between two renders of the same page.
+ */
+export function compareSignupOffers(a: SignupOffer, b: SignupOffer): number {
+  const rank = TIERS.indexOf(b.tier) - TIERS.indexOf(a.tier)
+  if (rank !== 0) return rank
+
+  if (a.freeDays !== b.freeDays) {
+    if (a.freeDays === null) return -1
+    if (b.freeDays === null) return 1
+    return b.freeDays - a.freeDays
+  }
+
+  return a.code.localeCompare(b.code)
 }

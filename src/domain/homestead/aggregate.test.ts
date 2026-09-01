@@ -6,7 +6,7 @@ import {
   initialHomesteadState,
   type HomesteadState,
 } from '@/domain/homestead/aggregate'
-import type { HomesteadEvent } from '@/domain/homestead/events'
+import { MAX_TRANSFER, type HomesteadEvent } from '@/domain/homestead/events'
 import { DomainError } from '@/es/errors'
 
 /** Fold a list of events, the way `executeCommand` folds a stream. */
@@ -656,5 +656,126 @@ describe('selling ground back', () => {
     expect(() =>
       decide(initialHomesteadState, { type: 'SellGround', place: 'outdoor', tiles: ['0,0'] }),
     ).toThrow(DomainError)
+  })
+})
+
+describe('spending on a room, out of the same purse', () => {
+  test('a summon or a pickup comes off the till', () => {
+    const state = founded(500)
+    const [event] = decide(state, {
+      type: 'SpendCoins',
+      on: 'thing',
+      what: 'bench',
+      cost: 40,
+    })
+
+    expect(event.type).toBe('CoinsSpent')
+    expect(fold([event], state).coins).toBe(460)
+  })
+
+  test('a free one records nothing at all', () => {
+    // A row per summon for a thing that cost nothing is a log full of zeroes.
+    expect(
+      decide(founded(500), { type: 'SpendCoins', on: 'item', what: 'patty', cost: 0 }),
+    ).toEqual([])
+  })
+
+  test('you cannot spend what you do not have', () => {
+    expect(() =>
+      decide(founded(10), { type: 'SpendCoins', on: 'thing', what: 'bench', cost: 40 }),
+    ).toThrow()
+  })
+
+  test('and the cost has to be a plausible number of whole coins', () => {
+    // The bound this aggregate can keep without seeing the shelf. The exact
+    // price is the server action's to resolve; no browser schema accepts one.
+    for (const cost of [-1, 1.5, 1_000_000]) {
+      expect(() =>
+        decide(founded(9_999_999), { type: 'SpendCoins', on: 'thing', what: 'x', cost }),
+      ).toThrow()
+    }
+  })
+
+  test('it needs a homestead, because that is where the purse is', () => {
+    expect(() =>
+      decide(initialHomesteadState, {
+        type: 'SpendCoins',
+        on: 'thing',
+        what: 'bench',
+        cost: 1,
+      }),
+    ).toThrow()
+  })
+})
+
+describe('handing coins to somebody else', () => {
+  const transfer = '5d1c2f6a-0000-4000-8000-000000000001'
+
+  test('the debit comes off the sender', () => {
+    const state = founded(500)
+    const [event] = decide(state, { type: 'SendCoins', to: 'ann', amount: 120, transfer })
+
+    expect(event.type).toBe('CoinsSent')
+    expect(fold([event], state).coins).toBe(380)
+  })
+
+  test('and the credit goes on to the receiver', () => {
+    const state = founded(40)
+    const [event] = decide(state, { type: 'ReceiveCoins', from: 'bo', amount: 120, transfer })
+
+    expect(event.type).toBe('CoinsReceived')
+    expect(fold([event], state).coins).toBe(160)
+  })
+
+  test('you cannot send what you do not have', () => {
+    expect(() =>
+      decide(founded(10), { type: 'SendCoins', to: 'ann', amount: 40, transfer }),
+    ).toThrow()
+  })
+
+  test('nor a nonsense amount, in either direction', () => {
+    for (const amount of [0, -5, 2.5, MAX_TRANSFER + 1]) {
+      expect(() =>
+        decide(founded(9_999_999), { type: 'SendCoins', to: 'ann', amount, transfer }),
+      ).toThrow()
+      expect(() =>
+        decide(founded(0), { type: 'ReceiveCoins', from: 'ann', amount, transfer }),
+      ).toThrow()
+    }
+  })
+
+  test('being paid needs no café of your own', () => {
+    // Refusing the credit would make somebody who has never opened one unable
+    // to be paid, and push every sender into checking first.
+    const [event] = decide(initialHomesteadState, {
+      type: 'ReceiveCoins',
+      from: 'ann',
+      amount: 25,
+      transfer,
+    })
+    expect(event.type).toBe('CoinsReceived')
+    expect(fold([event], initialHomesteadState).coins).toBe(25)
+  })
+
+  test('sending does need one, because that is where the purse is', () => {
+    expect(() =>
+      decide(initialHomesteadState, { type: 'SendCoins', to: 'ann', amount: 1, transfer }),
+    ).toThrow()
+  })
+
+  test('a transfer moves exactly what it took, and nothing is created', () => {
+    const sender = founded(500)
+    const receiver = founded(100)
+
+    const [debit] = decide(sender, { type: 'SendCoins', to: 'ann', amount: 75, transfer })
+    const [credit] = decide(receiver, { type: 'ReceiveCoins', from: 'bo', amount: 75, transfer })
+
+    const before = sender.coins + receiver.coins
+    const after = fold([debit], sender).coins + fold([credit], receiver).coins
+    expect(after).toBe(before)
+    // Both halves carry the same id, which is the only way to find the two ends
+    // of one movement in the log afterwards.
+    expect(debit.data).toMatchObject({ transfer })
+    expect(credit.data).toMatchObject({ transfer })
   })
 })

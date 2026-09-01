@@ -3,6 +3,7 @@ import { campaignSlug, campaignSource } from '@/domain/analytics/campaign'
 import { isRegistrationOpen } from '@/domain/flags/queries'
 import { readLocale } from '@/app/i18n/preference'
 import { readPromoCode } from '@/domain/promo/cookie'
+import { listSignupOffers } from '@/domain/promo/offers'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -27,7 +28,18 @@ export default async function SignUpPage({
   const { invite, error, code, src } = await searchParams
 
   const supabase = await createClient()
-  const open = await isRegistrationOpen(supabase)
+  const [open, offers] = await Promise.all([
+    isRegistrationOpen(supabase),
+    /**
+     * What is going, read off the codes an operator named `SIGNUP…`.
+     *
+     * Loaded here rather than fetched by the form, so it is on the page for
+     * somebody with no JavaScript and cannot flash in a moment after the fields
+     * have already been read. See `listSignupOffers` for why the prefix is the
+     * switch.
+     */
+    listSignupOffers(),
+  ])
 
   /**
    * The code from the URL, or the one /code/[code] left in the cookie.
@@ -42,13 +54,26 @@ export default async function SignUpPage({
    */
   const promo = await readPromoCode(code)
 
+  /**
+   * The best published offer, if nothing else was in hand.
+   *
+   * Applied on the server rather than by a click, which is the difference
+   * between an offer that works and one that only works with scripting - and
+   * `AuthForm` shows the strip marked as applied, so nothing is redeemed
+   * invisibly. A code that arrived on a link or in the cookie always wins: they
+   * were handed that one specifically, and quietly swapping it for ours is
+   * exactly the failure the visible field exists to prevent.
+   */
+  const applied = promo ?? offers[0]?.code ?? null
+
   return (
     <AuthForm
       mode="signup"
       errorCode={error}
       registrationOpen={open}
       invite={invite ?? null}
-      code={promo}
+      code={applied}
+      offers={offers}
       src={campaignSlug(campaignSource(src ?? null))}
       // Same rule as `/login`: no locale in the path means the reader's own.
       locale={await readLocale()}

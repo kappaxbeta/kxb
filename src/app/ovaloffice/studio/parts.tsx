@@ -2,7 +2,11 @@
 
 import { ChevronDown, type LucideIcon, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { PALETTE_GROUPS } from '@/domain/lounge/palette'
+import { PACK_MODELS } from '@/domain/builder/catalogue.generated'
+import { isBuildable, labelOf } from '@/domain/builder/catalogue'
+import { PACKS } from '@/domain/builder/packs'
+import { isKnownModel, PALETTE_GROUPS } from '@/domain/lounge/palette'
+import { lookLabel, STUDIO_CAST_GROUPS } from '@/domain/studio/scene'
 import { emoteTileStyle } from '@/domain/world/emotes'
 
 /**
@@ -125,7 +129,11 @@ export function Row({
 const THUMB = [
   // Bigger than it looks it needs to be, because on a touch screen the thumb is
   // the hit target and a 14px one is a slider you fight.
-  'h-4 w-4 appearance-none rounded-full bg-accent ring-2 ring-background transition-transform',
+  //
+  // The colour is a variable with the accent as its fallback, so a slider that
+  // stands for one axis can be that axis's colour without a second component -
+  // see `tint`.
+  'h-4 w-4 appearance-none rounded-full bg-[var(--slide-tint,var(--color-accent))] ring-2 ring-background transition-transform',
 ]
   .flatMap((rules) => rules.split(' '))
   .flatMap((rule) => [`[&::-webkit-slider-thumb]:${rule}`, `[&::-moz-range-thumb]:${rule}`])
@@ -149,6 +157,7 @@ export function Slide({
   max,
   step,
   unit = '',
+  tint,
   onChange,
 }: {
   label: string
@@ -157,21 +166,46 @@ export function Slide({
   max: number
   step: number
   unit?: string
+  /**
+   * A colour for the filled part and the thumb, when this slider stands for
+   * something that has one.
+   *
+   * The accent otherwise, which is every slider in the studio: a colour here is
+   * only worth spending where it *means* something, and in the animator it
+   * means an axis - the same red, green and blue as the pad above it and as
+   * every three-dimensional gizmo anybody has ever used.
+   */
+  tint?: string
   onChange: (value: number) => void
 }) {
   const span = max - min
   const fill = span <= 0 ? 0 : ((Math.min(max, Math.max(min, value)) - min) / span) * 100
 
   return (
-    <div className="group flex items-center gap-2 text-xs">
-      {label && <span className="w-20 shrink-0 truncate text-muted-foreground">{label}</span>}
+    <div
+      className="group flex items-center gap-2 text-xs"
+      style={tint ? ({ '--slide-tint': tint } as React.CSSProperties) : undefined}
+    >
+      {/*
+        Narrow, and it has to be: this row is drawn in a 22rem panel beside a
+        9.5rem pad, and at `w-20` the label plus the readout took all of it -
+        the track collapsed to the width of its own thumb and three sliders read
+        as three floating dots. Reported as exactly that, with a picture.
+      */}
+      {label && <span className="w-12 shrink-0 truncate text-muted-foreground">{label}</span>}
       {/* Taller than the track, so the whole row is draggable rather than just
-          the six pixels of it that are painted. */}
-      <span className="relative flex h-7 min-w-0 flex-1 items-center">
+          the six pixels of it that are painted.
+
+          `min-w` is the half that stops it happening again. `flex-1` alone
+          means "whatever is left", and whatever is left can be nothing - a
+          slider is the one control whose *length* is the interface, so it needs
+          a floor rather than a share. Below this the row wraps, which is a
+          worse layout and still a usable control. */}
+      <span className="relative flex h-7 min-w-[4rem] flex-1 items-center">
         <span aria-hidden className="absolute inset-x-0 h-1.5 rounded-full bg-border" />
         <span
           aria-hidden
-          className="absolute left-0 h-1.5 rounded-full bg-accent/70 transition-[width] duration-75"
+          className="absolute left-0 h-1.5 rounded-full bg-[var(--slide-tint,var(--color-accent))] opacity-70 transition-[width] duration-75"
           style={{ width: `${fill}%` }}
         />
         <input
@@ -473,7 +507,148 @@ export function Pick({
   )
 }
 
-/** The block palette, in its own groups - fifty-eight names in one flat list is unusable. */
+/**
+ * The block palette, in its own groups - fifty-eight names in one flat list is
+ * unusable - followed by the packs a still may now also reach.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the whole catalogue is not in here
+ * ---------------------------------------------------------------------------
+ * `parseScene` will accept any of the 1,394 models the builder builds worlds
+ * out of, and this select offers a handful of them. That is not an oversight
+ * and the two should not be made to agree: what a document may *contain* is a
+ * safety question, answered by the widest honest list, and what a dropdown may
+ * *offer* is a usability one, answered by the shortest useful list. Fourteen
+ * hundred `<option>` elements is a control nobody can find anything in, and the
+ * scroll alone is a second of layout.
+ *
+ * So the packs listed here are the ones that make sense standing in a shot on
+ * their own, and anything else in the catalogue is reachable by editing the
+ * link - which is what the studio's document being a URL is for.
+ */
+const PROP_PACKS: readonly string[] = ['cosmos']
+
+/**
+ * Whether a model brings an animation with it.
+ *
+ * Asked of the *pack* rather than of the file, because the panel cannot fetch a
+ * glTF to find out and must not stall a slider on a network round trip. Only
+ * `cosmos` ships clips today, and this is the one honest place to say so - a
+ * per-model list would go stale the first time a pack is replaced, and reading
+ * the file would make an inspector async for a label.
+ */
+const CLIPPED_PACKS = new Set(['cosmos'])
+
+export function hasClip(model: string): boolean {
+  const cut = model.indexOf('/')
+  return cut > 0 && CLIPPED_PACKS.has(model.slice(0, cut))
+}
+
+/**
+ * A colour multiplied over a model, or none.
+ *
+ * ---------------------------------------------------------------------------
+ * Why "none" is a button rather than an absence
+ * ---------------------------------------------------------------------------
+ * A native colour input has no empty state: it is always *some* colour, and the
+ * moment one is shown next to a model it reads as the colour that model already
+ * is - which for a galaxy it is not. Worse, there would then be no way back to
+ * the model's own colours once the input had been touched, because every value
+ * it can hold is a tint.
+ *
+ * So "none" is its own control and the swatch is disabled until a colour is
+ * asked for. `null` and `#ffffff` are genuinely different answers here - see
+ * `BlockSpec.tint` - and this is the pair of controls that can express both.
+ */
+export function Tint({
+  value,
+  onChange,
+}: {
+  value: string | null
+  onChange: (value: string | null) => void
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="flex-1">Colour</span>
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        aria-pressed={value === null}
+        className={`rounded-lg border px-2 py-1 text-xs transition ${
+          value === null
+            ? 'border-accent/60 bg-secondary text-foreground'
+            : 'border-border text-muted-foreground hover:border-accent/40'
+        }`}
+      >
+        none
+      </button>
+      <input
+        type="color"
+        // Seeded with the galaxy's own blue-white rather than black, so the
+        // first click on a fresh swatch is a tint somebody might want rather
+        // than one that turns the model off.
+        value={value ?? '#b9c9ff'}
+        onChange={(event) => onChange(event.target.value)}
+        className="size-7 cursor-pointer rounded-lg border border-border bg-secondary"
+      />
+    </div>
+  )
+}
+
+/**
+ * The same choice, typed.
+ *
+ * A `pack/name` out of the world catalogue, for the models `PickGroups` does
+ * not list. Kept as its own local string while somebody is mid-word: writing
+ * every keystroke straight through would send `c`, `co`, `cos` … to the
+ * document, and since none of those is a model the scene would blank on the
+ * first letter and come back on the last. So the box holds what was typed, the
+ * document only hears about a name the catalogue actually has, and the border
+ * says which of the two you are looking at.
+ */
+export function ModelField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [typed, setTyped] = useState(value)
+  // Re-seeded when the selection changes underneath, so clicking another prop
+  // shows that prop's id rather than the last thing typed into the old one.
+  const [seed, setSeed] = useState(value)
+  if (seed !== value) {
+    setSeed(value)
+    setTyped(value)
+  }
+
+  const known = isKnownModel(typed) || isBuildable(typed)
+
+  return (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      or type an id
+      <input
+        value={typed}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        placeholder="cosmos/galaxy"
+        onChange={(event) => {
+          const next = event.target.value.trim()
+          setTyped(next)
+          if (isKnownModel(next) || isBuildable(next)) {
+            setSeed(next)
+            onChange(next)
+          }
+        }}
+        className={`rounded-lg border bg-secondary px-2 py-1 font-mono text-sm text-foreground ${
+          known ? 'border-border' : 'border-destructive/60'
+        }`}
+      />
+    </label>
+  )
+}
+
 export function PickGroups({
   label,
   value,
@@ -496,6 +671,55 @@ export function PickGroups({
             {group.models.map((model) => (
               <option key={model} value={model}>
                 {model}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+        {PROP_PACKS.map((packId) => (
+          <optgroup key={packId} label={PACKS[packId].label}>
+            {(PACK_MODELS[packId] ?? []).map((name) => (
+              <option key={name} value={`${packId}/${name}`}>
+                {labelOf(name)}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/**
+ * The whole cast - peeps and the rigged looks - in one grouped select.
+ *
+ * The same shape `PickGroups` gives the block palette, and for the same
+ * reason: thirty-six bodies in one flat list is a select nobody can scan, and
+ * the packs are the grouping everybody already thinks in. The option label is
+ * the body's name alone (`Knight`, not `adventurers/Knight`); the value stays
+ * the qualified id the document stores.
+ */
+export function PickCast({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {label}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="rounded-lg border border-border bg-secondary px-2 py-1 text-sm text-foreground capitalize"
+      >
+        {STUDIO_CAST_GROUPS.map((group) => (
+          <optgroup key={group.name} label={group.name}>
+            {group.models.map((model) => (
+              <option key={model} value={model}>
+                {lookLabel(model)}
               </option>
             ))}
           </optgroup>

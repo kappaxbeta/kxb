@@ -9,8 +9,10 @@ import { LoungePanel, PalettePanel } from '@/app/components/holo-panels'
 import { IntroVideo } from '@/app/components/intro-video'
 import Logo from '@/app/components/logo'
 import { type MarkName, Mark } from '@/app/components/marketing-icons'
+import { Rack } from '@/app/components/marketing-shell'
 import { PeepStage } from '@/app/components/peep-stage'
 import { ShootingStars } from '@/app/components/shooting-stars'
+import { SummonScene } from '@/app/components/summon-scene'
 import { World } from '@/app/components/world'
 import {
   type ChipId,
@@ -21,6 +23,7 @@ import {
   type PlanId,
   type RowId,
   type ScreenId,
+  type StuffId,
 } from '@/app/i18n/landing'
 import {
   DEFAULT_LOCALE,
@@ -104,6 +107,23 @@ function XMark(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
+/**
+ * The Octocat silhouette, as one path.
+ *
+ * Drawn here beside the other two rather than pulled from an icon package for
+ * the reason `marketing-icons.tsx` gives at length: three small marks are not
+ * worth a dependency. Unlike those, this one is a *logo* and is copied exactly
+ * - a house-style redraw of somebody else's mark is a worse mark and a worse
+ * citizen. Hence `fill` rather than the stroke every drawing of our own uses.
+ */
+function GithubMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden {...props}>
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
     </svg>
   )
 }
@@ -347,7 +367,7 @@ const DOORS: {
     href: '/play',
     hue: 145,
     mark: 'football',
-    inside: ['battles', 'football', 'races', 'tournaments', 'cafe', 'lounge'],
+    inside: ['battles', 'football', 'vehicle', 'races', 'cafe', 'chat', 'lounge'],
     peep: { avatar: 'penguin', angle: 'front' },
   },
   {
@@ -355,7 +375,7 @@ const DOORS: {
     href: '/create',
     hue: 265,
     mark: 'pieces',
-    inside: ['palette', 'modes', 'rules', 'script', 'studio'],
+    inside: ['palette', 'thing', 'modes', 'clip', 'rules', 'script', 'studio'],
     peep: { avatar: 'koala', angle: 'three' },
   },
   {
@@ -487,6 +507,33 @@ const ROWS: {
       { model: 'glass', x: 89, y: 16, scale: 0.3, hue: 200 },
     ],
   },
+]
+
+/**
+ * The twelve tiles in the "new in the room" rack, as files.
+ *
+ * Here rather than in the dictionary for the same reason `TIER_LOOK` is here
+ * rather than in the tiers table: a path to a picture is layout, it is checked
+ * by looking at the page, and a missing one is a broken image rather than a
+ * missing sentence. The words under them are words and live in the dictionary.
+ *
+ * Every path is a thumbnail the model browser inside a space already draws,
+ * rendered off the same glTF the room loads - so this rack cannot show a kart
+ * the catalogue does not have, and the packs are the ones both editors reach.
+ */
+const STUFF: { id: StuffId; src: string }[] = [
+  { id: 'fountain', src: '/thumbs/builder/park/fountain.webp' },
+  { id: 'bench', src: '/thumbs/builder/park/bench.webp' },
+  { id: 'machine', src: '/thumbs/builder/cafe/coffee_machine.webp' },
+  { id: 'burger', src: '/thumbs/builder/restaurant/food_burger.webp' },
+  { id: 'till', src: '/thumbs/builder/cafe/cash_register.webp' },
+  { id: 'crate', src: '/xp/thumbs/resources/Containers_Crate_Large.webp' },
+  { id: 'target', src: '/xp/thumbs/proto/target.webp' },
+  { id: 'chest', src: '/xp/thumbs/resources/Gems_Chest.webp' },
+  { id: 'kart', src: '/xp/thumbs/cars/kart-oobi.webp' },
+  { id: 'racer', src: '/xp/thumbs/cars/race-future.webp' },
+  { id: 'firetruck', src: '/xp/thumbs/cars/firetruck.webp' },
+  { id: 'tractor', src: '/xp/thumbs/cars/tractor.webp' },
 ]
 
 /**
@@ -1256,37 +1303,62 @@ export function Landing({
         ))}
 
         {/*
-          The community edition, as its own box rather than only a nav link -
-          because on a phone there is no header pill, and the one fact this
-          section carries (the code is public) deserves better than a footer
-          link. It stands directly behind the three doors: the fourth door,
-          for the reader whose first question is the source. The beaver builds the thing; naturally it fronts this card.
+          The community edition, and it is not a card any more.
+
+          It was one - the same wash and lit edge as the three doors directly
+          above it - and as a card it read as a fourth door: one more feature
+          panel in a row of feature panels, which a reader skims. The fact it
+          carries is not a feature. It is that the whole thing is open and the
+          repository is right there, which is the one claim on this page that
+          nobody in this category can answer by shipping something.
+
+          So it takes the room instead of a box: type at section scale, and the
+          summon standing beside it on the same neon floor everything else in
+          this world stands on. `.usecases` two sections down makes the same
+          argument and made it first.
+
+          The beaver goes with the card. `.box-peep` is anchored to a `.box`,
+          and there is no longer one - which is the right outcome anyway, since
+          the picture beside the words is now doing that job and doing it with
+          fifteen frames rather than one.
         */}
         <section
-          className="box rise col-span-6"
+          className="opensource rise col-span-6"
           style={{ '--box-hue': 265, '--i': 6 } as React.CSSProperties}
         >
-          <h2 className="font-pixel text-xl uppercase leading-[1.3] sm:text-2xl">
-            {dict.community.title}
-          </h2>
-          <p className="band-prose mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
-            {dict.community.body}
-          </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:gap-4">
-            <Link
-              href={locale === 'de' ? '/de/community' : '/community'}
-              className="w-full max-w-xs rounded-full bg-accent px-7 py-3 text-center font-semibold transition sm:w-auto sm:max-w-none"
-            >
-              {dict.community.ctaHandbook}
-            </Link>
-            <a
-              href="https://github.com/kappaxbeta/kxb"
-              className="w-full max-w-xs rounded-full border border-line bg-surface-raised/70 px-7 py-3 text-center backdrop-blur-sm transition hover:bg-surface-raised sm:w-auto sm:max-w-none"
-            >
-              {dict.community.ctaGithub}
-            </a>
+          <div>
+            <h2 className="font-pixel text-2xl uppercase leading-[1.25] sm:text-3xl">
+              {dict.community.title}
+            </h2>
+            {/* `text-base` rather than the card's `text-sm`. Without a panel
+                around it there is no edge holding the paragraph together, and
+                body copy set at card scale on the open page reads as a caption
+                that lost its picture. */}
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-ink-muted">
+              {dict.community.body}
+            </p>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:gap-4">
+              <Link
+                href={locale === 'de' ? '/de/community' : '/community'}
+                className="w-full max-w-xs rounded-full bg-accent px-7 py-3 text-center font-semibold transition sm:w-auto sm:max-w-none"
+              >
+                {dict.community.ctaHandbook}
+              </Link>
+              {/* The mark on the button that goes to GitHub, rather than only
+                  the word. It is the one destination in this pair that is
+                  somewhere else entirely, and a logo is the fastest way a row
+                  of two buttons says which of them leaves the site. */}
+              <a
+                href="https://github.com/kappaxbeta/kxb"
+                className="flex w-full max-w-xs items-center justify-center gap-2.5 rounded-full border border-line bg-surface-raised/70 px-7 py-3 text-center backdrop-blur-sm transition hover:bg-surface-raised sm:w-auto sm:max-w-none"
+              >
+                <GithubMark className="h-[1.05em] w-[1.05em] shrink-0" />
+                {dict.community.ctaGithub}
+              </a>
+            </div>
           </div>
-          <BoxPeep avatar="beaver" angle="three" />
+
+          <SummonScene alt={dict.community.summonAlt} />
         </section>
 
         {/* Not a box, on purpose - see `.usecases`. */}
@@ -1328,6 +1400,69 @@ export function Landing({
               </article>
             )
           })}
+        </section>
+
+        {/*
+          What is in the room, and how you talk to whoever else is in it.
+
+          Between the four rows and the screenshots, and the position is the
+          argument. The rows are the reasons to want a room and the screenshots
+          are what the app is; this is the answer to the question a reader has
+          in between the two, which is "and then what, exactly". It was a fair
+          question for a long time - the honest answer to "what is in the lounge"
+          used to be a floor and some blocks.
+
+          One box holding both halves rather than two rows, because they are one
+          claim: the room stopped being empty and stopped being silent in the
+          same season. Each half has a whole page behind it and this is only the
+          paragraph that sends somebody there.
+        */}
+        <section
+          id="things"
+          className="box rise col-span-6"
+          style={{ '--box-hue': 200, '--i': 7 } as React.CSSProperties}
+        >
+          <p className="box-tag">{dict.stuff.tag}</p>
+          <h2 className="font-pixel mt-4 max-w-3xl text-xl leading-[1.3] uppercase sm:text-2xl">
+            {dict.stuff.title}
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">{dict.stuff.body}</p>
+
+          {/* The one picture on this page that nobody staged. Every tile is a
+              catalogue thumbnail, so a model leaving a pack takes its own tile
+              off the landing page rather than leaving a claim standing. */}
+          <Rack
+            label={dict.stuff.rackLabel}
+            items={STUFF.map((tile) => ({ src: tile.src, label: dict.stuff.rack[tile.id] }))}
+          />
+
+          {/* Two columns of prose inside one card, not two cards: the halves
+              are a pair of consequences of the sentence above them, and boxing
+              each of them would make them look like two more features. */}
+          <div className="mt-9 grid gap-8 sm:grid-cols-2 sm:gap-10">
+            <div>
+              <h3 className="text-base font-medium text-ink">{dict.stuff.thingsTitle}</h3>
+              <p className="mt-2.5 text-sm leading-relaxed text-ink-muted">
+                {dict.stuff.thingsBody}
+              </p>
+              <Link
+                href="/create#things"
+                className="mt-4 inline-block text-sm font-medium text-accent transition hover:opacity-80"
+              >
+                {dict.stuff.ctaThings} →
+              </Link>
+            </div>
+            <div>
+              <h3 className="text-base font-medium text-ink">{dict.stuff.talkTitle}</h3>
+              <p className="mt-2.5 text-sm leading-relaxed text-ink-muted">{dict.stuff.talkBody}</p>
+              <Link
+                href="/play#talk"
+                className="mt-4 inline-block text-sm font-medium text-accent transition hover:opacity-80"
+              >
+                {dict.stuff.ctaTalk} →
+              </Link>
+            </div>
+          </div>
         </section>
 
         {/*

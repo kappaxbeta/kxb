@@ -93,6 +93,13 @@ export function ChatPanel({
     node.scrollTop = node.scrollHeight
   }, [lines])
 
+  /**
+   * The box, once a command has been sent.
+   *
+   * Held so `send` can let go of it. See below for the one case that does.
+   */
+  const composer = useRef<HTMLTextAreaElement>(null)
+
   function send() {
     const body = draft.trim()
     if (!body || blockedReason) return
@@ -101,6 +108,24 @@ export function ChatPanel({
     // the message having been said twice.
     setDraft('')
     onSend(body)
+
+    /**
+     * A command hands the keyboard back; a sentence keeps it.
+     *
+     * The two are different acts that happen to be typed in the same box. After
+     * saying something to the room the next thing you usually do is say
+     * something else, so the caret stays. After `/xo` or `/thingiverse ball` you
+     * are addressing the *world* - the thing you asked for is now standing in
+     * front of you and you want to walk to it - and the field held the keyboard
+     * anyway, so every command ended in a trip to Escape before WASD did
+     * anything. Nobody types a command in order to type another command.
+     *
+     * Blurring rather than closing the panel: the answer to what you just asked
+     * for is a line in this list, and shutting the list is throwing away the
+     * receipt. The scene's own key handling already stands down while anything
+     * is focused in here (`isTyping`), so letting go is the whole fix.
+     */
+    if (body.startsWith('/')) composer.current?.blur()
   }
 
   // Fills whatever the caller gives it. The rail decides how tall a chat column
@@ -141,6 +166,7 @@ export function ChatPanel({
       ) : (
         <div className="mt-2 flex items-end gap-2">
           <textarea
+            ref={composer}
             value={draft}
             onChange={(event) => setDraft(event.target.value.slice(0, MAX_MESSAGE_LENGTH))}
             onKeyDown={(event) => {

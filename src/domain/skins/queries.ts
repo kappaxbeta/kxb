@@ -1,7 +1,8 @@
 import 'server-only'
 import type { Client } from '@/es/store'
 import { resolveFeatures } from '@/domain/flags/queries'
-import { readAvatarHere } from '@/domain/profile/avatar-queries'
+import { DUMMY_LOOK } from '@/domain/lounge/avatars'
+import { readAvatarHere, readAsDummy } from '@/domain/profile/avatar-queries'
 import type { ShopView, SkinView, VoucherView } from '@/domain/skins/application'
 
 /**
@@ -114,13 +115,44 @@ export async function readProfileSkin(supabase: Client, userId: string): Promise
 }
 
 /**
+ * The XP body this account owns, and whether this world is asked to draw it.
+ *
+ * Two answers rather than one, because they are two different things and
+ * conflating them is what put a Knight in the lounge: `model` is *which* XP
+ * body you have on - it is kept forever, changing it never touches the peep -
+ * and `inLounge` is a per-world mode switch that says which of your two bodies
+ * this player shows. Off by default, which is why a space draws a peep until
+ * somebody asks it not to.
+ *
+ * Forgiving like `readProfileSkin`: no row is "no XP body, peep mode", which is
+ * exactly what somebody who has never bought anything should get.
+ */
+export async function readXpBody(
+  supabase: Client,
+  userId: string,
+): Promise<{ model: string | null; inLounge: boolean }> {
+  const { data, error } = await supabase
+    .from('profile_skins')
+    .select('model, in_lounge')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error || !data) return { model: null, inLounge: false }
+  return { model: data.model, inLounge: data.in_lounge }
+}
+
+/**
  * The body somebody with no account stands in.
  *
  * The plain dummy, which is what every player is before they are anybody: a
  * qualified catalogue id, so the renderer draws it down the skinned path and
  * the presence channel carries it like any other look.
+ *
+ * The same constant the wardrobe offers as a body - see `DUMMY_LOOK`, which
+ * this is the server's name for. One string, so a guest's dummy and a chosen
+ * dummy cannot become two subtly different things.
  */
-export const GUEST_LOOK = 'dummy/Dummy'
+export const GUEST_LOOK = DUMMY_LOOK
 
 /**
  * What this *person* stands in, account or not.
@@ -146,12 +178,17 @@ export async function readLookFor(
 
 /**
  * What this person stands in *in the lounge*: their skin if they asked for it
- * there, otherwise their animal.
+ * there, the dummy if they asked for that, otherwise their animal.
  *
  * The lounge's own reader, separate from `readWornLook` above, because the two
  * answer different questions: a skin is worn in the games by default and in
  * the lounge only on request. Returns whatever the presence channel and the
  * renderer both understand - a bare animal name, or a qualified catalogue id.
+ *
+ * Three bodies, one order, written down here so nothing else has to decide it:
+ * a skin worn in here outranks the dummy, and the dummy outranks the animal.
+ * That is what makes taking a skin off put back whichever of the other two you
+ * were before you put it on, rather than asking you to pick again.
  *
  * Falls back to the animal on any failure, and on a row whose flag is off, so
  * the lounge always has a body to draw.
@@ -170,8 +207,9 @@ export async function readLoungeLook(
     .eq('user_id', userId)
     .maybeSingle()
 
-  if (error || !data?.in_lounge || !data.model) return animal
-  return data.model
+  if (!error && data?.in_lounge && data.model) return data.model
+
+  return (await readAsDummy(supabase, userId)) ? DUMMY_LOOK : animal
 }
 
 /**
@@ -194,6 +232,44 @@ export async function readWornLook(
   const skin = await readProfileSkin(supabase, userId)
   if (skin) return skin
   return readAvatarHere(supabase, userId, tenantId)
+}
+
+/**
+ * The body to send into *this level*, which the level has a say in.
+ *
+ * `readWornLook` above answers "what is this person wearing"; this answers
+ * "what should this person be in here", and the difference is that a document
+ * can insist. A level about a room full of animals stays one when somebody buys
+ * a Knight, and a level that casts everybody as knights is not asking.
+ *
+ * Resolved on the server rather than left to `bodiesFor`, because the two
+ * bodies live in two rows and only one string reaches the client - the presence
+ * channel carries what this returns, so every peer draws the same person the
+ * same way. `bodiesFor` still applies the same rule to whatever it is handed;
+ * this is what makes sure it is handed the right half in the first place.
+ *
+ * `wears` is `XpPlayer.wears` from the parsed document, or undefined for a
+ * level that never said. Anything this function does not recognise - the older
+ * names, and a model id the level casts everybody in - falls through to the
+ * worn look, which is what those values have always been given and what
+ * `bodiesFor` overrules on its own.
+ */
+export async function readLookForLevel(
+  supabase: Client,
+  userId: string,
+  wears: string | undefined,
+  tenantId: string | null = null,
+): Promise<string> {
+  // Animals only. The XP body is left alone on the row - it is not spent by a
+  // level declining to draw it.
+  if (wears === 'peep') return readAvatarHere(supabase, userId, tenantId)
+
+  // XP bodies only, and the dummy for anybody without one. Deliberately not
+  // falling back to their animal: a level that asked for XP bodies gets the
+  // body a player already is before they are anybody.
+  if (wears === 'xp') return (await readProfileSkin(supabase, userId)) ?? GUEST_LOOK
+
+  return readWornLook(supabase, userId, tenantId)
 }
 
 // ---------------------------------------------------------------------------

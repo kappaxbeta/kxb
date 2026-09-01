@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { groupNames, LOOSE_SHOWN, orderPlaces, type RoomMarks } from '@/domain/rooms/places'
+import {
+  groupNames,
+  groupRooms,
+  LOOSE_SHOWN,
+  orderPlaces,
+  type RoomMarks,
+} from '@/domain/rooms/places'
 import type { RoomView } from '@/domain/rooms/queries'
 
 /**
@@ -182,5 +188,37 @@ describe('groupNames', () => {
     ]
 
     expect(groupNames(rooms)).toEqual(['Design', 'Games'])
+  })
+})
+
+describe('groupRooms', () => {
+  test('every room once, under its caption, in the space own order', () => {
+    const rooms = [
+      room('a', { group: 'Design' }),
+      room('b'),
+      room('c', { group: 'Games' }),
+      room('d', { group: 'Design' }),
+      room('e'),
+    ]
+
+    expect(groupRooms(rooms)).toEqual([
+      { name: 'Design', rooms: [rooms[0], rooms[3]] },
+      { name: 'Games', rooms: [rooms[2]] },
+      { name: null, rooms: [rooms[1], rooms[4]] },
+    ])
+  })
+
+  test('no captions at all is one band with none', () => {
+    const rooms = [room('a'), room('b')]
+    expect(groupRooms(rooms)).toEqual([{ name: null, rooms }])
+  })
+
+  test('every room in a group leaves no loose band to draw', () => {
+    const rooms = [room('a', { group: 'Design' }), room('b', { group: 'Design' })]
+    expect(groupRooms(rooms)).toEqual([{ name: 'Design', rooms }])
+  })
+
+  test('nothing at all is nothing, not an empty caption', () => {
+    expect(groupRooms([])).toEqual([])
   })
 })

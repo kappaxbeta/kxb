@@ -8,6 +8,7 @@ import type { ChatMessage } from '@/app/world/_presence/presence-core'
 import { sceneWorldNow, subscribe as subscribeHere } from '@/app/world/_stores/here-store'
 import { announceSaid } from '@/app/world/_stores/said-store'
 import { callSummon } from '@/app/t/[slug]/summon-store'
+import { callClip, callThingiverse, callVehicle } from '@/app/world/_stores/thing-store'
 import { countReceived, countSent } from '@/app/world/perf/store'
 import { postChatMessage, readRoomChat } from '@/domain/chat/actions'
 import { CHAT_HISTORY_LIMIT } from '@/domain/chat/events'
@@ -247,8 +248,64 @@ export function ChatDock({
        * message that merely starts with it - "/battle later?" - is somebody
        * talking about the command, and swallowing it would eat a sentence.
        */
-      if (body.trim().toLowerCase() === '/battle') {
+      const typed = body.trim()
+
+      if (typed.toLowerCase() === '/battle') {
         callSummon()
+        return
+      }
+
+      /**
+       * `/thingiverse ball`, and `/xo ball` for the same thing.
+       *
+       * A verb *with an argument*, which is why this is a prefix match where
+       * `/battle` above is an exact one. The trailing words are what somebody
+       * is looking for, and they are handed over untouched - `resolveSummon` is
+       * where a word becomes a list of candidates, and it lives in the domain
+       * because it is a rule about the shelf rather than about this box.
+       *
+       * Two spellings because the feature has two names in the product: the
+       * shelf is the thingiverse, and `xo` is what a space already calls the
+       * world assets these come out of. Neither is more correct, so both work
+       * rather than one being a redirect somebody has to learn.
+       *
+       * Swallowed even when no world is on screen, exactly as `/battle` is: a
+       * command that posts itself into everybody's chat because nobody was
+       * listening is worse than a key that did nothing.
+       */
+      const summon = /^\/(?:thingiverse|xo)(?:\s+([\s\S]*))?$/i.exec(typed)
+      if (summon) {
+        callThingiverse((summon[1] ?? '').trim())
+        return
+      }
+
+      /**
+       * `/clip` - what this body can do, and what the thing you are in can.
+       *
+       * The word after it is optional and used to be impossible: this matched
+       * `/clip` exactly, so `/clip wink` fell through every branch and was
+       * posted into the room as a chat line. Somebody who names a clip means to
+       * play it, and somebody who names one this body does not have still gets
+       * the menu - which is the answer to the question they were asking.
+       */
+      const clip = /^\/clip(?:\s+([\s\S]*))?$/i.exec(typed)
+      if (clip) {
+        callClip((clip[1] ?? '').trim())
+        return
+      }
+
+      /**
+       * `/vehicle kart` - summon it and get in; bare `/vehicle` puts it away.
+       *
+       * The same shape as `/xo`: a prefix match whose trailing words go over
+       * untouched, swallowed even when no world is listening, because a
+       * command posting itself into everybody's chat is worse than a key that
+       * did nothing. Which thing counts as a vehicle is the scene's question -
+       * see `onVehicle` in `use-things`.
+       */
+      const vehicle = /^\/vehicle(?:\s+([\s\S]*))?$/i.exec(typed)
+      if (vehicle) {
+        callVehicle((vehicle[1] ?? '').trim())
         return
       }
 

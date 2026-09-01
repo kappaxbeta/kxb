@@ -35,6 +35,13 @@ export default async function PromosPage() {
           One per account, ever: somebody who has already redeemed, or who has
           been through Stripe, is refused wherever they try it.
         </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Most codes are handed out one link at a time. A code named{' '}
+          <span className="font-mono">SIGNUP…</span> is the exception — it is a
+          standing offer, shown on the sign-up form to everybody who reaches it
+          and filled in for them. Name one that way only when you mean it to be
+          public.
+        </p>
       </div>
 
       <PromoList codes={codes} />

@@ -132,6 +132,7 @@ export function TouchLayer({
   flying,
   dancing,
   onDancing,
+  action,
   onPlace,
   onRemove,
 }: {
@@ -150,6 +151,15 @@ export function TouchLayer({
   flying: boolean
   dancing: boolean
   onDancing: (next: (current: boolean) => boolean) => void
+  /**
+   * What the thing in front of you offers, if anything - use, take, drive,
+   * get up. It takes the dance button's spot rather than adding a fifth
+   * button: the two are never both urgent (you dance *between* things, not
+   * at one), a thumb has a memory for places rather than labels, and this is
+   * the same trade the keyboard makes - G acts when something is in front of
+   * you and dances the rest of the time.
+   */
+  action?: { label: string; onPress: () => void } | null
   onPlace: (cell: Cell, model: string) => void
   onRemove: (cell: Cell) => void
 }) {
@@ -177,11 +187,15 @@ export function TouchLayer({
         keyboard-only feature.
       */}
       <div className="flex gap-3">
-        <TapButton
-          label={dancing ? dict.world.stopDancing : dict.softKeys.dance}
-          tone={dancing ? 'pink' : 'cyan'}
-          onPress={() => onDancing((current) => !current)}
-        />
+        {action ? (
+          <TapButton label={action.label} tone="cyan" onPress={action.onPress} />
+        ) : (
+          <TapButton
+            label={dancing ? dict.world.stopDancing : dict.softKeys.dance}
+            tone={dancing ? 'pink' : 'cyan'}
+            onPress={() => onDancing((current) => !current)}
+          />
+        )}
       </div>
 
       {/*

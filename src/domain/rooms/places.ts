@@ -241,6 +241,43 @@ function compareTimes(a: string | null, b: string | null, direction: 'asc'): num
  * on two different afternoons. Sorted the way `orderPlaces` sorts groups, so
  * the list and the rail agree.
  */
+/**
+ * Every room, once, under the caption it was given.
+ *
+ * The manage list's ordering, and deliberately not `orderPlaces`. That one
+ * answers "where would somebody like to go" - it lifts pins, reads your own
+ * marks, and cuts the loose band short - and every one of those is wrong for a
+ * list you are *arranging*: a room that is missing from it cannot be given an
+ * icon, and a room that moved because you walked into it is a row that is not
+ * where you left it.
+ *
+ * So: the space's own order, bucketed. Groups in the order their first room
+ * appears, which is `groupNames`' order and so the same order the Places band
+ * draws them in - the arrangement and the result of it agree. The ungrouped
+ * come last as one band with a null caption, because "not in a group" is not a
+ * group and must not be drawn as one.
+ */
+export interface RoomBand {
+  /** The caption, or null for the rooms nobody has put anywhere. */
+  name: string | null
+  rooms: RoomView[]
+}
+
+export function groupRooms(rooms: RoomView[]): RoomBand[] {
+  const bands: RoomBand[] = groupNames(rooms).map((name) => ({ name, rooms: [] }))
+  const loose: RoomView[] = []
+
+  for (const room of rooms) {
+    const band = room.group ? bands.find((one) => one.name === room.group) : undefined
+    if (band) band.rooms.push(room)
+    else loose.push(room)
+  }
+
+  // A band with a caption and nothing under it cannot happen - the captions are
+  // read off the rooms themselves - so the only empty one to guard is the last.
+  return loose.length > 0 ? [...bands, { name: null, rooms: loose }] : bands
+}
+
 export function groupNames(rooms: RoomView[]): string[] {
   const seen: string[] = []
   for (const room of rooms) {

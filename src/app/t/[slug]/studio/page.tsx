@@ -190,19 +190,29 @@ export default async function SpaceStudioPage({
       {/*
         Two across on a phone and the full row on a laptop, so a fourth door
         does not squeeze the three that were here into a strip.
+
+        Each door wears its own icon twice: once at plate size, where it is a
+        label, and once blown up into the top-right corner at a tenth of the
+        ink, where it is the card's face. The big one is what tells the four
+        apart at a glance - they cannot differ by colour, because fuchsia is
+        this app's word for "you can press this" and four hues would spend that
+        on decoration. `.studio-door` in globals.css carries the rest.
       */}
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {doors.map((door) => (
           <li key={door.href}>
-            <Link
-              href={door.href}
-              className="group flex h-full flex-col gap-2 rounded-2xl border border-line/60 bg-surface-raised/30 p-4 transition hover:border-accent/60 hover:bg-surface-raised/60"
-            >
-              <span className="grid size-10 place-items-center rounded-xl border border-accent/50 text-accent">
+            <Link href={door.href} className="studio-door">
+              {/*
+                Thin-stroked, because a 2px lucide stroke at 7.5rem reads as a
+                fat cartoon outline; at 1 it reads as a drawing of the icon,
+                which is what a watermark should be.
+              */}
+              <door.icon className="studio-door-ghost" strokeWidth={1} aria-hidden />
+              <span className="studio-door-plate">
                 <door.icon className="size-5" aria-hidden />
               </span>
-              <span className="font-medium">{door.title}</span>
-              <span className="text-sm text-ink-muted">{door.blurb}</span>
+              <span className="studio-door-title">{door.title}</span>
+              <span className="studio-door-blurb">{door.blurb}</span>
             </Link>
           </li>
         ))}

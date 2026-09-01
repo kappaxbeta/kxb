@@ -187,6 +187,15 @@ export const ANIMATABLE: Record<NodeKind, readonly Animatable[]> = {
     { property: 'top', label: 'Height', min: -8, max: 24, step: 0.1 },
     { property: 'z', label: 'Z', min: -40, max: 40, step: 0.1 },
     { property: 'rotation', label: 'Turn', min: -360, max: 360, step: 1, unit: '°' },
+    // The other two axes. Keyable like the turn, so a galaxy can roll over
+    // during a shot rather than only being placed rolled.
+    { property: 'pitch', label: 'Pitch', min: -360, max: 360, step: 1, unit: '°' },
+    { property: 'roll', label: 'Roll', min: -360, max: 360, step: 1, unit: '°' },
+    // Keyable, like a peep's, which is what makes a prop able to arrive: a
+    // galaxy keyed from 0 to 1 over a third of a second plops into the shot,
+    // and the same two keys the other way take it out again. The bounds are
+    // `MIN`/`MAX_THING_SCALE`, so a size means the same here as in a room.
+    { property: 'scale', label: 'Size', min: 0.1, max: 12, step: 0.05 },
   ],
   ball: [
     { property: 'x', label: 'X', min: -40, max: 40, step: 0.1 },

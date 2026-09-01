@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
-import { DoorForm } from '@/app/g/[token]/door-form'
+import Logo from '@/app/components/logo'
+import { GuestDoor } from '@/app/g/[token]/door-form'
 import { guestArrival, linkProblem } from '@/domain/guests/application'
+import { readProfileSkin } from '@/domain/skins/queries'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient, getUser } from '@/lib/supabase/server'
 
@@ -190,55 +192,78 @@ export default async function GuestDoorPage({
   // the door again.
   if (role) redirect(guestArrival(link!.destination, tenant!.slug))
 
+  /**
+   * The xp body that will be standing on the pad beside the animal.
+   *
+   * The same rule `readLookFor` writes down for the rooms themselves, asked
+   * one page earlier so the door shows it rather than announcing it: nobody at
+   * all is the dummy, and somebody holding an account gets the skin they
+   * chose. A visitor here is a visitor *here* - it says nothing about who they
+   * are everywhere else, and their body should not stop at somebody else's
+   * door.
+   *
+   * Read as the viewer rather than through the service role: `profile_skins`
+   * is theirs, and this page has no business reading anybody else's.
+   */
+  const skin =
+    viewer && !viewer.is_anonymous
+      ? await readProfileSkin(await createClient(), viewer.id)
+      : null
+
   return (
-    <div className="consent-clear min-h-dvh flex items-center justify-center bg-surface p-6">
-      <div className="w-full max-w-sm space-y-6 rounded-2xl border border-line bg-surface-raised/40 p-8 shadow-xl">
-        {problem ? (
-          <div className="space-y-3 text-center">
+    /**
+     * The room the door stands in.
+     *
+     * The lobby's shell, verbatim: the neon floor running to a lit horizon,
+     * behind everything, at the house hue. It is what turns a page into a
+     * place, and it is the single cheapest thing this page could do to stop
+     * looking like a login form for a product about standing in a room.
+     *
+     * `consent-clear` stays where it was - the cookie banner needs the same
+     * clearance it always did.
+     */
+    <div className="consent-clear relative flex min-h-dvh flex-col overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute inset-0 [--box-hue:285]">
+        <div className="neon-horizon" style={{ '--box-horizon': '30%' } as React.CSSProperties} />
+        <div className="neon-floor !h-[45%]" />
+      </div>
+
+      {/* The mark, and nothing else.
+       *
+       * Whose door this is, said once, because most people reading it have
+       * never heard of the product and are about to type their name into it.
+       * Not a link: the one thing this page is for is walking through it, and
+       * a way out in the top-left corner of a door is a way out taken.
+       */}
+      <header className="relative z-10 flex items-center gap-3 px-4 py-4 sm:px-8">
+        <span className="inline-flex items-center gap-3 text-sm text-ink-muted">
+          <Logo />
+          <span className="font-pixel uppercase tracking-widest">team</span>
+        </span>
+      </header>
+
+      {problem ? (
+        <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-10 sm:px-8">
+          <div className="hud-panel w-full max-w-sm space-y-3 p-8 text-center">
             <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-line bg-surface-raised text-2xl">
               🔒
             </div>
-            <h1 className="text-lg font-semibold text-ink">{heading}</h1>
-            <p className="text-sm text-ink-muted">{problem}</p>
+            <h1 className="font-pixel text-xl uppercase leading-tight text-ink">{heading}</h1>
+            <p className="text-sm leading-relaxed text-ink-muted">{problem}</p>
           </div>
-        ) : (
-          <>
-            <div className="space-y-2 text-center">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-line bg-surface-raised text-2xl">
-                👋
-              </div>
-              <h1 className="text-lg font-semibold text-ink">
-                You&rsquo;ve been invited to {tenant?.name}
-              </h1>
-              {/* Says what they are about to be able to do, and what they are
-                  not. Somebody who expects to be able to build and finds they
-                  cannot will read it as broken rather than as intended - and
-                  the reverse is worse: telling a hackathon's attendees they
-                  cannot build, on the door of an event bought so that they
-                  could, is the first sentence they read and it is a lie. So
-                  this is computed from the event's own terms rather than
-                  written once. See `doorPromise`. */}
-              <p className="text-sm text-ink-muted">
-                Pick a name and walk in. {promise} You don&rsquo;t need an account.
-              </p>
-
-              {/* Said before they fill anything in, because it is the one thing
-                  a signed-in visitor would otherwise get wrong: this is not a
-                  second account and it does not touch the one they have. They
-                  keep their session; in this space they are a guest. */}
-              {viewer && !viewer.is_anonymous && (
-                <p className="rounded-xl border border-line bg-surface-raised/60 px-3 py-2 text-xs text-ink-muted">
-                  You&rsquo;re signed in{viewer.email ? ` as ${viewer.email}` : ''}. You
-                  are not a member of this space, so you&rsquo;ll join as a guest, and
-                  your own account stays exactly as it is.
-                </p>
-              )}
-            </div>
-
-            <DoorForm token={token} />
-          </>
-        )}
-      </div>
+        </div>
+      ) : (
+        <GuestDoor
+          token={token}
+          spaceName={tenant!.name}
+          promise={promise}
+          // Null for a stranger, which is who this door is mostly for. An
+          // address - or the empty string, for an account without one - is
+          // what puts the "you stay signed in" notice on the panel.
+          signedInAs={viewer && !viewer.is_anonymous ? (viewer.email ?? '') : null}
+          skin={skin}
+        />
+      )}
     </div>
   )
 }

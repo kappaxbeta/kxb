@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { AnalyticsBeacon } from './components/analytics-beacon'
 import { CtaTracker } from './components/cta-tracker'
-import { MusicButton } from './components/audio/music-button'
+import { CornerMusic } from './components/audio/corner-music'
 import pixelMillennium from './components/fonts/pixel'
 import { ContactWidget } from './components/contact-widget'
 import { ConnectionFavicon } from './components/connection-favicon'
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
-const TITLE = 'kxb - a browser-based multiplayer world you can host yourself'
+const TITLE = 'kxb.team - Game jam, hackathon, conference, class, community night, team space'
 const DESCRIPTION =
   'Invite your friends or colleagues to play or hangout together in a virtual team space.'
 
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   openGraph: {
     type: 'website',
-    siteName: 'kxb',
+    siteName: 'kxb.team',
     title: TITLE,
     description: DESCRIPTION,
     url: '/',
@@ -149,7 +149,7 @@ export default function RootLayout({
           screen edge and the icon tucks inside it.
         */}
         <div className="corner-dock">
-          <MusicButton />
+          <CornerMusic />
           <ContactWidget />
         </div>
         <CookieBanner />

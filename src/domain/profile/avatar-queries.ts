@@ -39,6 +39,36 @@ export async function readProfileAvatar(
 }
 
 /**
+ * Has this person asked to stand in the dummy rather than their animal?
+ *
+ * Its own read rather than a second column on `readProfileAvatar`, and
+ * deliberately as forgiving as `readProfileSkin`: any failure is "no", because
+ * every caller is about to draw a body and the animal is always drawable. That
+ * also means a box that has not run the migration yet answers "no" and keeps
+ * rendering rooms, rather than turning a missing column into a 500 on the
+ * lounge - which selecting it alongside `model` would have done.
+ *
+ * The flag is a fact about the account, not about a space: the dummy is who you
+ * are rather than who you are here, exactly like the skin. A space's animal
+ * override still applies underneath it, for when you take the dummy off.
+ */
+export async function readAsDummy(
+  supabase: Client,
+  userId: string | null | undefined,
+): Promise<boolean> {
+  if (!userId) return false
+
+  const { data, error } = await supabase
+    .from('profile_avatars')
+    .select('as_dummy')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error || !data) return false
+  return data.as_dummy === true
+}
+
+/**
  * The animal this account wears **in one space**, or null for "the usual".
  *
  * Null is the overwhelmingly common answer and it means *no opinion* rather

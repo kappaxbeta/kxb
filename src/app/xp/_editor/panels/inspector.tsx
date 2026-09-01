@@ -1000,11 +1000,30 @@ function PlayerRow({
           <Field label={t.everybodyIs}>
             <Select
               value={document.player.wears ?? 'dummy'}
+              /**
+               * The two bodies first, then the older names.
+               *
+               * `choose`, `peep` and `xp` are the ones worth reaching for now -
+               * everybody who plays has a peep *and* an XP body, and these are
+               * the level saying which of the two it wants. `profile` and
+               * `random` are kept below them because documents were written
+               * against them and a select that drops a value is a document that
+               * cannot be reopened.
+               *
+               * A model id - the level casting everybody as one body - is a
+               * valid `wears` too and is deliberately not offered here: it is
+               * typed into the document, not picked, because the catalogue is
+               * open and a select over it would be a list this panel has to
+               * keep in step with a pack it does not own.
+               */
               options={[
                 [
                   'dummy',
                   document.player.blueprint ? t.theBodyAbove : t.builtInDummy,
                 ],
+                ['choose', t.looks.choose],
+                ['peep', t.looks.peep],
+                ['xp', t.looks.xp],
                 ['profile', t.looks.profile],
                 ['random', t.looks.random],
               ]}
@@ -1014,13 +1033,19 @@ function PlayerRow({
             />
           </Field>
           <Hint className="mt-1">
-            {document.player.wears === 'profile'
-              ? t.wearsProfile
-              : document.player.wears === 'random'
-                ? t.wearsRandom
-                : document.player.blueprint
-                  ? t.wearsBody
-                  : t.wearsDummy}
+            {document.player.wears === 'choose'
+              ? t.wearsChoose
+              : document.player.wears === 'peep'
+                ? t.wearsPeep
+                : document.player.wears === 'xp'
+                  ? t.wearsXp
+                  : document.player.wears === 'profile'
+                    ? t.wearsProfile
+                    : document.player.wears === 'random'
+                      ? t.wearsRandom
+                      : document.player.blueprint
+                        ? t.wearsBody
+                        : t.wearsDummy}
           </Hint>
       </>
 

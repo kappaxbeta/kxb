@@ -819,11 +819,23 @@ function ConfigPanel({
  * as a bonus the gutter's numbers stop drifting on long lines. Long lines
  * scroll sideways, like every code editor.
  *
+ * **One scroller, around all three layers.** Not wrapping was only half of
+ * it: the box the textarea is stretched over must also be the *size of the
+ * file*, in both directions. It was neither - a flex row stretched it to
+ * the pane's height and shrank it to the pane's width - so the textarea sat
+ * smaller than its own text and scrolled inside itself, invisibly, the
+ * moment the caret left the visible part. The paint behind it did not move
+ * with it, and from then on a click landed five lines below the line you
+ * pointed at. `h-max min-h-full w-max min-w-full shrink-0` on the box is
+ * the whole fix, and the invariant it buys is worth stating plainly:
+ * neither layer ever scrolls; the pane around them does.
+ *
  * **Completions**, from `./complete.ts` - the closed vocabulary (SDK, p5,
  * the project's own words), offered under the box rather than at the caret,
  * for the reason the scripts panel gives: a caret-anchored popup needs a
  * text-measuring mirror, and that mirror is the first three hundred lines
- * of the code editor this pane refuses to become.
+ * of the code editor this pane refuses to become. Tab takes the first one;
+ * no other key is the menu's to take (see the keydown).
  */
 function CodePane({
   source,
@@ -838,7 +850,6 @@ function CodePane({
 }) {
   const box = useRef<HTMLTextAreaElement | null>(null)
   const [menu, setMenu] = useState<Completion[] | null>(null)
-  const [chosen, setChosen] = useState(0)
 
   const offer = (element: HTMLTextAreaElement) => {
     if (element.selectionStart !== element.selectionEnd) {
@@ -847,7 +858,6 @@ function CodePane({
     }
     const found = completionsFor(element.value, element.selectionStart, projectText)
     setMenu(found.length > 0 ? found : null)
-    setChosen(0)
   }
 
   const take = (pick: Completion) => {
@@ -866,17 +876,44 @@ function CodePane({
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col">
-      <div className="flex min-h-0 w-full min-w-0 flex-1 overflow-auto border-y border-transparent bg-neutral-950/60 focus-within:border-neutral-700">
+      {/* `code-stack`: on a touch screen the 16px input floor in `globals.css`
+          would otherwise raise the caret's text and leave the paint at 11px.
+          The class hands the floor to both layers at once - see the rule. */}
+      <div className="code-stack flex min-h-0 w-full min-w-0 flex-1 overflow-auto border-y border-transparent bg-neutral-950/60 focus-within:border-neutral-700">
         <pre
           aria-hidden
-          className="shrink-0 border-r border-neutral-900 bg-neutral-950 px-1.5 py-2 text-right font-mono text-[11px] leading-[1.45] text-neutral-700"
+          className="h-max min-h-full shrink-0 border-r border-neutral-900 bg-neutral-950 px-1.5 py-2 text-right font-mono text-[11px] leading-[1.45] text-neutral-700"
         >
           {Array.from({ length: lines }, (_, i) => i + 1).join('\n')}
         </pre>
-        {/* `w-max min-w-full`: as wide as the longest line, never narrower
-            than the pane - so the textarea over it has the same extents and
-            never scrolls inside itself, which is the slip coming back. */}
-        <div className="relative w-max min-w-full">
+        {/*
+          As big as the code, never smaller than the pane - in *both*
+          directions, and the height is the half that was missing.
+
+          The textarea is `inset-0` on this box, so this box's size is the
+          textarea's size. `w-max min-w-full` gave it the width of the
+          longest line. Its height, though, was whatever the flex row
+          stretched it to - the pane's visible height - while the painted
+          `pre` inside it stood as tall as the file. A file taller than the
+          pane therefore left the textarea short of its own content, and a
+          textarea shorter than its content *scrolls*, silently, with
+          `overflow-hidden`: arrow down past the last visible line and it
+          slid its text up 84px while the paint behind it stayed put. From
+          then on the caret was five lines from the glyph under it, and a
+          click on the line you meant edited the line five below - the slip
+          this pane was supposed to have stopped.
+
+          `h-max min-h-full` makes the box the file's own height, and
+          `shrink-0` is the width's half of the same story: this box is a
+          flex item, so `w-max` was only its *base* size and the row shrank
+          it back to the pane - which left the textarea narrower than a long
+          line and scrolling sideways inside itself, the same slip turned
+          ninety degrees. Now the box is the file's own size in both
+          directions, the textarea's content always fits, and the one thing
+          that scrolls is the pane around all three layers - which is what
+          keeps them together.
+        */}
+        <div className="relative h-max min-h-full w-max min-w-full shrink-0">
           <pre
             aria-hidden
             className="whitespace-pre px-3 py-2 font-mono text-[11px] leading-[1.45] text-neutral-200"
@@ -902,20 +939,34 @@ function CodePane({
             onKeyDown={(event) => {
               if (!menu) return
               /**
-               * Tab and Enter accept, arrows move, Escape closes - only
-               * while the menu is open, which is the rule that keeps a
-               * newline a newline the other 99% of the time.
+               * Tab accepts. Nothing else is taken.
+               *
+               * The menu used to hold Enter and both vertical arrows as
+               * well, and it opens on its own after two characters - so a
+               * person who typed `ci` and pressed down twice to leave the
+               * line went nowhere, and kept typing into the line they
+               * believed they had left. Enter, which is a newline
+               * everywhere in the world, wrote `circle`. A strip thirty
+               * pixels tall at the foot of the pane is not something you
+               * look at while typing, and it should not be able to take a
+               * key you were aiming at the text.
+               *
+               * So every key that moves a caret moves the caret, and closes
+               * the menu on its way through - the offer was about a caret
+               * that has now gone. What is lost is picking the third word
+               * with the keyboard; it is one click away in the strip, and
+               * the first word is the one Tab was always going to take.
                */
               if (event.key === 'Escape') {
                 event.preventDefault()
                 setMenu(null)
-              } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              } else if (event.key === 'Tab') {
                 event.preventDefault()
-                const step = event.key === 'ArrowDown' ? 1 : menu.length - 1
-                setChosen((at) => (at + step) % menu.length)
-              } else if (event.key === 'Tab' || event.key === 'Enter') {
-                event.preventDefault()
-                take(menu[chosen])
+                take(menu[0])
+              } else if (event.key.startsWith('Arrow') || event.key === 'Enter'
+                || event.key === 'Home' || event.key === 'End'
+                || event.key === 'PageUp' || event.key === 'PageDown') {
+                setMenu(null)
               }
             }}
             className="code-sheet absolute inset-0 h-full w-full resize-none overflow-hidden whitespace-pre bg-transparent px-3 py-2 font-mono text-[11px] leading-[1.45] text-transparent caret-neutral-100 selection:bg-violet-500/30 focus:outline-none"
@@ -935,8 +986,10 @@ function CodePane({
               event.preventDefault()
               take(pick)
             }}
+            /* The first is the one Tab takes, so the first is the one drawn
+               as chosen - the strip says what the key will do. */
             className={`rounded px-2 py-0.5 font-mono text-[11px] ${
-              index === chosen
+              index === 0
                 ? 'bg-neutral-800 text-neutral-100'
                 : pick.given
                   ? 'text-sky-300/80 hover:bg-neutral-900'
@@ -948,7 +1001,7 @@ function CodePane({
         ))}
         {menu && (
           <span className="ml-auto shrink-0 font-mono text-[10px] text-neutral-700">
-            tab · enter
+            tab · or click one
           </span>
         )}
       </div>

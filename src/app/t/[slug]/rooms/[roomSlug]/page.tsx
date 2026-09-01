@@ -16,8 +16,10 @@ import { loungeProjection } from '@/domain/lounge/projection'
 import { loungeGoalsProjection } from '@/domain/lounge/goal-projection'
 import { listGoals } from '@/domain/lounge/goal-queries'
 import { listLoungeBlocks } from '@/domain/lounge/queries'
-import { readProfileAvatar } from '@/domain/profile/avatar-queries'
-import { readProfileSkin } from '@/domain/skins/queries'
+import { thingiverseProjection } from '@/domain/thingiverse/projection'
+import { listBlueprints, listClips, listThings } from '@/domain/thingiverse/queries'
+import { readAsDummy, readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { readLookFor, readLookForLevel, readXpBody, shopFor } from '@/domain/skins/queries'
 import { readSceneIdentity } from '@/domain/guests/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
 import { roomsProjection } from '@/domain/rooms/projection'
@@ -32,6 +34,7 @@ import {
   canWrite,
   chatOpen,
   hasRole,
+  hasTier,
   isGuest,
   perfDisplayOn,
   requireFeature,
@@ -193,13 +196,21 @@ export default async function RoomPage({
       )
     }
 
-    const [avatar, name, skin] = await Promise.all([
+    const [avatar, name, body] = await Promise.all([
       readProfileAvatar(supabase, user.id),
       readDisplayName(supabase, user.id),
-      // The equipped skin, for the XP body only. Deliberately not folded into
-      // the identity: nameplates, rails and the guest roster draw animals and
-      // their pre-rendered shots, and a qualified skin id has no shot to draw.
-      readProfileSkin(supabase, user.id),
+      /**
+       * The body this *level* asks for, which is not always the one worn.
+       *
+       * Deliberately not folded into the identity: nameplates, rails and the
+       * guest roster draw animals and their pre-rendered shots, and a qualified
+       * XP body id has no shot to draw. And deliberately put through the
+       * document rather than read straight off the row - a level that says
+       * `wears: "peep"` gets animals here for the same reason it does at
+       * `/xp/[id]`, and the presence channel carries the answer to everybody
+       * else in the room.
+       */
+      readLookForLevel(supabase, user.id, document.player.wears, tenant.id),
     ])
     const identity = await readSceneIdentity(supabase, tenant.id, user.id, { name, avatar })
 
@@ -228,7 +239,7 @@ export default async function RoomPage({
           // not change animal by walking through a door - unless they bought a
           // skin, which outranks the animal in an XP and nowhere else. A guest
           // cannot own one, so the door's choice still stands for them.
-          avatar={skin ?? identity.avatar}
+          avatar={body ?? identity.avatar}
         />
       </>
     )
@@ -236,6 +247,20 @@ export default async function RoomPage({
 
   await runProjection(supabase, loungeProjection, tenant.id)
   await runProjection(supabase, loungeGoalsProjection, tenant.id)
+
+  /**
+   * The thingiverse, when this space has one.
+   *
+   * The same pair of gates the lounge page uses - the flag and the tier - and
+   * unlike the images above, a room gets these for real. A picture belongs to
+   * the space's one shared album, which is why there is no images panel in
+   * here; a summoned thing belongs to *this world*, keyed by the room's own id
+   * exactly as its blocks and its goals are.
+   */
+  const summoning = context.features.thingiverse && hasTier(context, 'xo')
+  if (summoning) {
+    await runProjection(supabase, thingiverseProjection, tenant.id)
+  }
 
   // Saved arenas, for the same picker panel the lounge offers them from - see
   // the note above. Only when the battle feature is on, exactly as the lounge
@@ -245,7 +270,8 @@ export default async function RoomPage({
     await runProjection(supabase, battlefieldsProjection, tenant.id)
   }
 
-  const [blocks, goals, avatar, name, spawnAt, arenas] = await Promise.all([
+  const [blocks, goals, avatar, name, spawnAt, arenas, look, wardrobe, things, shelf, clips] =
+    await Promise.all([
     // The room's id is its world id, which is what keeps its blocks out of the
     // lounge's and out of every other room's.
     listLoungeBlocks(supabase, tenant.id, room.roomId),
@@ -258,9 +284,33 @@ export default async function RoomPage({
     battleOpen(context)
       ? listBattlefields(supabase, tenant.id)
       : Promise.resolve([]),
+    /*
+     * The body, and the wardrobe to change it from - both read here for the
+     * reasons the lounge page gives at length. A room is the same scene on a
+     * different topic, and somebody should not become their animal again by
+     * walking through a door.
+     */
+    readLookFor(supabase, user, tenant.id),
+    user.is_anonymous ? Promise.resolve(null) : shopFor(supabase, user.id),
+    summoning
+      ? listThings(supabase, tenant.id, room.roomId, user.id)
+      : Promise.resolve([]),
+    summoning ? listBlueprints(supabase, tenant.id, user.id) : Promise.resolve([]),
+    summoning ? listClips(supabase, tenant.id, user.id) : Promise.resolve([]),
   ])
 
   const identity = await readSceneIdentity(supabase, tenant.id, user.id, { name, avatar })
+
+  const ownedSkins = (wardrobe?.skins ?? [])
+    .filter((skin) => wardrobe?.owned[skin.id])
+    .map((skin) => ({ id: skin.id, name: skin.name }))
+
+  // The wardrobe's three parts, for the reasons the lounge page gives at
+  // length: what the room draws and what the picker highlights are different
+  // questions, and reading one off the other is what lost people their peep.
+  const [xp, dummy] = user.is_anonymous
+    ? ([{ model: null, inLounge: false }, false] as const)
+    : await Promise.all([readXpBody(supabase, user.id), readAsDummy(supabase, user.id)])
 
   return (
     <>
@@ -279,6 +329,15 @@ export default async function RoomPage({
       initialBlocks={blocks}
       initialImages={[]}
       initialGoals={goals}
+      initialThings={things}
+      initialShelf={shelf}
+      initialClips={clips}
+      /*
+        Whether running costs anything here. Defaults off - every world this
+        product has ever had lets you run as long as you like, so a space that
+        has never touched the switch has not asked for the rule.
+      */
+      stamina={context.tenant.capabilities.stamina ?? false}
       readOnly={!canWrite(context)}
       // A guest walks here too, for the reason the lounge page gives at length.
       canFly={isGuest(context) ? false : undefined}
@@ -309,7 +368,23 @@ export default async function RoomPage({
       worldsHref={
         context.features.worlds ? `/t/${slug}/worlds?room=${room.roomId}` : undefined
       }
-      avatar={identity.avatar}
+      avatar={look}
+      animal={identity.avatar}
+      skins={ownedSkins}
+      /*
+       * Both bodies and the mode, rather than one answer with the other half
+       * inferred from it.
+       *
+       * It used to be `isSkinLook(look)`, which read "is what we are drawing a
+       * skin" and called that the wardrobe's state - so the two questions the
+       * wardrobe actually asks ("which XP body do I own" and "which body does
+       * this room draw") had one answer between them. Equipping wrote the mode,
+       * and the peep vanished from every space at once. These three are read
+       * from the rows that own them.
+       */
+      xpBody={xp.model}
+      showXp={xp.inLounge}
+      asDummy={dummy}
       /* Rooms are measured on the same switch the lounge is - they are the
          same scene on a `hall:` topic. See the lounge page. */
       perf={context.features.perf}

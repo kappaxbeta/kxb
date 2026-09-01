@@ -1,14 +1,17 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import { chainAbove, holdPins, preBend, reachFor } from '@/app/ovaloffice/animator/ik'
+import { modelUrlFor } from '@/domain/thingiverse/models'
+import { Posing, rigFrom, type RigHandle } from '@/app/ovaloffice/animator/posing'
 import { Rig } from '@/app/world/shots/pieces'
-import { type AnimationDoc, type Pose, type Quat, samplePose } from '@/domain/animator/clip'
-import { BONE_SPECS, DUMMY_BONES, DUMMY_URL, ROOT_BONE } from '@/domain/animator/rig'
+import { type AnimationDoc, type Pose, samplePose } from '@/domain/animator/clip'
+// `Rig` is taken in this file by the lighting rig above, so the body's rig
+// comes in under a name that says which of the two it is.
+import { type Rig as BodyRig, RIGS } from '@/domain/animator/rig'
 import { DEFAULT_LIGHT } from '@/domain/studio/scene'
 
 /**
@@ -32,41 +35,13 @@ import { DEFAULT_LIGHT } from '@/domain/studio/scene'
  * about that split.
  */
 
-/** What the editor is given once the model has loaded. */
-export interface RigHandle {
-  /** The glTF scene root. This is the object the exporter is handed. */
-  root: THREE.Object3D
-  bones: Map<string, THREE.Object3D>
-  /** Local rotations as the model shipped. The pose everything is measured from. */
-  rest: Pose
-  restQuats: Map<string, THREE.Quaternion>
-  capture: () => Pose
-  apply: (pose: Pose) => void
-}
+/**
+ * Re-exported so the many callers that import it from the stage keep working.
+ * It lives in `./posing` now, with the drag maths that produces one.
+ */
+export type { RigHandle }
 
-const _v = new THREE.Vector3()
-const _reach = new THREE.Vector3()
 const _euler = new THREE.Euler()
-
-function capture(bones: Map<string, THREE.Object3D>): Pose {
-  const out: Record<string, Quat> = {}
-  for (const [name, bone] of bones) {
-    if (name === ROOT_BONE) continue
-    const q = bone.quaternion
-    out[name] = [q.x, q.y, q.z, q.w]
-  }
-  const root = bones.get(ROOT_BONE)
-  return { root: root ? [root.position.x, root.position.y, root.position.z] : [0, 0, 0], bones: out }
-}
-
-function apply(bones: Map<string, THREE.Object3D>, pose: Pose): void {
-  for (const [name, bone] of bones) {
-    const q = pose.bones[name]
-    if (q) bone.quaternion.set(q[0], q[1], q[2], q[3])
-  }
-  const root = bones.get(ROOT_BONE)
-  if (root) root.position.set(pose.root[0], pose.root[1], pose.root[2])
-}
 
 /**
  * The model, cloned, with its bones indexed.
@@ -80,189 +55,27 @@ function apply(bones: Map<string, THREE.Object3D>, pose: Pose): void {
  * The clone also means the editor starts from the bind pose on every mount,
  * rather than from whatever the last session left in `useGLTF`'s cache.
  */
-function Dummy({ onReady }: { onReady: (rig: RigHandle) => void }) {
-  const { scene } = useGLTF(DUMMY_URL)
+function Body({ rig: body, onReady }: { rig: BodyRig; onReady: (rig: RigHandle) => void }) {
+  const { scene } = useGLTF(body.url)
 
   const rig = useMemo<RigHandle>(() => {
     const root = cloneSkinned(scene)
-
-    const bones = new Map<string, THREE.Object3D>()
-    const restQuats = new Map<string, THREE.Quaternion>()
+    // The body is not clickable: every pointer event in the viewport belongs
+    // either to a handle or to the camera. A mesh that ate clicks would mean a
+    // handle behind an arm could not be grabbed, and the handles are drawn in
+    // front of the body precisely so that never happens.
     root.traverse((node) => {
-      // The body is not clickable: every pointer event in the viewport belongs
-      // either to a handle or to the camera. A mesh that ate clicks would mean
-      // a handle behind an arm could not be grabbed, and the handles are drawn
-      // in front of the body precisely so that never happens.
       node.raycast = () => null
-      if (node.name === ROOT_BONE || BONE_SPECS[node.name] || (node as THREE.Bone).isBone) {
-        bones.set(node.name, node)
-        restQuats.set(node.name, node.quaternion.clone())
-      }
     })
-
-    return {
-      root,
-      bones,
-      restQuats,
-      rest: capture(bones),
-      capture: () => capture(bones),
-      apply: (pose: Pose) => apply(bones, pose),
-    }
-  }, [scene])
+    return rigFrom(root, body.specs)
+    // `body.specs` decides which nodes count as bones. It is a module constant
+    // per rig, so it only ever changes when the whole body does - at which
+    // point `scene` has changed too and the rig is being rebuilt anyway.
+  }, [scene, body.specs])
 
   useEffect(() => onReady(rig), [rig, onReady])
 
   return <primitive object={rig.root} />
-}
-
-/**
- * The plane a drag happens on.
- *
- * A pointer is two numbers and a bone lives in three, so something has to
- * decide what the missing one is. The answer everywhere in 3D is a plane, and
- * the plane here faces the camera as it stood *when the drag began* - frozen,
- * not re-aimed each frame. A plane that kept facing a moving camera would
- * change what the same pointer movement means halfway through a gesture.
- *
- * Held horizontal instead when shift is down, which is how you slide a foot
- * along the floor without orbiting round to look from above first.
- */
-function DragPlane({
-  at,
-  flat,
-  onMove,
-  onEnd,
-}: {
-  at: THREE.Vector3
-  flat: boolean
-  onMove: (point: THREE.Vector3) => void
-  onEnd: () => void
-}) {
-  const camera = useThree((state) => state.camera)
-
-  const quaternion = useMemo(() => {
-    if (flat) return new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
-    return camera.quaternion.clone()
-    // The camera is deliberately not a dependency: this is the orientation at
-    // the moment the drag started, and it must not change under the hand.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flat])
-
-  return (
-    <mesh
-      position={at}
-      quaternion={quaternion}
-      onPointerMove={(event) => {
-        event.stopPropagation()
-        onMove(event.point)
-      }}
-      onPointerUp={(event) => {
-        event.stopPropagation()
-        onEnd()
-      }}
-      // A drag that leaves the plane - off the edge, or behind the camera when
-      // the view is nearly edge-on to it - ends rather than freezing.
-      onPointerLeave={() => onEnd()}
-    >
-      {/* Big enough that the edge is never reachable at any sane zoom. */}
-      <planeGeometry args={[200, 200]} />
-      <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-    </mesh>
-  )
-}
-
-interface Drag {
-  bone: string
-  at: THREE.Vector3
-  flat: boolean
-  /** Pointer-to-handle offset, so the handle does not jump to the cursor. */
-  grab: THREE.Vector3
-}
-
-/**
- * One grabbable dot per bone.
- *
- * Drawn without depth testing and after everything else, so a handle inside the
- * chest is still clickable. The alternative - handles that hide behind the body
- * they belong to - means orbiting the camera before every other drag.
- *
- * Sized by distance rather than in world units, so they stay the same size on
- * screen whether you are framing the whole figure or a hand.
- */
-function Handles({
-  rig,
-  selected,
-  hovered,
-  pins,
-  dragging,
-  grabbable,
-  slideMode,
-  onHover,
-  onGrab,
-}: {
-  rig: RigHandle
-  selected: string | null
-  hovered: string | null
-  pins: ReadonlySet<string>
-  dragging: boolean
-  /** See the note on the same prop in `AnimatorStage`. */
-  grabbable: boolean
-  /** See the note on the same prop in `AnimatorStage`. */
-  slideMode: boolean
-  onHover: (bone: string | null) => void
-  onGrab: (bone: string, point: THREE.Vector3, flat: boolean) => void
-}) {
-  const group = useRef<THREE.Group>(null)
-  const camera = useThree((state) => state.camera)
-
-  useFrame(() => {
-    const node = group.current
-    if (!node) return
-    for (const child of node.children) {
-      const bone = rig.bones.get(child.name)
-      if (!bone) continue
-      bone.getWorldPosition(child.position)
-      const size = camera.position.distanceTo(child.position) * 0.018
-      child.scale.setScalar(Math.min(Math.max(size, 0.02), 0.09))
-    }
-  })
-
-  return (
-    <group ref={group}>
-      {DUMMY_BONES.map((spec) => {
-        const isSelected = selected === spec.name
-        const isPinned = pins.has(spec.name)
-        return (
-          <mesh
-            key={spec.name}
-            name={spec.name}
-            renderOrder={999}
-            onPointerOver={(event: ThreeEvent<PointerEvent>) => {
-              event.stopPropagation()
-              if (!dragging) onHover(spec.name)
-            }}
-            onPointerOut={() => onHover(null)}
-            onPointerDown={(event: ThreeEvent<PointerEvent>) => {
-              if (event.button !== 0 || !grabbable) return
-              event.stopPropagation()
-              onGrab(spec.name, event.point, event.shiftKey || slideMode)
-            }}
-          >
-            {/* The hips are the whole body's handle, so they are the big one. */}
-            <sphereGeometry args={[spec.name === 'hips' ? 1.5 : 1, 12, 10]} />
-            <meshBasicMaterial
-              color={
-                isPinned ? '#4ade80' : isSelected ? '#f0abfc' : hovered === spec.name ? '#fde68a' : '#94a3b8'
-              }
-              depthTest={false}
-              transparent
-              opacity={isSelected || hovered === spec.name || isPinned ? 0.95 : 0.6}
-            />
-          </mesh>
-        )
-      })}
-    </group>
-  )
 }
 
 /**
@@ -342,7 +155,38 @@ function docStamp(doc: AnimationDoc): string {
   return `${sum.toFixed(3)}|${doc.fps}|${doc.duration}`
 }
 
+/**
+ * Something in a hand, drawn where the hand is.
+ *
+ * Parented into the live rig rather than positioned each frame: the socket is a
+ * node in the skeleton, so hanging the model off it means the mixer moves it -
+ * a wave waves the cup too, for nothing.
+ *
+ * Removed on unmount and when the model changes, which is the whole of the
+ * cleanup: `useGLTF` caches the parsed file, and the clone is this component's
+ * own.
+ */
+function Held({ rig, hold }: { rig: RigHandle; hold: { model: string; socket: string } }) {
+  const { scene } = useGLTF(modelUrlFor(hold.model))
+
+  const object = useMemo(() => scene.clone(true), [scene])
+
+  useEffect(() => {
+    const socket = rig.bones.get(hold.socket)
+    if (!socket) return
+
+    socket.add(object)
+    return () => {
+      socket.remove(object)
+    }
+  }, [rig, hold.socket, object])
+
+  return null
+}
+
 export function AnimatorStage({
+  body = RIGS.dummy,
+  hold,
   doc,
   timeRef,
   playing,
@@ -358,6 +202,26 @@ export function AnimatorStage({
   onPose,
   onDragging,
 }: {
+  /**
+   * Which body is being posed.
+   *
+   * Defaults to the dummy, which is what the backoffice's animator has always
+   * posed and what every caller wanting the old behaviour gets for free.
+   * Nothing in here is *about* the dummy - the handles are drawn from a bone
+   * list, the drag maths takes a spec lookup, and the IK already took both as
+   * arguments - so a second rig is a parameter rather than a second stage.
+   */
+  body?: BodyRig
+  /**
+   * Something in a hand, while you pose.
+   *
+   * A pose with a cup in it is a different pose from the same arms with nothing
+   * in them, and the difference is only visible if the cup is there. So this is
+   * a *posing aid*: a model hung off a socket, drawn, never keyed, and never
+   * part of the clip - the clip is bones, and what a body happens to be holding
+   * is the world's business.
+   */
+  hold?: { model: string; socket: string } | null
   doc: AnimationDoc
   timeRef: React.RefObject<number>
   playing: boolean
@@ -392,21 +256,14 @@ export function AnimatorStage({
   onDragging: (dragging: boolean) => void
 }) {
   /**
-   * The gesture, in state rather than in a ref.
+   * The loaded rig, and whether a hand is currently on it.
    *
-   * The bones are imperative - see the note at the top - but a drag *starting*
-   * and *ending* are two renders per gesture, not sixty per second: what has to
-   * change is which dot is lit and whether the orbit control is allowed to have
-   * the left button. Those are things React draws, so React holds them.
+   * The gesture itself belongs to `<Posing>` now; what this still has to know
+   * is only whether one is running, because the playhead must not write bones
+   * while a pointer is dragging them.
    */
   const [rig, setRig] = useState<RigHandle | null>(null)
-  const [drag, setDrag] = useState<Drag | null>(null)
-  const [hovered, setHovered] = useState<string | null>(null)
-  /**
-   * Where each pinned bone was pinned. Never read while rendering, so this one
-   * stays a ref.
-   */
-  const pinPoints = useRef(new Map<string, THREE.Vector3>())
+  const [dragging, setDragging] = useState(false)
 
   const ready = useCallback(
     (handle: RigHandle) => {
@@ -416,119 +273,23 @@ export function AnimatorStage({
     [onReady],
   )
 
-  /**
-   * Pins, kept in step with what the panel has ticked.
-   *
-   * A pin remembers where the foot was *when it was pinned*, so ticking it is
-   * "leave this here" rather than "snap this to the floor". Unticking forgets.
-   */
-  useEffect(() => {
-    if (!rig) return
-    for (const name of pins) {
-      if (pinPoints.current.has(name)) continue
-      const bone = rig.bones.get(name)
-      if (bone) pinPoints.current.set(name, bone.getWorldPosition(new THREE.Vector3()))
-    }
-    for (const name of [...pinPoints.current.keys()]) {
-      if (!pins.has(name)) pinPoints.current.delete(name)
-    }
-  }, [pins, rig])
-
-  const onGrab = useCallback(
-    (bone: string, point: THREE.Vector3, flat: boolean) => {
-      const target = rig?.bones.get(bone)
-      if (!rig || !target) return
-
-      onSelect(bone)
-
-      const at = target.getWorldPosition(new THREE.Vector3())
-      setDrag({ bone, at, flat, grab: at.clone().sub(point) })
-
-      const spec = BONE_SPECS[bone]
-      if (spec && spec.reach > 0) preBend(chainAbove(target, spec.reach), BONE_SPECS, rig.restQuats)
-
-      onDragging(true)
+  const whileDragging = useCallback(
+    (on: boolean) => {
+      setDragging(on)
+      onDragging(on)
     },
-    [rig, onSelect, onDragging],
+    [onDragging],
   )
-
-  const onMove = useCallback(
-    (point: THREE.Vector3) => {
-      if (!rig || !drag) return
-
-      const target = rig.bones.get(drag.bone)
-      const spec = BONE_SPECS[drag.bone]
-      if (!target || !spec) return
-
-      _v.copy(point).add(drag.grab)
-
-      if (spec.reach === 0) {
-        /**
-         * The hips: the one handle that moves rather than turns.
-         *
-         * Written onto `root` and not onto the hips bone itself. The hips are
-         * inside the skin, so translating them slides the mesh off the
-         * skeleton's own origin and anything later parented to the model - a
-         * hat, a held prop - stays behind. `root` is the node the whole rig
-         * hangs from, which is what a clip in this pack expects to be moved.
-         */
-        const root = rig.bones.get(ROOT_BONE)
-        if (!root) return
-        const bone = target.getWorldPosition(_reach)
-        root.position.add(_v.sub(bone))
-        root.updateMatrixWorld(true)
-        holdPins(pinPoints.current, rig.bones, BONE_SPECS, rig.restQuats)
-      } else {
-        reachFor(target, chainAbove(target, spec.reach), _v, BONE_SPECS, rig.restQuats)
-      }
-    },
-    [rig, drag],
-  )
-
-  const onEnd = useCallback(() => {
-    if (!rig || !drag) return
-    setDrag(null)
-    onDragging(false)
-
-    // Dragging a pinned foot moves the pin with it. The alternative - a pin
-    // that remembers only where it was first ticked - means every deliberate
-    // step is undone by the next thing that moves the hips, which reads as the
-    // editor refusing to let you place the foot.
-    const pinned = pinPoints.current.get(drag.bone)
-    if (pinned) rig.bones.get(drag.bone)?.getWorldPosition(pinned)
-
-    // Keyable: a drag is a deliberate edit, so auto-key is allowed to fire on
-    // it. A scrub is not - see `Playhead`.
-    onPose(rig.capture(), true)
-  }, [rig, drag, onDragging, onPose])
 
   const onSettle = useCallback((pose: Pose) => onPose(pose, false), [onPose])
-
-  /**
-   * A release anywhere ends the drag.
-   *
-   * The plane's own `onPointerUp` covers letting go inside the viewport, which
-   * is almost always. This covers the rest: a button released over the panel,
-   * over another window, or after the pointer left the page entirely. Without
-   * it those all leave the rig stuck to the pointer with nothing pressed, and
-   * the only way out is to click - which poses whatever was grabbed.
-   */
-  useEffect(() => {
-    if (!drag) return
-    window.addEventListener('pointerup', onEnd)
-    window.addEventListener('pointercancel', onEnd)
-    return () => {
-      window.removeEventListener('pointerup', onEnd)
-      window.removeEventListener('pointercancel', onEnd)
-    }
-  }, [drag, onEnd])
 
   return (
     <>
       <Rig light={{ ...DEFAULT_LIGHT, rim: DEFAULT_LIGHT.rim * 0.5 }} radius={4} />
       {showGrid && <Floor />}
 
-      <Dummy onReady={ready} />
+      <Body rig={body} onReady={ready} />
+      {hold && rig && <Held rig={rig} hold={hold} />}
 
       {rig && (
         <>
@@ -537,36 +298,26 @@ export function AnimatorStage({
             doc={doc}
             timeRef={timeRef}
             playing={playing}
-            dragging={drag !== null}
+            dragging={dragging}
             frozen={frozen}
             onTime={onTime}
             onSettle={onSettle}
           />
-          <Handles
+          <Posing
             rig={rig}
+            bones={body.bones}
+            specs={body.specs}
             selected={selected}
-            hovered={hovered}
             pins={pins}
-            dragging={drag !== null || !grabbable}
             grabbable={grabbable}
             slideMode={slideMode}
-            onHover={setHovered}
-            onGrab={onGrab}
+            onSelect={onSelect}
+            onPose={onPose}
+            onDragging={whileDragging}
           />
         </>
       )}
 
-      {drag && (
-        <DragPlane
-          // Keyed on the bone so that starting a new drag builds a new plane
-          // rather than reusing the last one's frozen orientation.
-          key={`${drag.bone}-${drag.flat}`}
-          at={drag.at}
-          flat={drag.flat}
-          onMove={onMove}
-          onEnd={onEnd}
-        />
-      )}
     </>
   )
 }

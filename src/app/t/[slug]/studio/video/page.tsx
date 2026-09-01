@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { ShotEditor } from '@/app/ovaloffice/studio/shot-editor'
 import { findScene } from '@/domain/scenes/queries'
 import { listPickableWorlds } from '@/domain/worlds/queries'
+import { listBlueprints } from '@/domain/thingiverse/queries'
 import { decodeShot } from '@/domain/studio/shot'
 import { canWrite, hasRole, requireFeature, requireTenant } from '@/lib/tenant'
 import { workspaceDict } from '@/app/i18n/workspace'
@@ -58,6 +59,21 @@ export default async function SpaceVideoStudioPage({
   const canPin = hasRole(context, ['owner', 'admin', 'member']) && canWrite(context)
   const canPinTop = hasRole(context, ['owner', 'admin']) && canWrite(context)
 
+  /**
+   * The space's shelf, for props that are whole things rather than one model.
+   *
+   * Only where the space has the thingiverse at all: the feature is off by
+   * default, and a studio in a space without it simply gets an empty list and
+   * no picker. Trimmed to what the editor draws with - a name to choose by and
+   * the spec to draw from - because the view also carries ownership and
+   * moderation fields that are the rail's business and not a shot's.
+   */
+  const blueprints = context.features.thingiverse
+    ? (await listBlueprints(context.supabase, context.tenant.id, context.user.id)).map(
+        (one) => ({ id: one.id, name: one.name, spec: one.spec }),
+      )
+    : []
+
   /** The same list the picture studio offers, for the same reason. */
   const worlds = (await listPickableWorlds(context.supabase, context.tenant.id)).map((world) => ({
     id: world.id,
@@ -94,6 +110,7 @@ export default async function SpaceVideoStudioPage({
               canPinTop,
             }}
             worlds={worlds}
+            blueprints={blueprints}
           />
         </section>
       )
@@ -125,6 +142,7 @@ export default async function SpaceVideoStudioPage({
         initial={decodeShot(v)}
         scene={{ scope: { kind: 'space', slug }, canPin, canPinTop }}
         worlds={worlds}
+        blueprints={blueprints}
       />
     </section>
   )

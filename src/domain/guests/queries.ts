@@ -126,7 +126,9 @@ export async function listGuestLinks(
    * has since been shut still points there, and the row saying so is how the
    * host works out why their visitor is landing somewhere empty.
    */
-  const roomSlugs = [...new Set(landings.flatMap((spot) => (spot.room ? [spot.room] : [])))]
+  const roomSlugs = [
+    ...new Set(landings.flatMap((spot) => (spot.kind === 'room' && spot.ref ? [spot.ref] : []))),
+  ]
 
   const names = new Map<string, string>()
   if (roomSlugs.length > 0) {
@@ -139,6 +141,36 @@ export async function listGuestLinks(
     if (roomError) throw new Error(`Failed to load rooms: ${roomError.message}`)
 
     for (const room of rooms ?? []) names.set(room.slug, room.name)
+  }
+
+  /**
+   * And the names of the matches, the same way and for a stronger reason.
+   *
+   * A room link at least says which room in the address; a match link said
+   * nothing but "A match", so a host who had opened three fights in an evening
+   * had three identical rows and no way to tell which link went to which. The
+   * name is what they called the fight, which is the only handle anybody has on
+   * it - the id is a uuid and the level behind it is not what they were
+   * choosing between.
+   *
+   * Read across statuses on purpose. A match that has ended still has links
+   * pointing at it until the sweep takes them back, and "Finals" is a truer
+   * row than "A match" for the whole of that window.
+   */
+  const battleIds = [
+    ...new Set(landings.flatMap((spot) => (spot.kind === 'match' && spot.ref ? [spot.ref] : []))),
+  ]
+
+  if (battleIds.length > 0) {
+    const { data: battles, error: battleError } = await admin
+      .from('battles_read_model')
+      .select('id, name')
+      .eq('tenant_id', tenantId)
+      .in('id', battleIds)
+
+    if (battleError) throw new Error(`Failed to load matches: ${battleError.message}`)
+
+    for (const battle of battles ?? []) names.set(battle.id, battle.name)
   }
 
   return links.map((row, index) => {
@@ -155,7 +187,10 @@ export async function listGuestLinks(
       createdAt: row.created_at,
       requiresKnock: row.requires_knock === true,
       liveGuests: live.get(row.id) ?? 0,
-      landing: spot.room ? { ...spot, room: names.get(spot.room) ?? spot.room } : spot,
+      // The name if one was found, and the category word if not - which is
+      // what `guestLandingLabel` falls back to. A room that has been closed and
+      // a match that has been swept keep their link and lose their name.
+      landing: spot.ref ? { ...spot, name: names.get(spot.ref) ?? null } : spot,
     }
   })
 }

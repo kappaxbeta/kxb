@@ -17,7 +17,7 @@ import { loungeGoalsProjection } from '@/domain/lounge/goal-projection'
 import { listGoals } from '@/domain/lounge/goal-queries'
 import { listLoungeBlocks } from '@/domain/lounge/queries'
 import { readProfileAvatar } from '@/domain/profile/avatar-queries'
-import { readProfileSkin } from '@/domain/skins/queries'
+import { readLookForLevel } from '@/domain/skins/queries'
 import { readSceneIdentity } from '@/domain/guests/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
 import { runProjection } from '@/es/projection'
@@ -98,14 +98,11 @@ export default async function BattlePage({
     await runProjection(supabase, loungeGoalsProjection, worldTenantId)
   }
 
-  const [blocks, goals, avatar, name, skin, spawnAt] = await Promise.all([
+  const [blocks, goals, avatar, name, spawnAt] = await Promise.all([
     listLoungeBlocks(supabase, worldTenantId, battle.worldId),
     listGoals(supabase, worldTenantId, battle.worldId),
     readProfileAvatar(supabase, user.id),
     readDisplayName(supabase, user.id),
-    // The equipped skin, worn only by the XP body below - the roster and the
-    // lounge half keep drawing the animal, which is what has shots to draw.
-    readProfileSkin(supabase, user.id),
     // For the people who are not fighting. A fighter is placed on the ring by
     // `spawnSlot`, which is what a match needs and this must not override -
     // see the scene's spawn note. A spectator has no square, and until now
@@ -184,6 +181,22 @@ export default async function BattlePage({
      */
     const played = applyMatchRules(document, battle.xpRules)
 
+    /**
+     * The body this level asks for, once the level is known.
+     *
+     * A second round trip inside the branch rather than a sixth entry in the
+     * batch above, because the question needs the document and the document is
+     * only loaded here. A level that says `wears: "peep"` gets animals in a
+     * match for the same reason it does anywhere else, and everybody in the
+     * arena sees the same person - the presence channel carries this answer.
+     */
+    const body = await readLookForLevel(
+      supabase,
+      user.id,
+      played.player.wears,
+      context.tenant.id,
+    )
+
     return (
       <>
         {/*
@@ -210,10 +223,10 @@ export default async function BattlePage({
             name: displayNameFor(name, user.email, battleDict(locale).broken.someone),
           }}
           // The identity this space already resolved, so a match does not put
-          // somebody in a different body than the room they came from. The
-          // skin outranks it for the same reason it does in a room: an XP is
-          // where a bought look is worn.
-          avatar={skin ?? identity.avatar}
+          // somebody in a different body than the room they came from. The XP
+          // body outranks it for the same reason it does in a room - an XP is
+          // where a bought look is worn - unless this level said otherwise.
+          avatar={body ?? identity.avatar}
           joined={battle.participants.some((player) => player.userId === user.id)}
           // The same predicate and a different question - see the prop. The
           // action re-asks it anyway; this only decides whether the button is

@@ -12,6 +12,7 @@ import {
   roomDestination,
 } from '@/domain/guests/application'
 import type { GuestLinkView, GuestView } from '@/domain/guests/queries'
+import { Icon } from '@/app/t/[slug]/rail-icons'
 import { useCurrentMatch } from '@/app/t/[slug]/match-store'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
@@ -298,62 +299,20 @@ export function GuestRail({
         <ul className="space-y-1.5 px-3">
           {active.map((link) => (
             <li key={link.id} className="rounded-lg border border-line bg-surface/60 p-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-[10px] font-medium text-ink">
+              <div className="flex items-center gap-1.5 text-[10px] font-medium text-ink">
+                <span className="min-w-0 truncate">
                   {link.maxUses === null ? t.open : t.singleEntry}
+                </span>
                   {/* Marked on the row rather than only at creation, because
                       the two kinds of link behave completely differently for
                       the person you hand one to, and a rail full of
                       indistinguishable "Open" rows is how you send somebody the
                       wrong one. */}
-                  {link.requiresKnock && (
-                    <span className="rounded bg-amber-400/20 px-1 py-0.5 text-[9px] font-medium text-amber-300">
-                      {t.knockTag}
-                    </span>
-                  )}
-                </span>
-                <div className="flex shrink-0 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => copy(link)}
-                    className="text-[10px] text-ink-muted transition hover:text-accent"
-                  >
-                    {copied === link.id ? t.copied : t.copy}
-                  </button>
-                  {/*
-                    Folded away rather than always open, and one at a time.
-
-                    A code is the right thing when the people you are inviting
-                    are in the room with you, and the wrong thing when they are
-                    not - which is most of the time this rail is open. Four rows
-                    each carrying a QR square would push the guest list, which
-                    is the part somebody came here to read, off the bottom.
-                  */}
-                  <button
-                    type="button"
-                    onClick={() => setShown((id) => (id === link.id ? null : link.id))}
-                    aria-expanded={shown === link.id}
-                    className="text-[10px] text-ink-muted transition hover:text-accent"
-                  >
-                    {shown === link.id ? t.hide : t.showCode}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => run(() => revokeGuestLink(slug, link.id))}
-                    // Spells out the consequence, because "revoke" reads as
-                    // "stop new people joining" and this also empties the room
-                    // of everybody that link let in.
-                    title={
-                      link.liveGuests > 0
-                        ? fill(t.revokeTitleWith, { n: link.liveGuests })
-                        : t.revokeTitle
-                    }
-                    className="text-[10px] text-ink-muted transition hover:text-red-400 disabled:opacity-60"
-                  >
-                    {t.revoke}
-                  </button>
-                </div>
+                {link.requiresKnock && (
+                  <span className="shrink-0 rounded bg-amber-400/20 px-1 py-0.5 text-[9px] font-medium text-amber-300">
+                    {t.knockTag}
+                  </span>
+                )}
               </div>
 
               {/*
@@ -398,11 +357,94 @@ export function GuestRail({
                   ever walked through this link, and how many of them are still
                   here. They are different questions - a link with twelve
                   entries and nobody online is a link that had a good afternoon. */}
-              <p className="mt-1 text-[10px] text-ink-muted">
-                {fill(t.counts, { uses: link.uses, live: link.liveGuests })}
-                {link.maxUses !== null &&
-                  fill(t.countsCapped, { uses: link.uses, max: link.maxUses })}
-              </p>
+              {/*
+                The numbers and the controls share the last line.
+
+                The controls used to sit on the first one, beside the kind, and
+                that row had four things on it in a 15.5rem rail: `Ein Eintritt`,
+                the knock tag, and three of these. The label truncated to
+                `Ein Ein…` - a row telling you what kind of link it is, in which
+                the kind is the part that got cut.
+
+                Down here they have the whole card's width to share with one
+                short sentence, and the card reads in the order somebody asks:
+                what it is, where it goes, how it has been used - and then what
+                can be done about it.
+
+                Wrapping rather than shrinking, so the sentence is never broken
+                across two lines to keep the controls beside it: they share the
+                line where the language allows it and take one of their own
+                where it does not. `ml-auto` is what keeps them at the right
+                edge in both cases.
+              */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <p className="whitespace-nowrap text-[10px] text-ink-muted">
+                  {fill(t.counts, { uses: link.uses, live: link.liveGuests })}
+                  {link.maxUses !== null &&
+                    fill(t.countsCapped, { uses: link.uses, max: link.maxUses })}
+                </p>
+                {/*
+                  Three drawings rather than three verbs.
+
+                  They were words, and the words are what broke the card: this
+                  row has 15.5rem for a label, a knock tag and all three, and
+                  `Kopieren · Code zeigen · Zurückziehen` is half again the
+                  length of the English. The German rail did not wrap, it
+                  overflowed. A glyph is the same width in every language, and
+                  the verb it replaces is still said in full by `title` and by
+                  the accessible name - which is where a screen reader was
+                  reading it from anyway.
+                */}
+                <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => copy(link)}
+                    title={copied === link.id ? t.copied : t.copy}
+                    aria-label={copied === link.id ? t.copied : t.copy}
+                    className="rail-tool"
+                  >
+                    <Icon name={copied === link.id ? 'copied' : 'copy'} />
+                  </button>
+                  {/*
+                    Folded away rather than always open, and one at a time.
+
+                    A code is the right thing when the people you are inviting
+                    are in the room with you, and the wrong thing when they are
+                    not - which is most of the time this rail is open. Four rows
+                    each carrying a QR square would push the guest list, which
+                    is the part somebody came here to read, off the bottom.
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => setShown((id) => (id === link.id ? null : link.id))}
+                    aria-expanded={shown === link.id}
+                    title={shown === link.id ? t.hide : t.showCode}
+                    aria-label={shown === link.id ? t.hide : t.showCode}
+                    className="rail-tool"
+                  >
+                    <Icon name="code" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => run(() => revokeGuestLink(slug, link.id))}
+                    // Spells out the consequence, because "revoke" reads as
+                    // "stop new people joining" and this also empties the room
+                    // of everybody that link let in. It is the whole label now
+                    // rather than a footnote to one, so it says what the
+                    // control is as well as what it costs.
+                    title={
+                      link.liveGuests > 0
+                        ? fill(t.revokeTitleWith, { n: link.liveGuests })
+                        : t.revokeTitle
+                    }
+                    aria-label={t.revoke}
+                    className="rail-tool rail-tool-danger"
+                  >
+                    <Icon name="revoke" />
+                  </button>
+                </div>
+              </div>
             </li>
           ))}
         </ul>

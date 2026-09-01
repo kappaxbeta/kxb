@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { AVATARS, avatarShotUrl } from '@/domain/lounge/avatars'
+import { AVATARS, avatarShotUrl, DUMMY_LOOK } from '@/domain/lounge/avatars'
 import { skinThumbUrl } from '@/domain/skins/application'
 import { chatActions, useChatStatus, type ChatStatus } from '@/app/world/_stores/chat-store'
 import { EmoteGrid } from '@/app/world/_hud/emote-grid'
@@ -70,22 +70,57 @@ export function EmotePicker({
    * the room is the one thing the picker must not be.
    */
   peep?: {
+    /**
+     * The animal, and only ever the animal.
+     *
+     * Never a skin, which is the correction this wardrobe is built around: you
+     * have two bodies at once - this one and the XP body below - and neither is
+     * spent by choosing the other. What changed is that a skin no longer lands
+     * *in* this field and hides which animal is underneath.
+     */
     current: string
     onChange: (avatar: string) => void
     /**
-     * The skins this account owns, offered in the same grid as the animals.
+     * The peep's other face: the plain mannequin, as a switch beside the
+     * animals rather than a twenty-fifth animal in the grid.
      *
-     * One wardrobe rather than two, because the question somebody opens this
-     * to answer is "what am I standing in", and a peep and a skin are two
-     * answers to it rather than two questions. Empty or absent for anybody who
-     * owns none, which is most people and every guest - and then this is
-     * exactly the animal picker it has always been.
+     * A switch because the animal is kept underneath it - taking the dummy off
+     * hands back the one you already had, and the grid goes on showing which.
+     * The locker says it the same way; the two wardrobes should not disagree
+     * about what the plain body is.
      */
-    skins?: { id: string; name: string }[]
-    /** The skin worn here, or null when the animal is. */
-    wearing?: string | null
-    /** Wear a skin in this world, or `null` to go back to the animal. */
-    onWearSkin?: (id: string | null) => void
+    dummy?: { on: boolean; onToggle: (next: boolean) => void }
+    /**
+     * The other body, and which of the two this world is drawing.
+     *
+     * Two questions, kept apart, because conflating them is what put a bought
+     * Knight in every space an account walked into: `wearing`/`onWear` is which
+     * XP body you own and take into the games, `showing`/`onShow` is a mode
+     * switch for *this* player. Changing the body never flips the mode, and the
+     * mode starts off - so a space draws your peep until you ask it not to.
+     *
+     * Absent for anybody who cannot have one, which is every guest.
+     */
+    xp?: {
+      /** What this account owns. Empty is a shelf with only the dummy on it. */
+      skins: { id: string; name: string }[]
+      /** The XP body equipped, or `null` for the dummy every player starts in. */
+      wearing: string | null
+      onWear: (id: string | null) => void
+      /** The mode: is the XP body what this world is drawing right now. */
+      showing: boolean
+      onShow: (next: boolean) => void
+      /**
+       * Why the last switch did not take, if it did not.
+       *
+       * The save can refuse - there is no body to show - and the switch used to
+       * discard the answer, so a refusal was a button that flipped, flipped
+       * back a moment later when the server re-rendered, and never said why.
+       * It belongs here rather than in a corner of the room because this panel
+       * is what the person is looking at when it happens.
+       */
+      problem?: string | null
+    }
   }
   className?: string
 }) {
@@ -210,14 +245,23 @@ export function EmotePicker({
                             : 'border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                         }`}
                       >
-                        {/* The animal you are now, which is also the label: a
-                            word for it would be a word in three languages
-                            saying what the picture already says. */}
+                        {/* The body you are *drawn as* right now, which is also
+                            the label: a word for it would be a word in three
+                            languages saying what the picture already says.
+                            Follows the mode rather than the peep, so opening
+                            the wardrobe in XP mode does not show an animal
+                            nobody in the room can see. */}
                         <Image
-                          src={avatarShotUrl(peep.current)}
+                          src={
+                            peep.xp?.showing
+                              ? skinThumbUrl(peep.xp.wearing ?? DUMMY_LOOK)
+                              : peep.dummy?.on
+                                ? skinThumbUrl(DUMMY_LOOK)
+                                : avatarShotUrl(peep.current)
+                          }
                           alt=""
-                          width={128}
-                          height={128}
+                          width={192}
+                          height={192}
                           className="h-5 w-5 object-contain"
                         />
                         <span aria-hidden>{peeping ? '×' : '⌄'}</span>
@@ -229,63 +273,83 @@ export function EmotePicker({
                 {peep && peeping ? (
                   <>
                     {/*
-                      The skins first, and only for somebody who owns any.
+                      Which body, before which costume.
 
-                      Above the animals rather than below because this is the
-                      half that changes: the twenty-four have been in the same
-                      place since the lounge shipped, and a row that appears
-                      under a grid people already scroll past is a row nobody
-                      finds. Selecting one is "wear this here"; selecting an
-                      animal takes it off again, which is why the animal
-                      buttons clear the skin as well as setting the peep - two
-                      controls that can both be on would let you be two bodies.
+                      The switch is first because it is the question the other
+                      two rows are answers to: you always have a peep *and* an
+                      XP body, and the only thing a world decides is which of
+                      them it draws. It used to decide that as a side effect of
+                      picking a skin, so buying one for the games silently
+                      replaced the peep everywhere - one click answering two
+                      questions, and only one of them asked.
+
+                      Offered only once there is something to switch to. With
+                      no XP body equipped the mode has nothing to show, and the
+                      save refuses it for the same reason.
                     */}
-                    {peep.skins && peep.skins.length > 0 && (
-                      <div className="mb-2">
-                        <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-white/40">
-                          {t.skin}
-                        </p>
-                        <div
-                          role="radiogroup"
-                          aria-label={t.skin}
-                          className="grid grid-cols-6 gap-1"
-                        >
-                          {peep.skins.map((skin) => {
-                            const current = peep.wearing === skin.id
-                            return (
-                              <button
-                                key={skin.id}
-                                type="button"
-                                role="radio"
-                                aria-checked={current}
-                                aria-label={skin.name}
-                                title={skin.name}
-                                onClick={() => {
-                                  peep.onWearSkin?.(current ? null : skin.id)
-                                  setPeeping(false)
-                                }}
-                                className={`rounded-lg border p-1 transition-colors ${
-                                  current
-                                    ? 'border-amber-300/40 bg-amber-400/25'
-                                    : 'border-white/10 hover:bg-white/5'
-                                }`}
-                              >
-                                <Image
-                                  src={skinThumbUrl(skin.id)}
-                                  alt=""
-                                  width={192}
-                                  height={192}
-                                  loading={current ? 'eager' : 'lazy'}
-                                  className="h-8 w-8 object-contain"
-                                />
-                              </button>
-                            )
-                          })}
-                        </div>
-                        <p className="mb-1 mt-2 text-[10px] uppercase tracking-[0.14em] text-white/40">
-                          {t.peepLabel}
-                        </p>
-                      </div>
+                    {peep.xp?.wearing && (
+                      <button
+                        type="button"
+                        onClick={() => peep.xp?.onShow(!peep.xp.showing)}
+                        aria-pressed={peep.xp.showing}
+                        className={`mb-2 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
+                          peep.xp.showing
+                            ? 'border-amber-300/40 bg-amber-400/25 text-amber-100'
+                            : 'border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <span>{t.showXp}</span>
+                        <span className="text-[10px] text-white/40">
+                          {peep.xp.showing ? t.skin : t.peepLabel}
+                        </span>
+                      </button>
+                    )}
+
+                    {peep.xp?.problem && (
+                      <p
+                        role="status"
+                        className="-mt-1 mb-2 rounded-lg border border-red-400/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-200"
+                      >
+                        {peep.xp.problem}
+                      </p>
+                    )}
+
+                    {/*
+                      The peep: the animals, with the dummy as a switch above
+                      them rather than a face among them.
+
+                      First of the two grids because it is what a space draws by
+                      default and what everybody has before they have anything
+                      else. The dummy is drawn for everybody who can change body
+                      at all, not only for owners, because it is not a purchase -
+                      it is what a player already is in the games and what a
+                      visitor is standing in right now.
+                    */}
+                    <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-white/40">
+                      {t.peepLabel}
+                    </p>
+
+                    {peep.dummy && (
+                      <button
+                        type="button"
+                        onClick={() => peep.dummy?.onToggle(!peep.dummy.on)}
+                        aria-pressed={peep.dummy.on}
+                        className={`mb-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
+                          peep.dummy.on
+                            ? 'border-amber-300/40 bg-amber-400/25 text-amber-100'
+                            : 'border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <span>{t.dummy}</span>
+                        <Image
+                          src={skinThumbUrl(DUMMY_LOOK)}
+                          alt=""
+                          width={192}
+                          height={192}
+                          loading="lazy"
+                          className="h-5 w-5 object-contain"
+                        />
+                      </button>
                     )}
 
                     <div
@@ -294,8 +358,16 @@ export function EmotePicker({
                       className="grid grid-cols-6 gap-1"
                     >
                       {AVATARS.map((animal) => {
-                        // Worn only when no skin is over the top of it.
-                        const current = animal === peep.current && !peep.wearing
+                        /**
+                         * Highlighted from the animal alone.
+                         *
+                         * It used to be `&& !peep.wearing`, so putting an XP
+                         * body on un-highlighted every animal and the grid
+                         * stopped saying which peep was underneath. The peep is
+                         * always somebody now, whether or not it is the body on
+                         * screen; the dummy switch above is what dims it.
+                         */
+                        const current = animal === peep.current && !peep.dummy?.on
                         return (
                           <button
                             key={animal}
@@ -306,10 +378,6 @@ export function EmotePicker({
                             title={animal}
                             onClick={() => {
                               peep.onChange(animal)
-                              // Picking an animal is also taking the skin off,
-                              // or the choice would land on a body nobody can
-                              // see underneath the one they are wearing.
-                              if (peep.wearing) peep.onWearSkin?.(null)
                               // Straight back to the faces: you came here to
                               // change, and staying in the grid after the change
                               // has landed is one press somebody has to undo.
@@ -333,6 +401,80 @@ export function EmotePicker({
                         )
                       })}
                     </div>
+
+                    {/*
+                      And the XP body, underneath: what you take into the games.
+
+                      Picking one here changes the games and leaves this room
+                      alone unless the switch at the top says otherwise. Its
+                      first tile is the dummy - `null`, the body every player is
+                      before they are anybody - which is how you take an XP body
+                      off without owning a second one.
+                    */}
+                    {peep.xp && (
+                      <>
+                        <p className="mb-1 mt-3 text-[10px] uppercase tracking-[0.14em] text-white/40">
+                          {t.skin}
+                        </p>
+                        <div
+                          role="radiogroup"
+                          aria-label={t.skin}
+                          className="grid grid-cols-6 gap-1"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={peep.xp.wearing === null}
+                            aria-label={t.dummy}
+                            title={t.dummy}
+                            onClick={() => peep.xp?.onWear(null)}
+                            className={`rounded-lg border p-1 transition-colors ${
+                              peep.xp.wearing === null
+                                ? 'border-amber-300/40 bg-amber-400/25'
+                                : 'border-white/10 hover:bg-white/5'
+                            }`}
+                          >
+                            <Image
+                              src={skinThumbUrl(DUMMY_LOOK)}
+                              alt=""
+                              width={192}
+                              height={192}
+                              loading={peep.xp.wearing === null ? 'eager' : 'lazy'}
+                              className="h-8 w-8 object-contain"
+                            />
+                          </button>
+
+                          {peep.xp.skins.map((skin) => {
+                            const current = peep.xp?.wearing === skin.id
+                            return (
+                              <button
+                                key={skin.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={current}
+                                aria-label={skin.name}
+                                title={skin.name}
+                                onClick={() => peep.xp?.onWear(skin.id)}
+                                className={`rounded-lg border p-1 transition-colors ${
+                                  current
+                                    ? 'border-amber-300/40 bg-amber-400/25'
+                                    : 'border-white/10 hover:bg-white/5'
+                                }`}
+                              >
+                                <Image
+                                  src={skinThumbUrl(skin.id)}
+                                  alt=""
+                                  width={192}
+                                  height={192}
+                                  loading={current ? 'eager' : 'lazy'}
+                                  className="h-8 w-8 object-contain"
+                                />
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   <EmoteGrid

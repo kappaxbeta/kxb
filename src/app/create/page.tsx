@@ -7,12 +7,16 @@ import {
   MarketingShell,
   NotYet,
   PageHero,
+  BandScene,
   PageOutro,
+  Rack,
   Shot,
   Spec,
   Traits,
 } from '@/app/components/marketing-shell'
 import { resolveLook } from '@/app/components/look'
+import { MAX_BLUEPRINT_ACTIONS, MAX_BLUEPRINTS_PER_TENANT } from '@/domain/thingiverse/blueprint'
+import { MAX_STATES } from '@/domain/thingiverse/states'
 
 /**
  * The two ways to make something here.
@@ -44,7 +48,7 @@ import { resolveLook } from '@/app/components/look'
 export const metadata: Metadata = {
   title: 'Create — build the room, or build the game',
   description:
-    'The room you are standing in is the editor: fifty-eight pieces, placed live, with everyone else still standing in it. And xp, a browser game creator where things break, count and finish.',
+    'The room you are standing in is the editor: fifty-eight pieces, placed live, with everyone else still standing in it. Summon things out of 5,770 models, give them rules, states and recipes, pose your own animations. And xp, a browser game creator where things break, count and finish — or a p5.js sketch people can stand inside.',
 }
 
 type Tab = 'xo' | 'xp'
@@ -90,6 +94,65 @@ const XO_PARTS = [
     mark: 'pieces',
     title: 'Save as arena',
     body: 'Any world you have built becomes a thing you can load into any world you own. Swapping the lounge for last month’s arena is one click, and the arena it came from is untouched.',
+  },
+] as const
+
+/**
+ * Twelve of the things a space can summon, as the renders the catalogue already
+ * carries.
+ *
+ * Chosen for range rather than for looks: a fountain that does not fall, a
+ * bench that seats three, a burger that is cooked out of four other things, a
+ * crate that can be broken, a target that comes back, a kart that drives. Every
+ * claim the section makes has a tile under it.
+ */
+const THINGS = [
+  { src: '/thumbs/builder/park/fountain.webp', label: 'Fountain' },
+  { src: '/thumbs/builder/park/bench.webp', label: 'Bench' },
+  { src: '/thumbs/builder/cafe/coffee_machine.webp', label: 'Machine' },
+  { src: '/thumbs/builder/restaurant/food_burger.webp', label: 'Burger' },
+  { src: '/thumbs/builder/bakerygoods/cake_chocolate.webp', label: 'Cake' },
+  { src: '/thumbs/builder/cafe/cash_register.webp', label: 'Till' },
+  { src: '/xp/thumbs/resources/Containers_Crate_Large.webp', label: 'Crate' },
+  { src: '/xp/thumbs/proto/Barrel_A.webp', label: 'Barrel' },
+  { src: '/xp/thumbs/proto/target.webp', label: 'Target' },
+  { src: '/xp/thumbs/resources/Gems_Chest.webp', label: 'Chest' },
+  { src: '/xp/thumbs/resources/Food_Crate_Large_Apples.webp', label: 'Apples' },
+  { src: '/xp/thumbs/cars/kart-oobi.webp', label: 'Kart' },
+] as const
+
+/**
+ * When something happens to a thing. The four in `ThingAction`, and the
+ * shortness is the design rather than the roadmap.
+ */
+const WHENS = [
+  ['Touch', 'Somebody walked into it.'],
+  ['Near', 'Somebody is standing close to it.'],
+  ['Use', 'Somebody pressed E on it.'],
+  ['Always', 'It does this on its own, forever.'],
+] as const
+
+/** What a blueprint is, in the four sentences that matter. */
+const THING_PARTS = [
+  {
+    mark: 'thing',
+    title: 'A kind of thing, and then things',
+    body: 'Every ball falls the same way, so how it falls is a fact about balls — and where this one is is a fact about it. You author the first and summon as many of the second as the room can hold.',
+  },
+  {
+    mark: 'rules',
+    title: 'Four whens, eight deeds',
+    body: 'Play a clip, spin, bob, vanish, say something, become something else, swing, shoot. Rows in a rail panel while you stand next to the thing, not code — every word in the list is one you can check by looking at it.',
+  },
+  {
+    mark: 'clip',
+    title: 'A timeline when one thing is not enough',
+    body: 'The lid opens, waits and shuts. The sign flashes twice. A cue names a moment and a verb, and it can name the part it happens to — so a market stall spins its sign rather than spinning the stall.',
+  },
+  {
+    mark: 'catalogue',
+    title: 'Five thousand seven hundred and seventy models',
+    body: 'Both catalogues at once: the eleven packs a world is built from and the forty a level is. A space should not be able to put a bench in its lounge and not a treasure chest.',
   },
 ] as const
 
@@ -142,14 +205,48 @@ const XP_FACTS = [
   },
 ] as const
 
+/**
+ * What a p5 sketch gets that a level does not, and what it gives up for it.
+ *
+ * Every one of these is a fact about `src/app/xp/_sketch` rather than a claim
+ * about p5: the containment is `srcdoc.ts`, the `xp` object is `sdk.ts`, and
+ * the evaluation order is pinned by a test in `sketch.test.ts`.
+ */
+const SKETCH_PARTS = [
+  {
+    mark: 'script',
+    title: 'Real JavaScript, and a real canvas',
+    body: 'setup() and draw(), the way p5 has always been. A DOM, requestAnimationFrame, WebGL — everything the rules engine deliberately does not have, which is exactly when you want this instead of that.',
+  },
+  {
+    mark: 'together',
+    title: 'Multiplayer, and no netcode',
+    body: 'Write xp.avatar.x in your draw loop and everybody else sees you move, smoothed, without a line of networking. xp.players is who is in the room. xp.input is one movement axis whether they are on arrows, on WASD, or on a thumbstick drawn over a phone.',
+  },
+  {
+    mark: 'owner',
+    title: 'It runs in a box with the door shut',
+    body: 'An opaque-origin frame: our cookies are not its cookies, our storage is not its storage, and the only way through the wall is one message channel. Nothing loads that we did not serve, and there is no route to the network at all — so a sketch somebody else wrote is one you can open.',
+  },
+  {
+    mark: 'pieces',
+    title: 'Files, and the entry runs last',
+    body: 'Split it up as you would anywhere else. Each file is evaluated on its own, in the order you wrote them, so a syntax error in one does not take its neighbours down with it.',
+  },
+] as const
+
 const XO_NOT_YET = [
   'The world builder that draws a whole venue from a brief is admin-only. What you get is the in-world palette, which is the same blocks by hand.',
   'A world is one save. There are no versions and no undo beyond taking the block back off.',
   'Building is creative mode only. A world in battle mode is frozen, which is the point, but it does mean you cannot patch a floor mid-match.',
+  `A thing knows ${MAX_BLUEPRINT_ACTIONS} things it can be told to do and no more. There is no scripting in a room, and there is deliberately not going to be — a level has an editor and a rules engine behind it, and a lounge has a rail panel and somebody standing up.`,
+  'A recipe asks for an item by the word on its label, so two blueprints both called “patty” are a coin toss, and a recipe naming something nobody has drawn yet quietly never fires.',
+  'Posing is one skeleton. Every animal and every skin shares it, which is what makes a clip portable — and it is also why you cannot animate the fountain.',
 ] as const
 
 const XP_NOT_YET = [
   'No score comes back out of a match yet — it is a room you play in rather than a game that finishes.',
+  'A p5.js sketch cannot reach the network at all. That is the containment doing its job, and it does mean a sketch cannot fetch anything of its own.',
   'Shots hit the level and the things in it, not other players. Nobody owns anything and nothing is reconciled.',
   'Collision is cell-shaped: a wall is solid where it looks solid, to within half a metre.',
   'The art is one prototype kit. It is grey on purpose, and it is the only kit so far.',
@@ -250,13 +347,63 @@ function XoTab() {
         <Traits items={XO_PARTS} />
       </Band>
 
+      {/* Straight after the palette, because the palette raises the question
+          this answers. Fifty-eight blocks builds you a room and then stops: a
+          reader who has just been told they can lay a floor is one sentence
+          away from asking what goes on it. */}
+      <Band
+        id="things"
+        kicker="The thingiverse"
+        mark="thing"
+        title="And then summon something to put on it"
+        hue={200}
+        index={1}
+      >
+        <p>
+          A block has no identity — cell (3, 0, 7) is dirt, and that is all there is to know about
+          it. It cannot fall, it cannot be yours, and it cannot be a fountain. So there is a second
+          way to put something in a room: type a word into the chat box, and the thing appears in
+          front of you.
+        </p>
+
+        {/* Somebody doing it, then everything they could have done it with.
+            The render first because it answers "what does this look like" in
+            one glance and the rack answers "what is in it" in twelve - and a
+            reader who is not sold by the first will not count the second. */}
+        <BandScene
+          src="/xo/scenes/summon.webp"
+          alt="A fox wearing a dinosaur costume standing in a ring of green light, with a crate, two animal heads and a block of hay turning in the air around it"
+          width={1280}
+          height={720}
+        />
+
+        <Rack label="Things a space can summon" items={THINGS} />
+
+        <Traits items={THING_PARTS} />
+
+        <p>
+          <strong>Four things can happen to a thing</strong>, and the list is short because a room
+          is not a level: nobody is scripting it, and whoever is setting this has a rail panel open
+          and is standing next to the object.
+        </p>
+
+        <Spec rows={WHENS} />
+
+        <p>
+          A space keeps up to {MAX_BLUEPRINTS_PER_TENANT} of its own, and typing{' '}
+          <span className="font-mono text-ink">/thingiverse ball</span> reaches yours before it
+          reaches the packs — because if somebody here has already decided what a ball is, that is
+          what the word means.
+        </p>
+      </Band>
+
       <Band
         id="modes"
         kicker="Modes"
         mark="modes"
         title="Creative builds it, battle freezes it"
         hue={285}
-        index={1}
+        index={2}
       >
         <p>
           A world is in one of two modes, and the mode is the whole permission system for building.
@@ -269,12 +416,64 @@ function XoTab() {
       </Band>
 
       <Band
+        id="machine"
+        kicker="States"
+        mark="machine"
+        title="A burger goes on raw and comes off cooked"
+        hue={40}
+        index={3}
+        span="half"
+      >
+        <p>
+          Cooked is not a pose the raw burger is holding. It is a different model, it lasts, and
+          nothing about the room puts it back — so a thing gets up to {MAX_STATES} named states and
+          a set of changes between them. A crate that has been broken open stays broken. A target
+          that has been shot is gone for eight seconds and then is a whole target again.
+        </p>
+        <p>
+          <strong>The recipe lives on the table, not in a book.</strong> A cutting board makes a
+          salad, a pan makes a patty, and a grill makes neither — putting the recipes on the object
+          is what makes the object worth walking to, and it is also what makes a recipe reviewable:
+          it is right there in the panel of the thing it belongs to.
+        </p>
+        <p>
+          And in a room set to battle, a thing has health. A crate you cannot break in a world built
+          for a fight is not restraint, it is a hole.
+        </p>
+      </Band>
+
+      <Band
+        id="clips"
+        kicker="Animation"
+        mark="clip"
+        title="Pose it yourself, then hang it on something"
+        hue={320}
+        index={3}
+        span="half"
+      >
+        <p>
+          Drag a hand and the arm follows it. A key is not a curve on one bone, it is the whole
+          pose — which is what makes an animation something you can author standing up in twenty
+          minutes rather than something you open a second application for.
+        </p>
+        <p>
+          You pose the body somebody actually wears rather than a grey mannequin. Every skin shares
+          the dummy&rsquo;s skeleton exactly, down to the name of the slot a hand holds things in,
+          so an arm that cleared the body while you were posing still clears it on the knight.
+        </p>
+        <p>
+          Save it to the shelf and a blueprint can name it. Now the thing you built has an animation
+          nobody else has.
+        </p>
+      </Band>
+
+      <Band
         id="match"
         kicker="Then play in it"
         mark="battles"
         title="A world you built is a stage you can fight on"
         hue={145}
-        index={2}
+        index={4}
         span="half"
       >
         <p>
@@ -294,8 +493,8 @@ function XoTab() {
         kicker="Studio"
         mark="studio"
         title="Make a film of it and send that instead"
-        hue={320}
-        index={3}
+        hue={265}
+        index={4}
         span="half"
       >
         <p>Three studios, off the same models the world uses.</p>
@@ -390,13 +589,97 @@ function XpTab() {
         />
       </Band>
 
+      {/* After the pillars and before the numbers, because it is the answer to
+          the question the pillars raise: those four describe a level made of
+          pieces and rules, and the obvious next thought is "and if I would
+          rather just write it". */}
+      <Band
+        id="sketch"
+        kicker="p5.js"
+        mark="script"
+        title="Or skip all of that and write a sketch"
+        hue={195}
+        index={1}
+      >
+        <p>
+          A third kind of cartridge, beside the level and the world. Not pieces and not
+          rules — a <span className="font-mono text-ink">p5.js</span> sketch, source and all, kept
+          in the document itself. You write it in the browser, press{' '}
+          <strong>Run</strong>, and it is running.
+        </p>
+
+        <Traits items={SKETCH_PARTS} />
+
+        {/* The editor, and the reason it is here rather than only described:
+            every claim in the paragraph under it is a control visible in the
+            picture. A caption can say a sketch can be scheduled as a match; a
+            capture with the checkbox in it lets somebody check. */}
+        <Shot
+          src="/img/p5-editor.webp"
+          alt="The sketch editor: a file list with main.js as the entry, a blurb field, a key named KeyE mapped to boost, checkboxes for where the sketch can be played, the code in the middle, the sketch running live on the right, and a console under it"
+          width={2200}
+          height={1058}
+          caption={
+            <>
+              Files down the left with one of them marked{' '}
+              <span className="font-mono text-ink">ENTRY</span>, the code in the middle, and the
+              sketch running beside it as you type. Under the files are the two decisions that are
+              not code: which keys it wants — those become buttons on a phone — and whether it can{' '}
+              <span className="text-ink">stand as a room</span> people walk into, or{' '}
+              <span className="text-ink">be scheduled as a match</span>.
+            </>
+          }
+        />
+
+        <Shot
+          src="/img/p5-phone.webp"
+          alt="The sketch editor on a phone: a project called Game of Life with Run, Export and Save at the top, Files, Code and Play as tabs, a running grid of black and white cells filling the screen, and a console panel underneath"
+          width={1006}
+          height={1416}
+          phone
+          caption={
+            <>
+              The same editor in a hand. Files, the code and the thing itself become three tabs
+              rather than three panes, and <span className="text-ink">Run</span> is where it is on
+              the desktop.
+            </>
+          }
+        />
+
+        <p>
+          And it is not a toy corner of the product. A sketch that can stand as a room is a place on
+          the shelf people walk into and leave, with a guest link into it like anywhere else — and
+          one scheduled as a match gets a clock and a score limit your sketch reads back out of{' '}
+          <span className="font-mono text-ink">xp.match</span>.
+        </p>
+
+        {/* The payoff, and the one picture that could not be argued with: two
+            people standing inside a sketch somebody wrote this afternoon. */}
+        <Shot
+          src="/img/p5-room.webp"
+          alt="A p5.js sketch called Blob standing as a room: two green blobs with player names over them in the middle, the space’s own rails either side, and a panel of guest links into this sketch on the right"
+          width={2200}
+          height={1056}
+          caption={
+            <>
+              The same kind of document, standing as a room. Two people are in this one, each
+              drawn by the sketch’s own <span className="font-mono text-ink">draw()</span> and
+              moved by whoever is at the other keyboard — and the rail on the right is making a
+              door into it for somebody with no account. It is on the shelf beside the levels,
+              under <span className="font-mono text-ink">xp5js</span>, because as far as a space is
+              concerned it is one more thing you can walk into.
+            </>
+          }
+        />
+      </Band>
+
       <Band
         id="numbers"
         kicker="The numbers"
         mark="gauge"
         title="All measured, which is why they’re worth printing"
         hue={55}
-        index={1}
+        index={2}
       >
         <Figures items={XP_FACTS} />
         <p>
@@ -411,7 +694,7 @@ function XpTab() {
         mark="roadmap"
         title="The player ships today. The editor is soon, out loud."
         hue={285}
-        index={2}
+        index={3}
       >
         <p>
           An <span className="font-mono text-ink">xp</span> space is €15 a month and gets the XP

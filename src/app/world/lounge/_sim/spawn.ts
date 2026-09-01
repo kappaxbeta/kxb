@@ -272,13 +272,15 @@ export const HEADROOM = 2
  *
  * So the question is asked properly instead. Not "how high is this column" but
  * "where in this column is there room for a body", and of the answers, the
- * *lowest* - because a room with a roof has two valid surfaces and the one you
- * meant is the floor you built the roof over.
+ * lowest one that is the top of an actual block - because a room with a roof
+ * has two valid surfaces and the one you meant is the floor you built the roof
+ * over, and because the world floor is not a floor at all under an island, it
+ * is the level below which nothing falls. See the two loops at the bottom.
  *
  * That also keeps the case the old rule existed for. A solid tower has no gap
  * anywhere inside it, so every surface but the top fails the headroom check and
  * you arrive on top of it exactly as before. The rule did not change for open
- * ground; it just stopped being fooled by a ceiling.
+ * ground; it just stopped being fooled by a ceiling, and then by a hole.
  */
 export function standingSurface(
   blocks: readonly { x: number; y: number; z: number }[],
@@ -289,12 +291,13 @@ export function standingSurface(
   /**
    * The height the door was set at, if it has one.
    *
-   * Without it this returns the *lowest* surface in the column that has
-   * headroom, which is right for a room with a roof on it - you arrive on the
-   * floor rather than the tiles - and exactly wrong under anything floating.
-   * A door set on an island twenty blocks up is a column whose ground floor is
-   * wide open, so the lowest clear surface is the ground, and the arrival lands
-   * under the island looking up at it.
+   * Without it this returns the lowest surface in the column that has headroom
+   * and something under it, which is right for a room with a roof on it - you
+   * arrive on the floor rather than the tiles - and right on an island, whose
+   * ground level is open air. What it cannot answer is which of two floors a
+   * door was set on when both are real: a doorway on the first storey of a
+   * house is the ground floor to this, and only the remembered height says
+   * otherwise.
    *
    * A preference rather than a rule: it picks the clear surface *nearest* the
    * remembered height, so a door still works when the block it was set on has
@@ -353,9 +356,42 @@ export function standingSurface(
     if (best !== null) return best
   }
 
+  /**
+   * The lowest clear surface that is the top of something, and only then the
+   * bare world floor.
+   *
+   * "Lowest first" was the whole rule, and under anything floating it picks the
+   * world floor: an island twenty blocks up is a column whose ground level is
+   * wide open, so the lowest surface with headroom is the empty plane far below
+   * the island - and every world in the catalogue whose door stands on
+   * something raised put its visitors under it rather than on it. Reported as
+   * the arrival being on 0.
+   *
+   * A remembered height answers this exactly, and above; this is the answer for
+   * every door that has none - which is every door a published world carries,
+   * because `BuilderWorld.spawn` is two numbers and stores no height at all.
+   *
+   * The distinction that does the work is between a surface that is the top of
+   * a *block* and the world floor, which is nothing but the level below which
+   * you cannot fall. Standing on the floor of a column that has blocks in it
+   * and none of them under you is standing in a hole in the world; standing on
+   * the lowest block-top with room above it is standing on the thing that was
+   * built there. So the floor is kept as the answer of last resort - an empty
+   * column, a pit dug out of the ground - rather than as the first one.
+   *
+   * Still lowest-first among the block-tops, which is what keeps the case this
+   * function was written for: a roof over the door leaves two clear surfaces
+   * and the one somebody meant is the floor they built the roof over, not the
+   * roof.
+   */
+  let bare: number | null = null
   for (const surface of surfaces) {
-    if (clearAt(surface)) return surface
+    if (!clearAt(surface)) continue
+    // The top of a block: something was built here to stand on.
+    if (filled.has(surface - 1)) return surface
+    if (bare === null) bare = surface
   }
+  if (bare !== null) return bare
 
   /**
    * Nowhere in this column has room, which means it is solid to the top - a
