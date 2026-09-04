@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { BoardLive } from '@/app/t/[slug]/dashboard/board-live'
+import { MoneyCard } from '@/app/t/[slug]/dashboard/money-card'
 import { StreakBadge } from '@/app/t/[slug]/dashboard/streak-badge'
 import { avatarShotUrl } from '@/domain/lounge/avatars'
 import { workspaceDict } from '@/app/i18n/workspace'
@@ -52,15 +53,30 @@ export function Masthead({
 
   return (
     <header className="border-b border-line/60 pb-6">
-      {/* Your streak, above the space's name - the one line here that is about
-          you, and the way into the leaderboard. See <StreakBadge>. */}
-      <div className="mb-4">
+      {/*
+        The two things at the top that are about *you* rather than about the
+        space: how long you have been turning up, and what you have to spend.
+
+        Above the space's own name, and together, because they answer the same
+        arriving thought - "where am I with this place" - and because a streak
+        and a balance read as one status line rather than as two panels. The
+        streak links onward to the leaderboard; the money does not link
+        anywhere, because there is nowhere better to see it than here.
+
+        The money is fetched in the browser, so on a slow connection it arrives
+        after everything around it. It holds its own height while it does -
+        labels, coins and a bar where each figure will be - because this row is
+        above the space's name and a card that appeared late used to push the
+        whole board down. See <MoneyCard>.
+      */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <StreakBadge
           slug={slug}
           current={streak.current}
           longest={streak.longest}
           locale={locale}
         />
+        <MoneyCard slug={slug} locale={locale} />
       </div>
 
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">

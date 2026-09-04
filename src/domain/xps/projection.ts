@@ -80,6 +80,23 @@ export const xpsProjection: Projection<XpEvent> = {
         await patch(supabase, event, { space_policy: event.data.spacePolicy })
         return
 
+      /**
+       * What the owner says it is worth.
+       *
+       * `price_split` is written as `null` rather than `{}` when there is no
+       * split, so "nobody else has a share" is one value in the column instead
+       * of two - a reader checking for an empty object and a reader checking
+       * for null would otherwise both be right, and one of them would be wrong
+       * on half the rows.
+       */
+      case 'XpPriced':
+        await patch(supabase, event, {
+          price_once: event.data.once,
+          price_remix: event.data.remix,
+          price_split: event.data.split ?? null,
+        })
+        return
+
       case 'XpShared': {
         const { error } = await supabase.from('xp_grants').upsert(
           {
@@ -209,6 +226,10 @@ type XpPatch = {
   published_version?: number | null
   cover_path?: string
   bytes?: number
+  price_once?: number
+  price_remix?: number
+  /** Account id to whole percentage, or `null` when nobody else has a share. */
+  price_split?: Record<string, number> | null
 }
 
 async function patch(

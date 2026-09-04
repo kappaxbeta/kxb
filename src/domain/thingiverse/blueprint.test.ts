@@ -2,13 +2,17 @@ import { describe, expect, test } from 'bun:test'
 import {
   blueprintProblems,
   colliderOf,
+  colliderProblems,
   falls,
   freshSpec,
   freshUse,
+  MAX_COLLIDER_SIZE,
   MAX_SEAT_OFFSET,
   MAX_SEATS,
   MAX_THING_SCALE,
   needsValue,
+  seatClip,
+  shouts,
   usable,
   usingProblems,
 } from '@/domain/thingiverse/blueprint'
@@ -36,6 +40,57 @@ describe('what the engine is told', () => {
   test('blocking is the collider, in the engine s own words', () => {
     expect(colliderOf(freshSpec(model))).toBe('auto')
     expect(colliderOf({ ...freshSpec(model), blocking: false })).toBe('none')
+  })
+
+  test('boxes somebody drew are the collider instead of the measurement', () => {
+    const legs = [
+      { x: -1.2, w: 0.4, h: 3, d: 0.4 },
+      { x: 0.8, w: 0.4, h: 3, d: 0.4 },
+    ]
+    expect(colliderOf({ ...freshSpec(model), collider: legs })).toEqual(legs)
+  })
+
+  test('walking through it beats any box drawn on it', () => {
+    // The switch has to mean what it says: deleting the boxes first before
+    // "you can walk through this" took effect would make it a lie half the time.
+    expect(
+      colliderOf({
+        ...freshSpec(model),
+        blocking: false,
+        collider: [{ w: 1, h: 1, d: 1 }],
+      }),
+    ).toBe('none')
+  })
+
+  test('an empty list is the measurement, not solid nowhere', () => {
+    expect(colliderOf({ ...freshSpec(model), collider: [] })).toBe('auto')
+  })
+})
+
+describe('boxes drawn by hand', () => {
+  test('a plain box is fine, and so is having none', () => {
+    expect(colliderProblems({})).toEqual([])
+    expect(colliderProblems({ collider: [{ w: 1, h: 1, d: 1 }] })).toEqual([])
+  })
+
+  test('a box with no size is refused', () => {
+    expect(colliderProblems({ collider: [{ w: 0, h: 1, d: 1 }] })).toHaveLength(1)
+  })
+
+  test('a box bigger than the room it is drawn in is refused', () => {
+    expect(
+      colliderProblems({ collider: [{ w: MAX_COLLIDER_SIZE + 1, h: 1, d: 1 }] }),
+    ).toHaveLength(1)
+  })
+
+  test('a box parked in the next postcode is refused', () => {
+    expect(colliderProblems({ collider: [{ x: 99, w: 1, h: 1, d: 1 }] })).toHaveLength(1)
+  })
+
+  test('the whole spec carries them through the same check', () => {
+    expect(
+      blueprintProblems({ ...freshSpec(model), collider: [{ w: 0, h: 0, d: 0 }] }),
+    ).toHaveLength(3)
   })
 })
 
@@ -152,5 +207,71 @@ describe('getting in it', () => {
     expect(
       blueprintProblems({ ...freshSpec(model), use: { ...freshUse(), leave: '' } }),
     ).toHaveLength(1)
+  })
+})
+
+describe('what a body does while it is in one', () => {
+  test('a seat with nothing of its own plays whatever the thing loops', () => {
+    const use = { ...freshUse(), loop: 'sit' }
+    expect(seatClip(use, 0)).toBe('sit')
+  })
+
+  test('a seat that says so plays its own', () => {
+    const use = {
+      ...freshUse(),
+      loop: 'sit',
+      seats: [
+        { x: 0, y: 0, z: 0, clip: 'drive' },
+        { x: 1, y: 0, z: 0 },
+      ],
+    }
+    // The driver holds a wheel; the passenger holds on, which is the thing's
+    // own answer rather than a second field saying the same word.
+    expect(seatClip(use, 0)).toBe('drive')
+    expect(seatClip(use, 1)).toBe('sit')
+  })
+
+  test('a thing that loops nothing seats you doing nothing', () => {
+    expect(seatClip(freshUse(), 0)).toBeNull()
+  })
+
+  test('a seat nobody has is the thing s own answer, not a crash', () => {
+    // Reachable: somebody edits a bench down to one seat while a second person
+    // is sitting in what used to be seat three. See `seatOf`, which shuffles
+    // them along for the same reason.
+    expect(seatClip({ ...freshUse(), loop: 'sit' }, 7)).toBe('sit')
+  })
+
+  test('a seat clip is named or inherited, never blank', () => {
+    const use = { ...freshUse(), seats: [{ x: 0, y: 0, z: 0, clip: '  ' }] }
+    expect(usingProblems(use)).toEqual(['a seat plays a named clip, or inherits'])
+  })
+})
+
+describe('a thing that shouts', () => {
+  test('is one whose machine, table or recipe says a word', () => {
+    expect(shouts({ states: { start: 'a', states: [{ name: 'a', emit: 'ding', changes: [] }] } })).toBe(
+      true,
+    )
+    expect(shouts({ craft: { slots: [{ socket: 'top', takes: [], emit: 'clunk' }], recipes: [] } })).toBe(
+      true,
+    )
+    expect(
+      shouts({
+        craft: { slots: [], recipes: [{ needs: ['bun'], makes: 'burger', emit: 'served' }] },
+      }),
+    ).toBe(true)
+    expect(shouts({ actions: [{ when: 'use', deed: 'emit', value: 'open' }] })).toBe(true)
+  })
+
+  test('and a bench is not', () => {
+    expect(shouts({})).toBe(false)
+    expect(
+      shouts({
+        actions: [{ when: 'near', deed: 'spin' }],
+        states: { start: 'a', states: [{ name: 'a', changes: [] }] },
+        craft: { slots: [{ socket: 'top', takes: [] }], recipes: [] },
+      }),
+    ).toBe(false)
   })
 })

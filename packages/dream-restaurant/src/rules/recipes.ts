@@ -250,7 +250,20 @@ export const RECIPES: Recipe[] = [
     station: 'counter',
     needs: ['bun', 'patty_cooked'],
     seconds: 0,
-    price: 14,
+    /*
+      Eight, where it was fourteen.
+
+      The burger is the opening dish - the one the starting layout can actually
+      make - and it was the most valuable thing on the menu, which made every
+      later recipe feel like a downgrade. It is also the café's contribution to
+      an economy now: `docs/product/economy.md` §6 prices a healing drink at
+      about two coins and a battle stake at one, and a single burger paying
+      fourteen made the first shift worth more than the rest of the game.
+
+      Level with the coffee, which takes four seconds and no ingredients - so
+      the burger's two-crate assembly is the *work*, not the price.
+    */
+    price: 8,
   },
 
   // --- assembled on a counter, baked in the oven ----------------------------

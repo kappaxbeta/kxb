@@ -1,4 +1,5 @@
 import 'server-only'
+import { boughtExtras } from '@/domain/bank/extras'
 import {
   type FlaggedLimitKey,
   type Limit,
@@ -97,11 +98,26 @@ export async function limitFor(
 
   const rungs = error ? NO_RUNGS : toRungs(data?.[0])
 
+  /*
+    The fourth rung, and the only one that is not a cap: how many extra a member
+    of this space has *bought with coins*. Fetched here rather than threaded in
+    by callers because every create path that asks about a limit would otherwise
+    have to remember to ask about purchases too - and the one that forgot would
+    charge somebody and then keep refusing them.
+
+    Read in parallel with nothing, deliberately: this is a second round trip on
+    a hot path. It is one indexed primary-key lookup against a table that is
+    empty for most spaces, and correctness beat the round trip - a limit that
+    ignores what somebody paid for is worse than a limit that is slow.
+  */
+  const extras = await boughtExtras(supabase, tenantId)
+
   return resolveLimit({
     tier,
     key,
     override: rungs.hasOverride ? rungs.overrideValue : undefined,
     ceiling: rungs.ceilingValue,
+    bought: extras[key],
   })
 }
 
@@ -200,11 +216,21 @@ export async function tenantLimitStrict(
 
   const rungs = toRungs(data?.[0])
 
+  /*
+    Purchases count here too, and the strict posture survives them: a failed
+    extras read answers "none bought", which can only ever make this *stricter*
+    - the direction this function exists to fail in. It cannot invent a slot
+    somebody did not pay for, which is the mistake that would matter at a door
+    the service role writes through.
+  */
+  const extras = await boughtExtras(client, tenantId)
+
   return resolveLimit({
     tier,
     key,
     override: rungs.hasOverride ? rungs.overrideValue : undefined,
     ceiling: rungs.ceilingValue,
+    bought: extras[key],
   })
 }
 

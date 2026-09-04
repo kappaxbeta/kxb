@@ -2582,6 +2582,25 @@ a.box:active,
   box-shadow: 0 0 1.8rem oklch(0.75 0.22 200 / 0.6);
 }
 
+/* The handle inside the signed-in pill.
+ *
+ * A username is the one label in this row nobody wrote for it: it can be two
+ * characters or thirty, and at thirty, in the pixel face at 375px, it takes
+ * the header off the right edge of the phone the way the German CTA once did.
+ * Capped and ellipsised rather than wrapped - the pill is a capsule and a
+ * second line breaks the shape - and the cap is generous enough that ordinary
+ * handles are never touched.
+ *
+ * Its own span rather than the anchor, because `.nav-pill-cta` is a flex box
+ * and `text-overflow` has nothing to clip on one. */
+.nav-pill-you {
+  display: block;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------------------------------------------------------------------------
  * The landing page's own buttons, in the display face
  * ---------------------------------------------------------------------------
@@ -2605,6 +2624,35 @@ a.box:active,
   letter-spacing: 0.04em;
 }
 
+/* ---------------------------------------------------------------------------
+ * A price, in the product's own face
+ * ---------------------------------------------------------------------------
+ * `CoinPrice` draws the one number on a control that is a *promise* - press
+ * this and you are 300 coins poorer - and it was set in whatever the button
+ * around it happened to be, which on a settings card is the system sans and in
+ * the things rail is the system sans at 11px. A price that looks like body text
+ * is a price somebody reads as a label.
+ *
+ * The pixel face is what the product says numbers in: the HUD, the nav, the big
+ * controls under the headline. Here it does a second job as well as a first -
+ * it is fixed-pitch, so a column of prices lines up on its digits without
+ * `tabular-nums` having to ask, and a 60 next to a 1,000 in a table stays a
+ * column rather than a ragged edge.
+ *
+ * Sized in `em` and not in a step, because this rides inside whatever it is put
+ * in - a 11px chip, a `text-sm` shop row, a table cell - and it has to grow with
+ * its host. The 1.08 is the correction the face needs everywhere it is used:
+ * Millennium draws about half its em, so matched by declared size it reads
+ * noticeably smaller than the sans beside it. `0.04em` is the nav's tracking,
+ * for the reason `.cta-pixel` gives - short strings only, and only outward.
+ * ------------------------------------------------------------------------- */
+.coin-price {
+  font-family: var(--font-pixel);
+  font-size: 1.08em;
+  letter-spacing: 0.04em;
+  font-weight: 400;
+}
+
 /* Anchored sections should not land with their heading under the header. */
 [id] { scroll-margin-top: 6rem; }
 
@@ -2626,18 +2674,64 @@ a.box:active,
 @media (pointer: coarse) {
   .nav-pill-link,
   .nav-pill-cta,
+  .xo-trigger,
   .chip,
   .corner-launcher {
     min-height: 2.75rem;
   }
 }
 
-/* Narrow screens keep the mark and the one button that matters. The section
- * links are all still reachable by scrolling, which is what a visitor on a
- * phone was going to do anyway. */
+/* The long label is the default and the short one is the exception.
+ *
+ * Declared *before* the media query on purpose. Both rules have the same
+ * specificity, so source order decides: with this after the query, the
+ * `display: none` here would win at every width and the short label would
+ * never appear - which is exactly the bug the first draft of this shipped. */
+.nav-pill-xo-short {
+  display: none;
+}
+
+/* Narrow screens keep the mark, the channel, and the one button that matters.
+ *
+ * The rule used to hide every link, and the reason was width rather than
+ * principle: seven of them never fit at 375px. The header is three now, and
+ * one of the three earns its place on a phone - XO Universe is where the
+ * product explains itself since Play, Create and Share moved into it, so a
+ * phone with no link to it has no way in at all.
+ *
+ * It shortens to "XO" rather than staying "XO Universe". Two characters always
+ * fit, and the mark beside it has already said which XO this is. Community and
+ * Browse stay hidden: both are reachable from inside the pages, and three
+ * pixel-face words plus a language menu and a CTA is more than 375px holds. */
 @media (max-width: 767px) {
   .nav-pill-link { display: none; }
   .nav-pill-quiet { display: inline-flex; }
+  .nav-pill-xo-long { display: none; }
+  .nav-pill-xo-short { display: inline; }
+
+  /* The labels come down a size on a phone - and so does the mark, three
+   * hundred lines further down, where it is defined.
+   *
+   * Measured at 375px in German, which is the widest this header ever gets:
+   * Anmelden and Beta beitreten are half again the length of Sign in and Join
+   * the beta, and the row overflowed the viewport by 25px - the sign-up pill
+   * ran off the right edge with its glow cut in half by the screen. Every
+   * number here is a few pixels off one item rather than one item deleted,
+   * because everything left in this row is either the address, the way back,
+   * or the thing the page is asking for. */
+  .nav-pill { gap: 0.15rem; }
+
+  /* 0.5rem, not the 0.9 a cursor gets. The size of the labels is untouched -
+   * the pixel face is drawn on a fixed grid and a fractional size blurs it -
+   * so the air around them is where the pixels come from. */
+  .nav-pill-link,
+  .nav-pill-cta,
+  .xo-trigger { padding-inline: 0.5rem; }
+
+  /* The language menu keeps its flag and loses its code: "DE" beside a German
+   * flag is the same fact twice, and the flag is the half that is legible at a
+   * glance. The chevron stays - it is what says the flag opens something. */
+  .lang-code { display: none; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -3903,158 +3997,247 @@ a.box:active,
   transform: rotate(4deg) scale(1.06);
 }
 
+/* The mark, one size down on a phone.
+ *
+ * Declared here rather than beside the header's own mobile rules, and that is
+ * source order rather than taste: `.logo` is defined above, a media query adds
+ * no specificity, and the same selector later in the file wins - which is how
+ * the first draft of this shipped a rule that measured 40px and drew 50.
+ *
+ * 40x32 rather than 50x40. The header at 375px is a mark, a menu, a flag, a
+ * way back and a sign-up, and in German the last two are long; ten pixels off
+ * the address is the cheapest ten pixels in the row. */
+@media (max-width: 767px) {
+  .logo {
+    width: 40px;
+    height: 32px;
+    font-size: 1.15rem;
+    border-width: 1px;
+  }
+
+  /* The sticker follows the thing it is stuck to. */
+  .team-badge {
+    right: -14px;
+    top: -5px;
+    width: 22px;
+    height: 14px;
+    font-size: 11px;
+    padding-inline: 3px;
+  }
+}
+
 /* ---------------------------------------------------------------------------
- * Editor
+ * The editor
  * ---------------------------------------------------------------------------
- * TipTap ships behaviour, not appearance. Task lists render as bare <ul>, code
- * blocks as unstyled <pre>, and the placeholder is a CSS pseudo-element that
- * does not exist until you write it. Without this block the Notion-like
- * extensions are all installed and all invisible.
+ * BlockNote replaced TipTap, and this block got much smaller as a result. The
+ * old one styled task lists, code blocks, tables and a placeholder from
+ * nothing, because TipTap ships behaviour and no appearance. BlockNote ships
+ * both - `@blocknote/mantine/style.css` is imported by the editor component -
+ * so all that is left to do here is make it *ours*.
+ *
+ * Which is the whole job: the editor sits inside the space's own chrome, and
+ * an editor that brought its own greys, its own radius and its own font would
+ * read as a widget embedded in the page rather than as the page. Every rule
+ * below maps one of BlockNote's variables onto a token this app already has,
+ * so the editor follows the theme wherever the theme goes.
  * ------------------------------------------------------------------------- */
 
-.ProseMirror {
-  outline: none;
-  min-height: 24rem;
+.channel-editor {
+  background: transparent;
+  font-family: inherit;
+
+  /* BlockNote's own palette, pointed at the app's. Set on the container rather
+     than :root so nothing outside the editor inherits a variable named for
+     somebody else's design system. */
+  --bn-colors-editor-text: var(--foreground);
+  --bn-colors-editor-background: transparent;
+  --bn-colors-menu-text: var(--foreground);
+  --bn-colors-menu-background: var(--popover);
+  --bn-colors-tooltip-text: var(--foreground);
+  --bn-colors-tooltip-background: var(--popover);
+  --bn-colors-hovered-text: var(--foreground);
+  --bn-colors-hovered-background: var(--accent);
+  --bn-colors-selected-text: var(--primary-foreground);
+  --bn-colors-selected-background: var(--primary);
+  --bn-colors-disabled-text: var(--muted-foreground);
+  --bn-colors-disabled-background: var(--muted);
+  --bn-colors-shadow: var(--border);
+  --bn-colors-border: var(--border);
+  --bn-colors-side-menu: var(--muted-foreground);
+  --bn-border-radius: var(--radius);
+  --bn-font-family: inherit;
 }
 
-/* The placeholder is decoration, not content - it only shows on an empty node
- * that currently has the cursor, which is why it needs its own rule. */
-.ProseMirror p.is-editor-empty:first-child::before,
-.ProseMirror .is-empty::before {
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-  color: var(--color-ink-muted);
+.channel-editor .bn-editor {
+  background: transparent;
+  /* The default is 54px of gutter for the drag handles. Ours is narrower
+     because the surrounding page already has its own margin, and two nested
+     gutters put the text a third of the way across the screen. */
+  padding-inline: 12px;
 }
 
-.ProseMirror h1 { font-size: 1.875rem; font-weight: 650; margin: 1.4rem 0 0.5rem; line-height: 1.2; }
-.ProseMirror h2 { font-size: 1.5rem;   font-weight: 640; margin: 1.2rem 0 0.4rem; line-height: 1.25; }
-.ProseMirror h3 { font-size: 1.25rem;  font-weight: 620; margin: 1rem 0 0.35rem; }
-.ProseMirror p  { margin: 0.35rem 0; line-height: 1.7; }
-
-.ProseMirror ul,
-.ProseMirror ol { padding-left: 1.4rem; margin: 0.4rem 0; }
-.ProseMirror ul { list-style: disc; }
-.ProseMirror ol { list-style: decimal; }
-.ProseMirror li { margin: 0.15rem 0; }
-.ProseMirror li p { margin: 0; }
-
-/* Task lists: the marker is a real checkbox, so the list must not also draw a
- * bullet next to it. */
-.ProseMirror ul[data-type='taskList'] { list-style: none; padding-left: 0.25rem; }
-.ProseMirror ul[data-type='taskList'] li { display: flex; align-items: flex-start; gap: 0.5rem; }
-.ProseMirror ul[data-type='taskList'] li > label { margin-top: 0.35rem; user-select: none; }
-.ProseMirror ul[data-type='taskList'] li > div { flex: 1 1 auto; min-width: 0; }
-.ProseMirror ul[data-type='taskList'] input[type='checkbox'] {
-  accent-color: var(--color-accent);
-  width: 0.95rem;
-  height: 0.95rem;
+/* The placeholder, which is the one piece of appearance BlockNote leaves to
+   the host: its default grey is fixed and disappears against a dark card. */
+.channel-editor [data-is-empty-and-focused] .bn-inline-content::before {
+  color: var(--muted-foreground);
+  opacity: 0.6;
 }
 
-.ProseMirror blockquote {
-  border-left: 3px solid var(--color-accent);
-  padding-left: 0.9rem;
-  margin: 0.6rem 0;
-  color: var(--color-ink-muted);
+/* ---------------------------------------------------------------------------
+ * The same editor, in a page's writing column
+ * ---------------------------------------------------------------------------
+ * An extension of the block above rather than a second one: the variable map
+ * is the expensive half and there must be exactly one of it, or the two
+ * surfaces that embed this editor drift into two dark themes. What differs is
+ * geometry, and only geometry.
+ *
+ * The geometry problem is BlockNote's gutter. Its default is 54px of padding
+ * on the editor so the drag handles have somewhere to live - which means the
+ * *text* starts 54px right of where the column does, and a column centred by
+ * its container ends up with its prose visibly off-centre and its right margin
+ * 54px wider than its left. On a wide screen that reads as the page having
+ * been laid out wrongly, because it has.
+ *
+ * So the editor's own padding goes to zero and the gutter becomes padding on
+ * `.page-writer`'s inner column instead. The handles are positioned absolutely
+ * against the editor, so they hang left into that padding and are visible;
+ * nothing between them and the viewport edge is `overflow: hidden`, which is
+ * the condition that makes this work and the thing to check if they ever
+ * vanish.
+ * ------------------------------------------------------------------------- */
+.page-writer .bn-editor {
+  padding-inline: 0;
+  padding-block: 0;
+
+  /* Prose, not UI. The rails run at 11px and this deliberately does not: a
+     document is read in sentences, and 1rem with an open line-height is the
+     measure the column's 46rem was chosen against. */
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
-.ProseMirror hr {
-  border: none;
-  border-top: 1px solid var(--color-line);
-  margin: 1.2rem 0;
+/* The one thing the drag handle needs from the page: room to hang in, and a
+   guarantee nothing clips it. Below the breakpoint where that room exists,
+   BlockNote is given its gutter back rather than putting handles under the
+   window's edge. */
+@media (max-width: 40rem) {
+  .page-writer .bn-editor {
+    padding-inline-start: 1.5rem;
+  }
 }
 
-.ProseMirror code {
-  background: oklch(0.18 0.03 255 / 0.8);
-  border: 1px solid var(--color-line);
-  border-radius: 0.3rem;
-  padding: 0.08rem 0.3rem;
-  font-size: 0.875em;
-  color: var(--color-accent);
-}
-
-.ProseMirror pre {
-  background: oklch(0.13 0.028 255 / 0.85);
-  border: 1px solid var(--color-line);
-  border-radius: 0.6rem;
-  padding: 0.85rem 1rem;
-  margin: 0.6rem 0;
-  overflow-x: auto;
-  font-size: 0.85rem;
-  line-height: 1.55;
-}
-.ProseMirror pre code { background: none; border: none; padding: 0; font-size: inherit; color: inherit; }
-
-/* lowlight emits `hljs-*` classes. Only the tokens worth distinguishing at a
- * glance are coloured; syntax highlighting that uses ten hues reads as noise. */
-.ProseMirror .hljs-comment,
-.ProseMirror .hljs-quote { color: var(--color-ink-muted); font-style: italic; }
-.ProseMirror .hljs-keyword,
-.ProseMirror .hljs-selector-tag,
-.ProseMirror .hljs-built_in { color: oklch(0.75 0.22 330); }
-.ProseMirror .hljs-string,
-.ProseMirror .hljs-attr { color: oklch(0.82 0.17 165); }
-.ProseMirror .hljs-number,
-.ProseMirror .hljs-literal { color: oklch(0.84 0.15 80); }
-.ProseMirror .hljs-title,
-.ProseMirror .hljs-function { color: oklch(0.8 0.15 210); }
-
-.ProseMirror table {
-  border-collapse: collapse;
-  margin: 0.7rem 0;
-  width: 100%;
-  table-layout: fixed;
-  overflow: hidden;
-}
-.ProseMirror th,
-.ProseMirror td {
-  border: 1px solid var(--color-line);
-  padding: 0.4rem 0.55rem;
-  vertical-align: top;
-  position: relative;
-}
-.ProseMirror th { background: oklch(0.18 0.03 255 / 0.7); font-weight: 600; text-align: left; }
-.ProseMirror .selectedCell::after {
+/* ---------------------------------------------------------------------------
+ * The scene stage's floor
+ * ---------------------------------------------------------------------------
+ * `.neon-floor` and `.neon-horizon` are reused rather than redrawn - the design
+ * system asks for exactly that, and the payoff is that a scene staged in this
+ * box looks like the room it will be played in rather than like a diagram of
+ * one. What it does not survive is the change of scale.
+ *
+ * Those two are tuned for a hero panel several hundred pixels tall: a floor
+ * 60% of that height, rotated 68 degrees through a 20rem perspective, and a
+ * horizon 38% up. Dropped into a 16:9 block about 300px tall, 60% is 180px,
+ * and 68 degrees of rotation compresses that to a band of lines along the
+ * bottom edge - present, correct, and unreadable as a floor.
+ *
+ * So the box gets a taller floor through a tighter perspective, which is the
+ * same room seen from closer rather than a different grid. The mask does the
+ * rest: the lines still fade out before they reach the top, so the upper half
+ * of the stage stays free for the tokens standing in it.
+ * ------------------------------------------------------------------------- */
+/*
+ * 2D: the plan view, and the default.
+ *
+ * A flat grid seen from directly above, drawn here rather than borrowed
+ * because `.neon-floor` is specifically the product's way of saying "this is a
+ * room" and this is deliberately not one - it is the rehearsal-room floor an
+ * author blocks a scene on, where two marks a centimetre apart really are a
+ * centimetre apart. Borrowing the perspective grid for it would have made
+ * every placement a guess about foreshortening.
+ *
+ * Faint on purpose, and fainter than the first attempt at it: at 0.16 and 0.14
+ * the grid read as the subject of the box rather than as the surface under it,
+ * which is the failure a rehearsal-room floor cannot have. The tokens standing
+ * on it are what somebody is looking at. The centre mark below is the one line
+ * allowed to be seen.
+ */
+.scene-stage-flat::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: color-mix(in oklch, var(--color-accent) 14%, transparent);
+  z-index: -1;
   pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      oklch(0.72 0.26 var(--box-hue) / 0.09) 0 1px,
+      transparent 1px 2.5rem
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      oklch(0.8 0.15 200 / 0.07) 0 1px,
+      transparent 1px 2.5rem
+    );
 }
-/* The drag target for resizable columns. */
-.ProseMirror .column-resize-handle {
+
+/*
+ * The centre mark, which is the one line on a plan that is worth seeing.
+ *
+ * Centre stage is the position every other position is described against, and
+ * on an unmarked grid it is somewhere an author has to estimate. Two hairlines
+ * crossing at the middle cost nothing and make "slightly left of centre" a
+ * thing you can see rather than a thing you nudge towards.
+ */
+.scene-stage-flat::after {
+  content: '';
   position: absolute;
-  right: -2px;
-  top: 0;
-  bottom: -2px;
-  width: 4px;
-  background: var(--color-accent);
+  inset: 0;
+  z-index: -1;
   pointer-events: none;
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.5px), oklch(0.85 0.15 195 / 0.4) calc(50% - 0.5px) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), oklch(0.85 0.15 195 / 0.4) calc(50% - 0.5px) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black, transparent 62%);
+  mask-image: radial-gradient(circle at 50% 50%, black, transparent 62%);
 }
 
-.ProseMirror img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 0.5rem;
-  margin: 0.4rem 0;
-}
-/* Clicking an image selects the node; say so. */
-.ProseMirror img.ProseMirror-selectednode {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+.scene-stage .neon-floor {
+  height: 82%;
+  transform: perspective(13rem) rotateX(63deg);
+  /* Lifted from 85%, or a floor this tall fades out halfway up the stage and
+     takes the far edge of the room with it. */
+  -webkit-mask-image: linear-gradient(to top, black, transparent 96%);
+  mask-image: linear-gradient(to top, black, transparent 96%);
 }
 
-.ProseMirror mark {
-  background: color-mix(in oklch, var(--color-accent-2) 30%, transparent);
-  border-radius: 0.2rem;
-  padding: 0 0.15rem;
+.scene-stage .neon-horizon {
+  /* Where the taller floor's rotated top edge actually lands. The two have to
+     agree or they read as a line and a grid rather than as one room. The
+     default 38% is tuned for a hero panel and would cut a 16:9 block in half. */
+  bottom: 62%;
+  box-shadow: 0 0 1.2rem 0.15rem oklch(0.75 0.24 var(--box-hue) / 0.35);
 }
 
-.ProseMirror a {
-  color: var(--color-accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+/* Headings inside a page. BlockNote sizes these from its own scale, which is
+   built for a light document at a smaller base; against this ground they came
+   out barely distinguishable from body text two paragraphs down. */
+.page-writer .bn-block-content[data-content-type='heading'] {
+  letter-spacing: -0.01em;
+}
+
+.page-writer .bn-block-content[data-level='1'] .bn-inline-content {
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+
+.page-writer .bn-block-content[data-level='2'] .bn-inline-content {
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+
+.page-writer .bn-block-content[data-level='3'] .bn-inline-content {
+  font-size: 1.05rem;
+  line-height: 1.4;
 }
 
 /* ---------------------------------------------------------------------------
@@ -4230,12 +4413,13 @@ a.box:active,
 }
 
 /*
- * The same button, in the rail rather than in a screen corner.
+ * The music button, in the rail - which is now the only place it is.
  *
- * A world puts the corner over the canvas, so the music control moves into the
- * panel with the radio and the party lights - see `CornerMusic`. What changes
- * is only the size: a pill sized for an empty corner is a slab in a 14rem
- * column, and the row it sits in already carries the word "Music".
+ * It used to be here *and* in the corner dock on every page; the corner copy
+ * is gone, because it sat over the canvas in a world and everywhere else it
+ * offered to stop a loop that only plays inside a space. The size is what this
+ * rule is for: a pill sized for an empty corner is a slab in a 14rem column,
+ * and the row it sits in already carries the word "Music".
  */
 .rail-music {
   padding: 0.3rem 0.55rem;
@@ -6911,6 +7095,113 @@ body:has([data-look='dusk']) {
   max-width: 62ch;
 }
 
+/* --- The price table: what a plan holds, and what one more costs ---------- */
+
+/*
+ * The one real table on any of these pages. `Spec` is the two-column answer and
+ * it is the right one almost everywhere; this section is two-dimensional (six
+ * things by three plans) and the answer somebody wants is a cell.
+ *
+ * Wrapped in its own scroller rather than allowed to widen the band. Four
+ * columns of numbers at 375px is about 30rem of content, and a table that
+ * cannot shrink is how a page starts scrolling sideways as a whole - which is
+ * the one layout failure that makes every other section unreadable too.
+ */
+.price-table-scroll {
+  margin-top: 1.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* Room for the shadowless right edge to be reachable by a thumb. */
+  padding-bottom: 0.25rem;
+}
+
+.price-table {
+  width: 100%;
+  min-width: 30rem;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+/* The plan names, in the face the product says its own words in. Lowercase
+ * because that is what they are - `TIER_DETAILS.label` is 'free', 'xo', 'xp'
+ * and the note there says so deliberately. */
+.price-table thead th {
+  padding: 0 0 0.6rem;
+  border-bottom: 1px solid oklch(0.72 0.12 var(--box-hue) / 0.28);
+  font-family: var(--font-pixel);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: oklch(0.82 0.15 var(--box-hue));
+}
+
+.price-table thead th:first-child {
+  color: var(--color-ink-muted);
+}
+
+.price-table tbody th {
+  padding: 0.85rem 1.5rem 0.85rem 0;
+  border-bottom: 1px solid oklch(0.72 0.12 var(--box-hue) / 0.16);
+  font-weight: 500;
+  color: var(--color-ink);
+  vertical-align: top;
+}
+
+.price-table td {
+  padding: 0.85rem 1.5rem 0.85rem 0;
+  border-bottom: 1px solid oklch(0.72 0.12 var(--box-hue) / 0.16);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.price-table td:last-child,
+.price-table tbody th:last-child {
+  padding-right: 0;
+}
+
+/* The allowance sits above the price rather than beside it, because the two are
+ * different kinds of fact - what you are given, and what the next one costs -
+ * and on one line at this size they read as a single garbled number. */
+.price-held {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+}
+
+/* `CoinPrice` carries its own left margin, for the buttons it usually sits on
+ * the end of. At the start of a cell that margin is a stray indent. */
+.price-table .coin-price {
+  margin-left: 0;
+  margin-top: 0.15rem;
+}
+
+.price-none {
+  display: inline-block;
+  margin-top: 0.15rem;
+  color: oklch(0.62 0.02 300);
+}
+
+/* The exceptions, said in the row they are about. Two of the six cells on this
+ * table look like mistakes - free holding no private levels, and no plan
+ * holding a vehicle - and a footnote elsewhere is a footnote nobody reads. */
+.price-note {
+  display: block;
+  margin-top: 0.2rem;
+  max-width: 22ch;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--color-ink-muted);
+  white-space: normal;
+}
+
+.price-foot {
+  margin-top: 0.9rem;
+  font-size: 0.8125rem;
+  color: var(--color-ink-muted);
+  max-width: 62ch;
+}
+
 /* --- Traits: several things that are all true at once -------------------- */
 
 .traits {
@@ -7490,6 +7781,12 @@ body:has([data-look='dusk']) {
   width: min(32rem, 92%);
   display: grid;
   place-items: center;
+  /* The negative bottom margin pulls the next section up *into* this box, and
+   * the heap is positioned, so it paints over whatever arrives there - on
+   * /create that is the xo/xp switch, whose buttons stopped taking clicks
+   * anywhere the transparent corners of the square canvas covered them. The
+   * heap is decorative (`alt=""`), so it has no business catching a pointer. */
+  pointer-events: none;
 }
 
 .page-pile {
@@ -8802,5 +9099,783 @@ body:has([data-look='dusk']) {
   .studio-door:focus-visible .studio-door-ghost {
     rotate: none;
     scale: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Inside the installed app
+ * ---------------------------------------------------------------------------
+ * `packages/shell` is this site in a WebView on somebody's home screen. It puts
+ * `data-shell` on <html> before the first paint, and this is what that is for.
+ *
+ * Two kinds of thing cannot be in an App Store build:
+ *
+ *  - **Anything that sells.** Guideline 3.1.1: digital goods bought inside an
+ *    iOS app go through Apple's in-app purchase. A Stripe checkout reachable
+ *    from a web view is not a loophole, it is the example the rule is written
+ *    from. The app is free and sells nothing.
+ *  - **Sign in with Google.** Not a rule but a fact: Google refuses OAuth from
+ *    an embedded browser - `disallowed_useragent` - so the button can only
+ *    disappoint. Email and the one-time link both work.
+ *
+ * `display: none` rather than a server-side check, because most of the pages
+ * this matters on are static: reading a request header there would make them
+ * dynamic for every visitor on the web to answer a question only the app asks.
+ * The actions that would take money are refused on the server as well - see
+ * `isAppShell` in `src/lib/app-shell.ts` - because a hidden button is a
+ * rendering decision and a Server Action is a public POST endpoint.
+ *
+ * `!important` because these sit inside components with their own display
+ * rules, and a thing that must not be shown must not be shown by a specificity
+ * accident either.
+ */
+[data-shell] .not-in-app {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * Project Oasis: reading a book on a screen
+ * ---------------------------------------------------------------------------
+ * Three rules, and they are the only three that matter for long prose.
+ *
+ * A serif face, because this is a book and not an interface. The stack is
+ * system faces rather than a web font: the app already loads one non-system
+ * face (`--font-pixel`) and earning a second one costs every reader a download
+ * on a page whose whole job is to start being readable immediately. Georgia
+ * and Charter are on effectively every machine that will open this and are
+ * both designed for exactly this - body text at a reading size on a screen.
+ *
+ * A measure of about 65 characters. `ch` is the unit that actually says that:
+ * it is the width of a "0" in the current font, so the column tracks the face
+ * and the size instead of being a px value that was right on one of them once.
+ * `min()` against the viewport keeps it from overflowing a narrow phone, where
+ * the padding is what limits the line instead.
+ *
+ * Theme comes from the tokens, not from a colour written here. The body sits
+ * slightly softer than `--foreground` in both themes, which is the one
+ * typographic liberty on the page: pure black on white is harsh over hundreds
+ * of words, and pure white on near-black glares. `color-mix` gets that from
+ * the existing pair rather than introducing a fourth colour to keep in step.
+ * ------------------------------------------------------------------------- */
+
+.oasis-prose {
+  /* Times first, then the fallbacks that look like it.
+   *
+   * "Times New Roman" and Liberation Serif are metrically the same face, so a
+   * Linux reader gets the same measure rather than a different one; Charter and
+   * Georgia stay behind them as the screen-designed options for anybody with
+   * neither. All of them carry Cyrillic, which the Bulgarian edition needs and
+   * is the reason a decorative serif is not on this list. */
+  --font-serif: "Times New Roman", Times, "Liberation Serif", Charter, Georgia,
+    ui-serif, serif;
+  font-family: var(--font-serif);
+  /* 65 characters, or the screen, whichever is narrower - and 56ch is what
+   * that costs rather than 65ch.
+   *
+   * `ch` is the advance of "0", and in Charter the digits are noticeably wider
+   * than the lowercase the prose is actually made of. Measured against a real
+   * paragraph on this page, 65ch renders about 72 characters a line and 56ch
+   * lands on 65. The unit is still right - it tracks the face and the size, so
+   * this does not go stale when either changes - but the number has to be the
+   * one that produces the measure, not the measure itself. */
+  /* 56ch was measured against Charter. Times is a narrower face - more
+   * characters fit in the same `ch` - so the same number would run long, and
+   * 52ch is where it lands back on about 65 characters. */
+  max-width: min(52ch, 100%);
+  /* Bigger, and Times is why it has to be: it was drawn for newsprint at small
+   * sizes and sits optically smaller than Charter at the same value. 1.25rem
+   * reads at roughly what 1.125rem did before. */
+  font-size: 1.25rem;
+  line-height: 1.75;
+  color: color-mix(in oklch, var(--foreground) 88%, var(--background));
+}
+
+/* Paragraph rhythm is spacing, not indentation: an indent is the convention
+ * for print, where a page has no room to spend a blank line between every
+ * paragraph. A screen does. */
+.oasis-prose > p + p {
+  margin-top: 1.25em;
+}
+
+/* The scene break. A row of space with a mark in it rather than a rule across
+ * the column - a horizontal line reads as "new section" and this is the same
+ * scene continuing after a pause. */
+.oasis-break {
+  margin: 2.25em 0;
+  text-align: center;
+  letter-spacing: 0.6em;
+  /* The letter-spacing pads the right of the last glyph, which walks the mark
+   * off centre by half of it. */
+  text-indent: 0.6em;
+  color: var(--muted-foreground);
+}
+
+/* The on-air light. Steady rather than blinking: it is a status, and a blink
+ * on a page somebody is about to read for ten minutes is a thing in the corner
+ * of their eye the whole time. Reduced-motion readers get the same dot, which
+ * is the point of it not moving in the first place. */
+.oasis-live {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: oklch(0.63 0.21 25);
+  box-shadow: 0 0 0 0.2rem color-mix(in oklch, oklch(0.63 0.21 25) 20%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * The header menus
+ * ---------------------------------------------------------------------------
+ * Two `<details>` in the header pill - the language switch and XO - drawn out
+ * of one vocabulary. The panel is absolutely positioned so that opening it does
+ * not push the nav around: a header that changes height when you press
+ * something in it is the one thing these controls must not do.
+ *
+ * `position: relative` on the `<details>` rather than on the header: the panel
+ * hangs off its own control, and anchoring it to an ancestor would make it move
+ * whenever the nav reflows.
+ *
+ * Shared rather than copied, because the two stand next to each other: a header
+ * row that drops two differently-drawn panels reads as two controls borrowed
+ * from two sites. What differs between them is the trigger, and only the
+ * trigger - the language switch wears a nav link, XO is a painted pill.
+ * ------------------------------------------------------------------------- */
+
+.menu {
+  position: relative;
+}
+
+.menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  /* The disclosure triangle Safari and Chrome draw by default, removed in the
+   * two spellings that are needed to actually remove it. */
+  list-style: none;
+}
+
+.menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.menu-chevron {
+  /* 0.85em rather than 0.6: the trigger is set in the pixel face at 0.72rem,
+     so a chevron at 0.6em of that is 7px and reads as a full stop. */
+  font-size: 0.85em;
+  line-height: 1;
+  opacity: 0.65;
+  transition: transform 150ms ease;
+}
+
+.menu[open] .menu-chevron {
+  transform: rotate(180deg);
+}
+
+.menu-panel {
+  position: absolute;
+  right: 0;
+  z-index: 50;
+  margin-top: 0.35rem;
+  min-width: 11rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.14);
+  list-style: none;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  /* Not the pixel face the nav links wear: this is a list of language names
+   * and one of them is Cyrillic, which that face does not cover. The system
+   * stack is what can actually draw every item here. */
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.85rem;
+  /* 44px of target, which is the floor a thumb needs and the reason this is
+   * padding rather than line-height. */
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+.menu-item:hover {
+  background: var(--muted);
+}
+
+.menu-item.is-current {
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+ * XO, the one painted control in the header
+ * ---------------------------------------------------------------------------
+ * The channel used to be a nav link that grew a magenta pill on phones. It is
+ * a menu now - the channel plus Play, Create and Share - and a menu holding
+ * four destinations is the map of the site, which is worth more than a link's
+ * worth of ink.
+ *
+ * So it is painted, and what it is painted with is the whole palette moving:
+ * six stops on a gradient three times the width of the pill, slid sideways
+ * forever, with the sweep `.summon-cta` wears travelling over the top of it.
+ * The house has exactly two of these - the hero's "come and play" and this -
+ * and they are the two controls that are meant to be pressed.
+ *
+ * Dark ink on it rather than white, for the reason the sign-up button next to
+ * it is cyan-on-dark: at 0.72rem a pixel face needs the contrast, and a light
+ * label on a moving light ground has a moment in every cycle where it does not
+ * have it.
+ * ------------------------------------------------------------------------- */
+
+.xo-trigger {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  font-family: var(--font-pixel);
+  text-transform: uppercase;
+  /* One weight ships, so anything above 400 is the browser smearing the pixels
+   * sideways - the same note the sign-up pill carries. */
+  font-weight: 400;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  cursor: pointer;
+  color: oklch(0.16 0.04 300);
+  background: linear-gradient(
+    100deg,
+    oklch(0.78 0.19 20),
+    oklch(0.87 0.16 90),
+    oklch(0.85 0.17 150),
+    oklch(0.83 0.14 220),
+    oklch(0.74 0.19 300),
+    oklch(0.78 0.19 20)
+  );
+  /* Two pill-widths of gradient, which is the compromise the width of this
+   * control forces: at three the pill only ever showed two neighbouring stops
+   * and read as a pink-to-orange fade, and at one the whole spectrum inside
+   * 53px is a smear. At two there are three or four hues in it at any moment,
+   * which is what makes it read as a rainbow while standing still. The last
+   * stop is the first one, so the wrap has no seam in it. */
+  background-size: 200% 100%;
+  animation: xo-rainbow 12s linear infinite;
+  box-shadow: 0 0.35rem 1.1rem oklch(0.7 0.2 330 / 0.35);
+}
+
+/* The panel hangs off the left of this one.
+ *
+ * `.menu-panel` is right-aligned, which is right for the language switch: it
+ * sits near the end of the row, and a panel growing leftwards from it stays on
+ * screen. XO is the first control in the row, so the same alignment put a
+ * 176px panel 50px off the left edge of a 375px phone - the channel's own menu,
+ * half of it outside the window. It grows the other way instead. */
+.xo-menu .menu-panel {
+  left: 0;
+  right: auto;
+}
+
+.xo-trigger::after {
+  content: "";
+  position: absolute;
+  inset-block: -50%;
+  inset-inline-start: 0;
+  width: 40%;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.45), transparent);
+  animation: summon-wave 3.6s var(--ease-out-soft) infinite;
+}
+
+@keyframes xo-rainbow {
+  to { background-position: -200% 0; }
+}
+
+/* ---------------------------------------------------------------------------
+ * The same pill, before anybody knows whether there is an episode
+ * ---------------------------------------------------------------------------
+ * The account menu asks the server what is on, and the answer arrives after the
+ * menu has already opened. It used to draw nothing until then, so the pill
+ * appeared a beat later and shoved five rows of the menu down under a pointer
+ * that was already moving at one of them.
+ *
+ * So the box is drawn from the start and only the words wait. Geometry from
+ * `.xo-trigger` above - one class, so the ghost cannot drift out of shape from
+ * the real thing - and everything that makes that control *look like a
+ * control* taken back off: no rainbow, no sweep, no pointer. What is left is a
+ * quiet slot the height of a pill, which is exactly what it is.
+ * ------------------------------------------------------------------------- */
+.xo-trigger-waiting {
+  background: var(--color-surface-raised);
+  /* An inset ring rather than a border: a border on this one and not on the
+     real pill would make the slot two pixels taller than the thing it is
+     holding space for, which is the whole bug this class exists to avoid. */
+  box-shadow: inset 0 0 0 1px oklch(0.66 0.16 275 / 0.25);
+  color: var(--color-ink-muted);
+  cursor: default;
+  animation: none;
+}
+
+/* The sweep is the part that says "press me". */
+.xo-trigger-waiting::after { content: none; }
+
+/* Still a rainbow, just not a moving one: the gradient is the identity of the
+ * control and the motion is the decoration on it. */
+@media (prefers-reduced-motion: reduce) {
+  .xo-trigger { animation: none; }
+  .xo-trigger::after { animation: none; opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+ * The XO Universe cards
+ * ---------------------------------------------------------------------------
+ * Three quiet cards above somebody's reading, so the rule is restraint: a
+ * hairline and a surface, with the colour spent only where it identifies
+ * something. What stops them being plain is one large outline of the card's own
+ * mark, sunk into the corner at a few percent opacity.
+ *
+ * The mark is drawn twice on purpose - small and lit in the tile, huge and
+ * almost invisible behind it. That is the reference's trick and it works
+ * because the two are the same shape: the big one reads as texture until you
+ * notice what it is, and then the card has told you what it is twice without
+ * saying anything twice.
+ * ------------------------------------------------------------------------- */
+
+.pillar {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.pillar-deco {
+  position: absolute;
+  top: -1.25rem;
+  right: -1.25rem;
+  width: 8.5rem;
+  height: 8.5rem;
+  z-index: -1;
+  opacity: 0.09;
+  /* The marks are 16px SVGs with the size baked into their attributes, so the
+   * override has to be on the element rather than a font-size. */
+  pointer-events: none;
+  transition:
+    transform 420ms var(--ease-out-soft, cubic-bezier(0.22, 1, 0.36, 1)),
+    opacity 420ms var(--ease-out-soft, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.pillar-deco svg {
+  width: 100%;
+  height: 100%;
+  /* Thinner than the 1.4 the small mark uses: at eight times the size the same
+   * stroke reads as a heavy black shape rather than an outline. */
+  stroke-width: 0.7;
+}
+
+/* The whole animation, and it is one move. The mark leans in and brightens
+ * slightly - enough to say the card is live under the pointer, not enough to
+ * pull an eye off the paragraph somebody is reading underneath. */
+.pillar:hover .pillar-deco {
+  transform: translate(-0.4rem, 0.4rem) rotate(-6deg) scale(1.06);
+  opacity: 0.16;
+}
+
+.pillar-tile {
+  transition: transform 420ms var(--ease-out-soft, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.pillar:hover .pillar-tile {
+  transform: translateY(-2px);
+}
+
+/* Somebody who has asked for less motion still gets the brightening, because
+ * that is the part carrying the information. Only the movement goes. */
+@media (prefers-reduced-motion: reduce) {
+  .pillar-deco,
+  .pillar-tile {
+    transition: opacity 420ms ease;
+  }
+
+  .pillar:hover .pillar-deco,
+  .pillar:hover .pillar-tile {
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The mobile jump to what is on
+ * ---------------------------------------------------------------------------
+ * Phone only. The channel's two columns stack, the cards land above the story,
+ * and a returning reader should not have to scroll past three explanations to
+ * find out which chapter is up. This says it and goes there.
+ *
+ * Lit like the header's XO button - the same magenta, the same pill - because
+ * it is the same thing being pointed at, and a reader who has pressed one
+ * should recognise the other.
+ * ------------------------------------------------------------------------- */
+
+.xo-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid oklch(0.75 0.18 330 / 0.55);
+  background: linear-gradient(
+    100deg,
+    oklch(0.35 0.13 330 / 0.35),
+    oklch(0.3 0.12 285 / 0.25)
+  );
+  box-shadow: 0 0 1.4rem oklch(0.7 0.22 330 / 0.22);
+  color: var(--foreground);
+  transition:
+    border-color var(--dur-base, 180ms) ease,
+    box-shadow var(--dur-base, 180ms) ease;
+}
+
+.xo-jump:hover,
+.xo-jump:focus-visible {
+  border-color: oklch(0.8 0.2 330 / 0.85);
+  box-shadow: 0 0 1.8rem oklch(0.75 0.24 330 / 0.35);
+}
+
+.xo-jump-live {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: 9999px;
+  background: oklch(0.63 0.21 25);
+  box-shadow: 0 0 0 0.22rem color-mix(in oklch, oklch(0.63 0.21 25) 22%, transparent);
+}
+
+.xo-jump-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.xo-jump-label {
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: oklch(0.86 0.1 330);
+}
+
+/* One line, clipped rather than wrapped: a chapter title is as long as it is,
+ * and a control that changes height with the content it points at makes the
+ * page jump every time a new episode goes up. */
+.xo-jump-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.xo-jump-chevron {
+  margin-left: auto;
+  flex: none;
+  opacity: 0.7;
+}
+
+/* The anchor lands under the sticky header without this. */
+#story {
+  scroll-margin-top: 5.5rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The channel band, on the front page
+ * ---------------------------------------------------------------------------
+ * One card between the tour and the price, pointing at XO Universe, with the
+ * mark standing in it. See the note where it is drawn in `landing.tsx` for why
+ * it is at that seam and not in the hero.
+ *
+ * Magenta, hue 330, everywhere - the same colour as the header's XO pill and
+ * the channel's own jump button, and deliberately not the cyan the sign-up
+ * wears. That is the one hard rule on this band: it may be the brightest thing
+ * in this part of the page, and it may not look like the next step.
+ *
+ * Not `.box`. The bento card washes its hue up the whole face and is built to
+ * be one of six things competing for a glance; this is one wide thing on its
+ * own, and it wants the light coming from the left where the globe is rather
+ * than up from the floor.
+ * ------------------------------------------------------------------------- */
+
+.xo-band {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.75rem;
+  border-radius: 1.75rem;
+  border: 1px solid oklch(0.75 0.18 330 / 0.4);
+  background:
+    radial-gradient(60% 120% at 12% 50%, oklch(0.45 0.2 330 / 0.35), transparent 70%),
+    linear-gradient(100deg, oklch(0.12 0.05 330 / 0.9), oklch(0.1 0.04 285 / 0.85));
+  box-shadow:
+    inset 0 1px 0 oklch(0.9 0.1 330 / 0.14),
+    0 1.5rem 3rem oklch(0.05 0.02 265 / 0.55);
+}
+
+/* Three things in a row on a wide screen, stacked on a phone: the mark, the
+ * words, and the button.
+ *
+ * Viewport queries rather than Tailwind's `sm:` on the element, and that is
+ * not a style preference: this band is full-width, so the viewport is the
+ * right thing to ask - and the last time a two-column marketing layout in this
+ * repo was written as `sm:flex-row` it was inside a narrow column, where the
+ * breakpoint fires on a screen the column never gets. Keeping the rule with
+ * the component keeps the question "how wide is this box" in one place.
+ *
+ * The button is a grid child rather than the last line of the copy, which is
+ * what the middle step is for: from 640px it sits under the words in their
+ * own column rather than under the globe, and from 900px it moves out to the
+ * end of the row. Drawn as one column of copy on a 1280px screen the band was
+ * two thirds empty on the right, which reads as an unfinished layout rather
+ * than as air. */
+@media (min-width: 640px) {
+  .xo-band {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1.4rem 2.25rem;
+    padding: 2rem 2.25rem;
+  }
+
+  .xo-band-cta {
+    grid-column: 2;
+    margin-top: 0;
+    justify-self: start;
+  }
+}
+
+@media (min-width: 900px) {
+  .xo-band {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .xo-band-cta {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+}
+
+/* Centred over the copy on a phone, beside it from 640px. The mark is the
+ * loud thing on this band and a left-aligned globe over left-aligned type
+ * reads as a bullet point. */
+.xo-band-mark {
+  justify-self: center;
+}
+
+@media (min-width: 640px) {
+  .xo-band-mark {
+    justify-self: start;
+  }
+}
+
+.xo-band-tag {
+  font-family: var(--font-pixel);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: oklch(0.86 0.11 330);
+}
+
+.xo-band-title {
+  margin-top: 0.65rem;
+  text-transform: uppercase;
+  /* Fluid for the reason the hero's headline is: the pixel face is drawn on a
+   * wide grid and set in caps here, so a fixed size that fits at 1280px is two
+   * and a half lines at 375px. */
+  font-size: clamp(1.05rem, 3.4vw, 1.6rem);
+  line-height: 1.3;
+  max-width: 30ch;
+  /* Left to itself the second line was the single word "UNIVERSE", which
+   * splits the channel's name across the break and reads as a widow. Balanced,
+   * the browser does the same job in every language - which matters here,
+   * because the German sentence is four words longer than the English one and
+   * a hand-placed break would only ever be right for one of them. */
+  text-wrap: balance;
+}
+
+.xo-band-now {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+  font-size: 0.95rem;
+  color: var(--color-ink-muted, oklch(0.72 0.02 300));
+}
+
+/* The same red dot the channel puts beside "Now showing". It is the one thing
+ * on this band that says the story is running rather than finished, and a
+ * reader who has seen the channel has already met it. */
+.xo-band-live {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: 9999px;
+  background: oklch(0.63 0.21 25);
+  box-shadow: 0 0 0 0.22rem color-mix(in oklch, oklch(0.63 0.21 25) 22%, transparent);
+}
+
+.xo-band-cta {
+  display: inline-block;
+  margin-top: 1.35rem;
+  padding: 0.7rem 1.6rem;
+  border-radius: 999px;
+  border: 1px solid oklch(0.8 0.2 330 / 0.75);
+  background: oklch(0.42 0.17 330 / 0.55);
+  color: oklch(0.97 0.03 330);
+  transition:
+    background var(--dur-fast, 120ms) var(--ease-out-soft, ease),
+    box-shadow var(--dur-base, 180ms) var(--ease-out-soft, ease);
+}
+
+.xo-band-cta:hover,
+.xo-band-cta:focus-visible {
+  background: oklch(0.52 0.21 330 / 0.7);
+  box-shadow: 0 0 1.6rem oklch(0.7 0.22 330 / 0.4);
+}
+
+/* ---------------------------------------------------------------------------
+ * The XO Universe mark
+ * ---------------------------------------------------------------------------
+ * "XO · UNIVERSE" with a planet behind the first two letters. The component
+ * next to this (`components/universe-mark.tsx`) writes five custom
+ * properties on pointer moves and nothing else; every transform below reads
+ * them, and the interpolation is these transitions rather than a loop of ours.
+ *
+ * The resting values are the identity - no rotation, no drift - so a page with
+ * no pointer on it, a page that has scrolled the mark out of view, and a
+ * reader who has asked for less motion all get the same still drawing. That is
+ * what makes the reduced-motion case free: it is the default case.
+ * ------------------------------------------------------------------------- */
+
+.xo-mark {
+  --xo-size: clamp(5rem, 17vw, 8.5rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: oklch(0.97 0.03 330);
+}
+
+.xo-mark-globe {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--xo-size);
+  height: var(--xo-size);
+  /* Shallow on purpose. At 900px the globe swings like a door; this is a
+   * wordmark leaning, not a camera move. */
+  perspective: 460px;
+}
+
+.xo-mark-sky {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotateX(var(--xo-rx, 0deg)) rotateY(var(--xo-ry, 0deg));
+  transition: transform 480ms var(--ease-out-soft, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* The star field slides against the globe rather than with it. Two layers
+ * moving in opposite directions is the whole of the depth here. */
+.xo-mark-stars {
+  fill: oklch(0.92 0.05 320);
+  opacity: 0.75;
+  transform: translate(var(--xo-drift-x, 0px), var(--xo-drift-y, 0px));
+  transition: transform 620ms var(--ease-out-soft, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.xo-mark-orbit {
+  fill: none;
+  stroke: oklch(0.82 0.15 320 / 0.55);
+  stroke-width: 1.1;
+  /* User units: the reference box for an SVG child is the view box, so this is
+   * the centre of the 120-unit square the mark is drawn in. */
+  transform-origin: 60px 60px;
+  transform: rotate(var(--xo-spin, 0deg));
+  transition: transform 700ms var(--ease-out-soft, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* Without a moon on it a ring rotating about its own centre is identical at
+ * every angle, which is to say invisible. This is the part that moves. */
+.xo-mark-moon {
+  fill: oklch(0.88 0.16 85);
+  stroke: none;
+}
+
+.xo-mark-planet {
+  fill: url(#xo-mark-body);
+  stroke: oklch(0.85 0.14 330 / 0.5);
+  stroke-width: 1;
+  filter: drop-shadow(0 0 0.9rem oklch(0.6 0.22 330 / 0.45));
+}
+
+.xo-mark-grid {
+  fill: none;
+  stroke: oklch(0.96 0.06 330 / 0.28);
+  stroke-width: 0.8;
+}
+
+.xo-mark-xo {
+  position: relative;
+  z-index: 1;
+  font-size: calc(var(--xo-size) * 0.33);
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: oklch(0.99 0.01 330);
+  /* The letters sit on a lit sphere, so they need their own dark ground to
+   * stay legible where the highlight is brightest. */
+  text-shadow:
+    0 0 0.4rem oklch(0.2 0.08 300 / 0.9),
+    0 1px 0.15rem oklch(0.15 0.05 300 / 0.8);
+}
+
+.xo-mark-sep {
+  font-family: var(--font-pixel);
+  font-size: 0.9rem;
+  opacity: 0.55;
+}
+
+.xo-mark-word {
+  font-size: clamp(0.75rem, 2.2vw, 1rem);
+  letter-spacing: 0.18em;
+  color: oklch(0.9 0.07 330);
+}
+
+/* Nothing here is bound when the preference is set - the listener is never
+ * added - so this is belt and braces for the one frame between hydration and
+ * a variable that was written before it: with no transition there is nothing
+ * to animate even if something did write one. */
+@media (prefers-reduced-motion: reduce) {
+  .xo-mark-sky,
+  .xo-mark-stars,
+  .xo-mark-orbit {
+    transition: none;
   }
 }

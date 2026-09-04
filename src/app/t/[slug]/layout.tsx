@@ -19,6 +19,7 @@ import { WorkspaceDeactivated } from '@/app/t/[slug]/deactivated'
 import { readEntitlement } from '@/domain/billing/entitlement'
 import { EVENT_SURFACES } from '@/domain/events/presets'
 import { guestCanReach } from '@/domain/events/queries'
+import { listBlockedIds } from '@/domain/blocks/queries'
 import { chatProjection } from '@/domain/chat/projection'
 import { listChatMessages } from '@/domain/chat/queries'
 import { guestRoomSlug } from '@/domain/guests/application'
@@ -46,6 +47,7 @@ import {
   hasTier,
   isGuest,
   requireTenant,
+  thingiverseOpen,
   writeBlockedReason,
   xpOpen,
 } from '@/lib/tenant'
@@ -335,6 +337,16 @@ export default async function TenantLayout({
         // cannot add to it - the same rule `postChatMessage` enforces again at
         // the boundary, from the same function.
         blockedReason: writeBlockedReason(context),
+        /**
+         * Everyone this reader has blocked.
+         *
+         * The scrollback above does not need it - the select policy has
+         * already refused those rows - and the live socket does, because a
+         * broadcast is four fields that never touched the table. One read, so
+         * that the copy of the rule running on the client is the same list the
+         * database is applying.
+         */
+        blockedPeople: await listBlockedIds(supabase),
       }
     : null
 
@@ -418,12 +430,14 @@ export default async function TenantLayout({
                       xp: hasTier(context, 'xp'),
                       skinShop: features.skin_shop,
                       /*
-                        Both halves, and the tier is the half worth naming: the
-                        thingiverse is world-building, and world-building is
-                        what xo is. A free space with the flag on would get a
-                        tab whose every button ends in an upsell.
+                        One question, asked of `thingiverseOpen` rather than
+                        spelled here. It used to be the flag *and* the xo tier,
+                        and the tier half is gone - a free space holds rooms,
+                        places and a project now, so none of the buttons behind
+                        this tab ends in an upsell any more. The argument, and
+                        what replaced it, are at the helper.
                       */
-                      thingiverse: features.thingiverse && hasTier(context, 'xo'),
+                      thingiverse: thingiverseOpen(context),
                       /*
                         A capability rather than a flag, and one that defaults
                         *off*: every world this product has ever had lets you

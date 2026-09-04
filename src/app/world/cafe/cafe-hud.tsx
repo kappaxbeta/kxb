@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   actionKey,
   ControlsPanel,
@@ -14,6 +14,7 @@ import {
   wasd,
   type ControlRow,
 } from '@/app/world/_hud/hud'
+import { notePurseMoved } from '@/app/components/purse-signal'
 import { PROPS, prop, propThumbUrl, refundOf } from '@kxb/dream-restaurant/catalog'
 import {
   ambience,
@@ -126,6 +127,27 @@ export function CafeHud({
    */
   const t = cafeDict(useLocale())
   const showStats = !(compact && mode === 'build')
+
+  /*
+    Keep the rail's copy of this number honest.
+
+    The same purse is drawn twice on this screen - here, and in the space rail
+    beside the canvas - and the rail reads its balance once when it mounts.
+    Without this it shows whatever the balance was when the page loaded, for the
+    whole session, while this one moves every few seconds.
+
+    The number is *passed* rather than the rail being told to go and look. That
+    matters more than it sounds: a signal with no number means a `readPurse` per
+    customer served, and `requireTenant` writes cookies - so every burger would
+    re-render the page around this canvas. It did, and the café stuttered. See
+    `purse-signal.ts`.
+
+    Depends on `state.coins` alone, so it fires when the balance changes and not
+    on every frame this HUD draws.
+  */
+  useEffect(() => {
+    notePurseMoved(state.coins)
+  }, [state.coins])
 
   return (
     <>

@@ -102,6 +102,36 @@ export interface RedeemGrant {
    * just got is a confirmation screen that will be misread half the time.
    */
   tier: Tier
+  /**
+   * Bucks dropped in the pocket with the month, or 0 for a code that carries
+   * none.
+   *
+   * Carried for the same reason `tier` is, and the case is stronger: a month is
+   * abstract until somebody hits a wall, and five bucks are a thing to spend
+   * this minute. A confirmation that mentions only the month buries the half of
+   * the offer that gets somebody into the shop - see `contest.ts`, where the
+   * whole campaign is built on the second half of that sentence.
+   */
+  bucks: number
+  /**
+   * Coins minted into the account's wallet, or 0.
+   *
+   * The wallet rather than a purse, because a redemption often happens before
+   * there is a space to have a purse in. They are spendable only where the
+   * `economy` flag is on, which is nowhere by default - so a code that carries
+   * coins is a bet on a space that has switched it on, and the copy for it says
+   * where they went rather than what they buy.
+   */
+  coins: number
+  /**
+   * Bearer voucher codes the same redemption minted, for passing on.
+   *
+   * Handed over once and never again: an unclaimed voucher belongs to nobody,
+   * so it is not in any list this account can read afterwards. A surface that
+   * receives these and does not print them has thrown them away - which is why
+   * the redeem box keeps them on screen rather than refreshing them off it.
+   */
+  voucherCodes: readonly string[]
 }
 
 export type RedeemResult =
@@ -341,6 +371,19 @@ export interface SignupOffer {
   closesAt: string | null
   /** Claims left, or `null` when the code is uncapped. */
   remaining: number | null
+  /**
+   * Bucks that come with it, or 0.
+   *
+   * Part of the headline rather than of the small print, because it is the only
+   * thing in an offer that is *immediate*: a month of a plan is a promise about
+   * the next four weeks, and five bucks are a skin somebody wears before they
+   * have finished reading the page.
+   */
+  bucks: number
+  /** Bearer codes it also hands over, to pass on. Usually 0. */
+  vouchers: number
+  /** Coins into the wallet, or 0. */
+  coins: number
 }
 
 /**

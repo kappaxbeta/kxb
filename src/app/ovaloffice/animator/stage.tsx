@@ -41,7 +41,26 @@ import { DEFAULT_LIGHT } from '@/domain/studio/scene'
  */
 export type { RigHandle }
 
-const _euler = new THREE.Euler()
+/**
+ * The scratch euler the two conversions below share.
+ *
+ * `'YXZ'` rather than three.js's default `'XYZ'`, and the order is the whole
+ * fix for a bug that read as *the facing is locked*: an euler's **middle** axis
+ * is the one that gimbal-locks at +/-90, and under `'XYZ'` the middle axis is
+ * Y - the turn. So a bone turned to 90 degrees stopped being able to turn, and
+ * the number the panel read back stopped tracking the pad.
+ *
+ * `'YXZ'` is yaw, then pitch, then roll - the order every flight and camera
+ * rig uses, for the same reason it is right here. It puts the singularity on
+ * *pitch* at +/-90, which for a character bone is straight up or straight down:
+ * rare, and obvious when you are there. Turn is then free through the whole
+ * range, which is the motion somebody posing a shoulder or a head actually
+ * spends their time on.
+ *
+ * Both functions must agree on the order. They share this object so they
+ * cannot drift.
+ */
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ')
 
 /**
  * The model, cloned, with its bones indexed.
@@ -360,6 +379,7 @@ export function setBoneEuler(
     THREE.MathUtils.degToRad(degrees.x),
     THREE.MathUtils.degToRad(degrees.y),
     THREE.MathUtils.degToRad(degrees.z),
+    'YXZ',
   )
   // Relative to the bind pose, so zero on all three sliders is the rig as it
   // shipped rather than an arbitrary rotation the modeller happened to bake in.
@@ -375,7 +395,7 @@ export function boneEuler(rig: RigHandle, pose: Pose, bone: string): { x: number
   if (!bind || !q) return { x: 0, y: 0, z: 0 }
 
   const relative = bind.clone().invert().multiply(new THREE.Quaternion(q[0], q[1], q[2], q[3]))
-  _euler.setFromQuaternion(relative)
+  _euler.setFromQuaternion(relative, 'YXZ')
   return {
     x: Math.round(THREE.MathUtils.radToDeg(_euler.x)),
     y: Math.round(THREE.MathUtils.radToDeg(_euler.y)),

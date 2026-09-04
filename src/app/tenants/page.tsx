@@ -18,7 +18,7 @@ import { readGrant } from '@/domain/promo/queries'
 import { mayRedeem } from '@/domain/promo/redeem'
 import { mayClaimFreeMonth } from '@/domain/promo/winback'
 import { landingPath } from '@/domain/tenants/last-space'
-import { readAsDummy, readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { readProfileAvatar, readShowXp } from '@/domain/profile/avatar-queries'
 import { shopFor } from '@/domain/skins/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -106,7 +106,7 @@ export default async function TenantsPage({
     avatar,
     username,
     wardrobe,
-    asDummy,
+    showXp,
   ] = await Promise.all([
     listMyTenants(supabase, user.id),
     listMyInvitations(supabase),
@@ -125,9 +125,9 @@ export default async function TenantsPage({
     // The wardrobe, for the locker on the stage: what is owned, what is worn,
     // and whether the shelf is even open. The same read the shop page runs.
     shopFor(supabase, user.id),
-    // And whether the xo half is the plain dummy rather than the animal. A
-    // third body, so the locker has to be able to say which of the three.
-    readAsDummy(supabase, user.id),
+    // And which of the two bodies rooms draw. A mode rather than a third body:
+    // the locker holds both halves and this says which one is on screen.
+    readShowXp(supabase, user.id),
   ])
 
   // Has to agree with the gate in createTenant, which skips its Stripe check on
@@ -158,8 +158,25 @@ export default async function TenantsPage({
    * gate are unchanged from the list-page days — see the histories in
    * `application.ts` and `createTenant`.
    */
+  /**
+   * The banners, in a wrapper rather than in a fragment.
+   *
+   * A `<>` here is the obvious spelling and it is the one that warned. `Lobby`
+   * is a Client Component and this is a slot passed across that boundary, so
+   * the fragment does not stay a fragment: RSC serialises its children and the
+   * client re-renders them as a *dynamic* array, which React then key-checks.
+   * With one banner showing there is no array and nothing happens - which is
+   * why it only ever appeared for somebody with two of them at once, and why
+   * the warning named `<form action={signOut}>` (a sibling slot from the same
+   * owner) rather than any of the paragraphs below.
+   *
+   * Keys on each `<p>` would also silence it. A wrapper is better: these are
+   * one stack of banners rather than a list of independent things, they carry
+   * their own `mb-3`, and one element cannot go back to being an array the next
+   * time somebody adds a case.
+   */
   const notices = (
-    <>
+    <div>
       {grant?.live && (
         <p className="mb-3 rounded-lg border border-accent/50 bg-surface-raised px-3 py-2.5 text-sm text-accent">
           {grant.until === null
@@ -199,7 +216,7 @@ export default async function TenantsPage({
           {t.checkoutCancelled}
         </p>
       )}
-    </>
+    </div>
   )
 
   return (
@@ -224,7 +241,7 @@ export default async function TenantsPage({
         role,
       }))}
       avatar={avatar}
-      asDummy={asDummy}
+      showXp={showXp}
       username={username}
       wardrobe={wardrobe}
       email={user.email ?? ''}

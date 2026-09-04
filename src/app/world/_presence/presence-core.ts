@@ -27,6 +27,50 @@ export const SEND_HZ = 8
 export const SEND_INTERVAL = 1000 / SEND_HZ
 
 /**
+ * How often to send when there are this many other people to send to.
+ *
+ * `SEND_HZ` is the rate a *full* room can afford, and for years it was the rate
+ * every room paid. That is the wrong shape for the cost it is guarding against:
+ * a broadcast is fanned out to everybody, so a room's traffic is `n x hz x n`,
+ * and the room that made eight the right answer is the twenty-player one. Two
+ * friends in a world were being charged the twenty-player rate for a bill of
+ * 2 x 8 x 2 = 32 messages a second.
+ *
+ * They pay for it twice over, because the receiver's playout delay is floored
+ * at two send intervals - so a rate picked to protect a crowded room is also
+ * 250ms of lag in an empty one, and 250ms is the difference between passing to
+ * where somebody is and passing to where they were. That is what "the
+ * connection is not great" describes far more often than any packet loss.
+ *
+ * So the rate follows the room. The tiers keep the worst case exactly where it
+ * was - a twenty-player room still sends at eight, still 3 040 messages a
+ * second leaving the server - and hand the headroom to the rooms that have it:
+ *
+ *   | others | hz | messages/s out |
+ *   |--------|----|----------------|
+ *   | 1      | 20 | 40             |
+ *   | 3      | 20 | 240            |
+ *   | 7      | 12 | 672            |
+ *   | 19     |  8 | 3 040          |
+ *
+ * Nobody is told which rate we picked and nobody needs to be: `peer-motion`
+ * measures the cadence of every sender it hears rather than assuming one, so a
+ * room whose rate steps down as it fills is a room whose buffers follow it, and
+ * a client that has not reloaded since this shipped is simply a peer sending at
+ * eight. See the header of `peer-motion.ts`.
+ */
+export function sendHzFor(peers: number): number {
+  if (peers <= 3) return 20
+  if (peers <= 7) return 12
+  return SEND_HZ
+}
+
+/** The same answer as an interval, which is what every send loop wants. */
+export function sendIntervalFor(peers: number): number {
+  return 1000 / sendHzFor(peers)
+}
+
+/**
  * Resend even when nothing moved, so a peer who joined mid-stillness learns
  * where you are instead of waiting for you to twitch.
  */

@@ -185,8 +185,69 @@ export async function requireTenant(
 ): Promise<TenantContext> {
   const { user, supabase } = await requireUser()
 
+  const resolved = await resolveTenant(supabase, user, slug, options)
+  if (resolved.ok) return resolved.context
+
+  // The proxy closes the session on the way in to that page, unless this guest
+  // is still admitted somewhere else - which is exactly what `?from=` is for,
+  // and why the check lives there rather than here.
+  if (resolved.reason === 'visit-ended') {
+    redirect(`${GUEST_LEFT_PATH}?from=${encodeURIComponent(slug)}`)
+  }
+
+  notFound()
+}
+
+/**
+ * Why somebody did not get a context.
+ *
+ * Three answers rather than a boolean, because the two callers that exist want
+ * to say different things about them. A page turns `missing` and `refused` into
+ * the same 404 on purpose - see the note below on why a refusal must not be
+ * distinguishable from an absence - while an API answering a phone has to send
+ * a status code and cannot send a login page, and a visit that has just ended
+ * is the one case with somewhere better to go than either.
+ */
+export type TenantRefusal = 'missing' | 'refused' | 'visit-ended'
+
+export type TenantResolution =
+  | { ok: true; context: TenantContext }
+  | { ok: false; reason: TenantRefusal }
+
+/**
+ * Everything `requireTenant` knows, with the client handed in and no way out
+ * of the function except a return.
+ *
+ * This is the whole of the door: the space exists, this person has standing in
+ * it, what it is entitled to, what tier it is on, which flags are resolved for
+ * this caller, and whether a guest may be on this surface. `requireTenant` is
+ * now a five-line wrapper that turns the refusals into `notFound()` and
+ * `redirect()`, which are the right verbs for a page and the wrong ones for
+ * anything else.
+ *
+ * It exists because there is a second front door now. The native app carries a
+ * bearer token instead of a cookie and speaks to route handlers, where a
+ * `redirect()` is a 307 that a phone's HTTP client follows into a login *page*
+ * and reports as success - the failure mode `src/app/api/renders/auth.ts`
+ * already wrote down. The alternative to this split was a second copy of the
+ * membership, guest, billing and tier rules living under `/api/m`, which is the
+ * kind of duplication that is correct for exactly as long as nobody edits one
+ * of the two.
+ *
+ * The client is a parameter for the same reason: a cookie session and a bearer
+ * session are two ways of building a Supabase client and nothing below this
+ * line cares which one arrived. Every check underneath is RLS-scoped to that
+ * client, so handing in the wrong one cannot widen anything - it can only fail
+ * closed.
+ */
+export async function resolveTenant(
+  supabase: Client,
+  user: User,
+  slug: string,
+  options: TenantOptions = {},
+): Promise<TenantResolution> {
   const tenantId = await findTenantIdBySlug(supabase, slug)
-  if (!tenantId) notFound()
+  if (!tenantId) return { ok: false, reason: 'missing' }
 
   // Asked through `tenant_role()` rather than by reading `tenant_members`
   // directly, because that function is the one place that knows a guest is also
@@ -255,13 +316,13 @@ export async function requireTenant(
     // The proxy closes the session on the way in to that page, unless this
     // guest is still admitted somewhere else - which is exactly what `?from=`
     // is for, and why the check lives there rather than here.
-    if (!knocking) redirect(`${GUEST_LEFT_PATH}?from=${encodeURIComponent(slug)}`)
+    if (!knocking) return { ok: false, reason: 'visit-ended' }
   }
 
-  if (!role) notFound()
+  if (!role) return { ok: false, reason: 'missing' }
 
   const tenant = await loadTenantRow(supabase, tenantId)
-  if (!tenant) notFound()
+  if (!tenant) return { ok: false, reason: 'missing' }
 
   const [subscription, entitled, tier, features, event] = await Promise.all([
     getSubscription(supabase, tenantId),
@@ -290,7 +351,7 @@ export async function requireTenant(
         options.surface !== undefined &&
         guestCanReach(event, options.surface))
 
-    if (!allowed) notFound()
+    if (!allowed) return { ok: false, reason: 'refused' }
   }
 
   // ---------------------------------------------------------------------------
@@ -317,74 +378,77 @@ export async function requireTenant(
   const billed = features.billing
 
   return {
-    user,
-    supabase,
-    tenant: {
-      id: tenantId,
-      slug: tenant.slug,
-      name: tenant.name,
-      archived: tenant.archived,
-      role: asTenantRole(role),
-      entitled: billed ? entitled : true,
-      /**
-       * Is this space shut?
-       *
-       * Only ever because a person decided so. Archiving is the owner's own
-       * action or an admin's, and it is the single path to this being true.
-       *
-       * **Billing never shuts a space.** That is the rule the free tier is
-       * built on, and it holds all the way down: no subscription, a cancelled
-       * one, a failed debit, a reversed payment - every one of them lands on
-       * `free`, open and writable and capped. A space that stops paying becomes
-       * the space it would have been if it had never started, which is a real
-       * product rather than a locked door.
-       *
-       * Shutting somebody out is therefore a moderation decision and looks like
-       * one: a human does it, deliberately, and it leaves a trail. Nothing
-       * automatic can take a space away from the people using it, which also
-       * means no bank's timing and no webhook's ordering ever can.
-       *
-       * Named rather than inlined as `archived` even though it is exactly that
-       * today, because the callers are asking "is this space shut" and not "did
-       * somebody press archive". If a moderation suspension ever joins it, it
-       * joins here and every caller is already right.
-       */
-      deactivated: tenant.archived,
-      /**
-       * The space's plan, and *not* rewritten by the billing flag.
-       *
-       * This used to be `billed ? tier : 'xp'`, and that line is how an `xo`
-       * space came to hold a match nobody in it could open.
-       *
-       * `billing` resolves user-first - `resolve_features` checks a `user`
-       * override before a `tenant` one - so an account comped this way was the
-       * only person in the room seeing `xp`. They summoned a match inside a
-       * level, which `createBattle` allowed because their context said xp, and
-       * everybody else's context said xo and dropped them in the lounge. One
-       * person was looking at a different space than everybody standing in it.
-       *
-       * A tier is a fact about a *space*; a per-account switch must not be able
-       * to restate one. keys.ts already draws exactly this line for the valued
-       * flags - `tenant_feature_limit()` reads tenant-scope overrides and
-       * ignores user ones - and this is the same rule applied to the most
-       * space-shaped value there is.
-       *
-       * Comping is unaffected and has a mechanism that is already shared:
-       * `/ovaloffice/promos` grants a tier to an owner, it lands in
-       * `promo_redemptions`, and `tenant_tier()` hands the same answer to
-       * everybody in the space. That is what "this space is comped" should
-       * mean, and it is one row rather than one flag per person.
-       */
-      tier,
-      loungeMode: tenant.lounge_mode === 'creative' ? 'creative' : 'battle',
-      chatEnabled: tenant.chat_enabled === true,
-      capabilities: (tenant.capabilities ?? {}) as Partial<
-        Record<SpaceCapability, boolean>
-      >,
+    ok: true,
+    context: {
+      user,
+      supabase,
+      tenant: {
+        id: tenantId,
+        slug: tenant.slug,
+        name: tenant.name,
+        archived: tenant.archived,
+        role: asTenantRole(role),
+        entitled: billed ? entitled : true,
+        /**
+         * Is this space shut?
+         *
+         * Only ever because a person decided so. Archiving is the owner's own
+         * action or an admin's, and it is the single path to this being true.
+         *
+         * **Billing never shuts a space.** That is the rule the free tier is
+         * built on, and it holds all the way down: no subscription, a cancelled
+         * one, a failed debit, a reversed payment - every one of them lands on
+         * `free`, open and writable and capped. A space that stops paying becomes
+         * the space it would have been if it had never started, which is a real
+         * product rather than a locked door.
+         *
+         * Shutting somebody out is therefore a moderation decision and looks like
+         * one: a human does it, deliberately, and it leaves a trail. Nothing
+         * automatic can take a space away from the people using it, which also
+         * means no bank's timing and no webhook's ordering ever can.
+         *
+         * Named rather than inlined as `archived` even though it is exactly that
+         * today, because the callers are asking "is this space shut" and not "did
+         * somebody press archive". If a moderation suspension ever joins it, it
+         * joins here and every caller is already right.
+         */
+        deactivated: tenant.archived,
+        /**
+         * The space's plan, and *not* rewritten by the billing flag.
+         *
+         * This used to be `billed ? tier : 'xp'`, and that line is how an `xo`
+         * space came to hold a match nobody in it could open.
+         *
+         * `billing` resolves user-first - `resolve_features` checks a `user`
+         * override before a `tenant` one - so an account comped this way was the
+         * only person in the room seeing `xp`. They summoned a match inside a
+         * level, which `createBattle` allowed because their context said xp, and
+         * everybody else's context said xo and dropped them in the lounge. One
+         * person was looking at a different space than everybody standing in it.
+         *
+         * A tier is a fact about a *space*; a per-account switch must not be able
+         * to restate one. keys.ts already draws exactly this line for the valued
+         * flags - `tenant_feature_limit()` reads tenant-scope overrides and
+         * ignores user ones - and this is the same rule applied to the most
+         * space-shaped value there is.
+         *
+         * Comping is unaffected and has a mechanism that is already shared:
+         * `/ovaloffice/promos` grants a tier to an owner, it lands in
+         * `promo_redemptions`, and `tenant_tier()` hands the same answer to
+         * everybody in the space. That is what "this space is comped" should
+         * mean, and it is one row rather than one flag per person.
+         */
+        tier,
+        loungeMode: tenant.lounge_mode === 'creative' ? 'creative' : 'battle',
+        chatEnabled: tenant.chat_enabled === true,
+        capabilities: (tenant.capabilities ?? {}) as Partial<
+          Record<SpaceCapability, boolean>
+        >,
+      },
+      subscription: billed ? subscription : { ...subscription, writable: true },
+      features,
+      event,
     },
-    subscription: billed ? subscription : { ...subscription, writable: true },
-    features,
-    event,
   }
 }
 
@@ -632,6 +696,54 @@ export function projectsOpen(context: TenantContext): boolean {
  */
 export function requireProjects(context: TenantContext): void {
   if (!projectsOpen(context)) notFound()
+}
+
+/**
+ * Is the thingiverse open in this space?
+ *
+ * One switch now, where it was a pair. Every reader used to spell
+ * `context.features.thingiverse && hasTier(context, 'xo')` for itself - nine of
+ * them, across the rail, three surfaces, two mobile routes and the server
+ * action - and a gate copied nine times is a gate that is eventually eight.
+ * This is the same move `chatOpen`, `xpOpen` and `battleOpen` already made, and
+ * for the reason they give: the question is asked in several moods that must
+ * not drift apart.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the tier is no longer half of it
+ * ---------------------------------------------------------------------------
+ * The pair's second half was `xo`, and the note on the rail argued it well:
+ * "the thingiverse is world-building, and world-building is what xo is. A free
+ * space with the flag on would get a tab whose every button ends in an upsell."
+ *
+ * That was true of the free tier it was written against - the one holding no
+ * rooms, no XP places and no projects. It is not true of the one we have. Free
+ * holds five rooms, four XP places and a project now (see `TIER_LIMITS`), so a
+ * blueprint made here has somewhere to stand and something to be summoned into,
+ * and none of those buttons ends anywhere but in the room the person is
+ * already in.
+ *
+ * What is left of the argument is a real one, and it is answered by a different
+ * number: authoring room is what the paid tiers meter, and `projects` is where
+ * that wall stands. A shelf of blueprints is not metered at all - nothing in
+ * `LIMIT_KEYS` counts one - which makes "you may not open the shelf" a strange
+ * thing for a *plan* to say. The flag stays: an installation that has not
+ * shipped this to a space still has not.
+ */
+export function thingiverseOpen(context: TenantContext): boolean {
+  return context.features.thingiverse
+}
+
+/**
+ * Refuse a thingiverse surface to a space that has not got one.
+ *
+ * `notFound()`, matching `requireFeature` and `requireProjects`, and it
+ * replaces the `requireFeature(context, 'thingiverse')` + `requireTier(context,
+ * 'xo')` pair the two composer routes opened with. Same answer, one place to
+ * change it - which is the whole point of `thingiverseOpen` above.
+ */
+export function requireThingiverse(context: TenantContext): void {
+  if (!thingiverseOpen(context)) notFound()
 }
 
 /**

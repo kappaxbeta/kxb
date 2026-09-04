@@ -1,5 +1,6 @@
 'use server'
 
+import { OPENING_COINS } from '@/domain/bank/prices'
 import { initialState as initialCafe } from '@kxb/dream-restaurant/game'
 import { initialState as initialHome } from '@kxb/peepz-world/game'
 import { homesteadDecider } from '@/domain/homestead/aggregate'
@@ -91,7 +92,23 @@ export async function foundHomestead(slug: string): Promise<HomesteadResult> {
 
   return run(slug, {
     type: 'FoundHomestead',
-    coins: cafe.coins,
+    /*
+      The economy's opening balance, not the café's.
+
+      `initialCafe().coins` is 120 and is a *tutorial* number - the smallest
+      layout that can complete an order, with enough left over to buy the second
+      thing you will want. That was right while the café was a self-contained
+      game whose coins bought café furniture.
+
+      It is the wrong source now, because this balance is the opening position
+      in an economy: it pays battle stakes, door tolls, revives and quota
+      extras. So the number comes from `bank/prices.ts` and the café keeps its
+      own for the standalone game. See `OPENING_COINS`.
+
+      The layout below still comes from `initialCafe()`, which is exactly what
+      that function should decide.
+    */
+    coins: OPENING_COINS,
     layout: {
       cafe: [...cafe.props].map(([tile, placed]) => ({
         tile,
@@ -275,7 +292,7 @@ export async function sendCoins(
       decider: homesteadDecider,
       tenantId: tenant.id,
       streamId: homesteadStreamId(tenant.id, to),
-      command: { type: 'ReceiveCoins', from: user.id, amount, transfer },
+      command: { type: 'ReceiveCoins', from: user.id, amount, transfer, owner: to },
       metadata: { actorId: user.id },
     })
   } catch (error) {

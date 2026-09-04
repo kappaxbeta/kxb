@@ -7,16 +7,22 @@ import {
   request,
   subscribe,
 } from '@/app/ovaloffice/builder/thumbnails'
-import { type CatalogueEntry, packSize, searchCatalogue } from '@/domain/builder/catalogue'
+import { PackPreviewGrid } from '@/app/components/pack-preview'
+import {
+  placementThumbnail,
+  PLACEABLE_PACKS,
+  searchPlaceable,
+} from '@/domain/builder/props'
+import { MODEL_COUNT } from '@/domain/thingiverse/models'
+import { packPreviews, splitPreviews } from '@/domain/thingiverse/pack-preview'
 import { isBlockModel } from '@/domain/worlds/blocks'
-import { modelThumbnailUrl, PACK_ORDER, PACKS } from '@/domain/builder/packs'
 
 /**
- * Choosing one of 1308 models.
+ * Choosing one of 5,863 models.
  *
  * The lounge's picker renders its whole palette into a grid and lets you scan
  * it, which works because its whole palette is 58 blocks that fit on a screen
- * and a half. At twenty times that, scanning is not a strategy: you find a
+ * and a half. At a hundred times that, scanning is not a strategy: you find a
  * model by knowing roughly what it is called and which pack it came from, so
  * the search box has focus on open and the pack filter is the first thing under
  * it.
@@ -25,6 +31,20 @@ import { modelThumbnailUrl, PACK_ORDER, PACKS } from '@/domain/builder/packs'
  * see ./thumbnails. Only tiles that have actually scrolled into view ask for
  * one, which is what keeps opening the picker from downloading the entire asset
  * library.
+ *
+ * ---------------------------------------------------------------------------
+ * Opening on the packs rather than on everything
+ * ---------------------------------------------------------------------------
+ * An empty query used to mean "every model", and the grid mounted all 1,308 of
+ * them - a tile each, an intersection observer each - which was survivable.
+ * With both catalogues in here it is 5,863, and it is also the wrong first
+ * screen: nobody opens this looking at everything.
+ *
+ * So the landing state is the *packs*, with four of each one's own models on
+ * the card. That is a page you can read - it answers "what have we got" in
+ * pictures - and it costs about two hundred thumbnails instead of six thousand
+ * tiles. Type anything, or press a pack, and the grid is the grid it always
+ * was.
  */
 
 export function ModelPicker({
@@ -54,7 +74,7 @@ export function ModelPicker({
   const input = useRef<HTMLInputElement>(null)
 
   const groups = useMemo(() => {
-    const found = searchCatalogue(query, blocksOnly ? 'bb10' : pack)
+    const found = searchPlaceable(query, blocksOnly ? 'bb10' : pack)
     if (!blocksOnly) return found
 
     // The pack and the palette are not the same list: `bb10` ships blocks the
@@ -68,6 +88,18 @@ export function ModelPicker({
       .filter((group) => group.models.length > 0)
   }, [query, pack, blocksOnly])
   const found = groups.reduce((sum, group) => sum + group.models.length, 0)
+
+  /**
+   * The pack cards, built once for the life of the modal.
+   *
+   * Both registries are module constants, so this cannot change while the
+   * picker is open - and building it on every keystroke would walk 5,863
+   * models to draw something that is not on screen while you are typing.
+   */
+  const previews = useMemo(() => splitPreviews(packPreviews()), [])
+
+  /** Nothing typed and no pack pressed: the state the packs are the answer to. */
+  const landing = !blocksOnly && pack === undefined && query.trim() === ''
 
   useEffect(() => {
     input.current?.focus()
@@ -105,11 +137,13 @@ export function ModelPicker({
               ref={input}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search 1308 models — try “chair”, “tree”, “wall red”…"
+              placeholder={`Search ${MODEL_COUNT.toLocaleString()} models — try “chair”, “tree”, “wall red”…`}
               aria-label="Search models"
               className="min-w-0 flex-1 rounded-full border border-line/60 bg-surface/70 px-4 py-2 text-sm text-ink outline-none transition placeholder:text-ink-muted/70 focus:border-accent"
             />
-            <span className="shrink-0 text-xs tabular-nums text-ink-muted">{found} found</span>
+            <span className="shrink-0 text-xs tabular-nums text-ink-muted">
+              {landing ? `${PLACEABLE_PACKS.length} packs` : `${found} found`}
+            </span>
             <button
               type="button"
               onClick={onClose}
@@ -122,27 +156,58 @@ export function ModelPicker({
             </button>
           </div>
 
-          {/* The pack filter. Horizontal because there are twelve of them and a
-              dropdown would hide the one fact that matters: how big each is.
+          {/* The pack filter, and only once a pack is being filtered by.
 
-              Gone entirely when only blocks are on offer - one tab is not a
+              It was fourteen chips in a horizontal scroller, which was a
+              reasonable filter. At fifty-four it is a wall of words that
+              arrives before you have asked anything, and the cards below say
+              the same thing with pictures. So the chips are what you use to get
+              *back* - one row, the chosen pack and the way out of it - and
+              choosing in the first place happens on a card.
+
+              Gone entirely when only blocks are on offer: one tab is not a
               filter, it is a label. */}
-          {!blocksOnly && (
+          {!blocksOnly && !landing && (
           <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
             <PackChip active={pack === undefined} onClick={() => setPack(undefined)}>
-              All
+              All packs
             </PackChip>
-            {PACK_ORDER.map((id) => (
-              <PackChip key={id} active={pack === id} onClick={() => setPack(id)}>
-                {PACKS[id].label}
-                <span className="ml-1.5 tabular-nums opacity-60">{packSize(id)}</span>
+            {pack !== undefined && (
+              <PackChip active onClick={() => setPack(undefined)}>
+                {PLACEABLE_PACKS.find((entry) => entry.id === pack)?.label ?? pack}
+                <span aria-hidden className="ml-1.5 opacity-60">
+                  ✕
+                </span>
               </PackChip>
-            ))}
+            )}
           </div>
           )}
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+          {landing ? (
+            /*
+              The packs, as pictures. Two rows, split the way the two registries
+              already are: what a *world* is furnished with, then what a *level*
+              is - which is also the difference between "Proto" and "Proto"
+              appearing twice with nothing to tell them apart.
+            */
+            <div className="space-y-4">
+              <PackPreviewGrid
+                label="World packs"
+                previews={previews.rooms}
+                onSelect={setPack}
+                sizeLabelOf={sizeLabel}
+              />
+              <PackPreviewGrid
+                label="Level packs"
+                previews={previews.levels}
+                onSelect={setPack}
+                sizeLabelOf={sizeLabel}
+              />
+            </div>
+          ) : (
+            <>
           {groups.map((group) => (
             <section key={group.packId} className="mb-6 last:mb-0">
               <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-ink-muted/70">
@@ -167,6 +232,8 @@ export function ModelPicker({
 
           {groups.length === 0 && (
             <p className="py-10 text-center text-xs text-ink-muted">Nothing matches “{query}”.</p>
+          )}
+            </>
           )}
         </div>
       </div>
@@ -212,7 +279,8 @@ function Tile({
   selected,
   onPick,
 }: {
-  entry: CatalogueEntry
+  /** Whatever `searchPlaceable` returns - an id and a name, out of either registry. */
+  entry: { id: string; label: string }
   selected: boolean
   onPick: () => void
 }) {
@@ -291,7 +359,7 @@ function Tile({
           // round trip.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={modelThumbnailUrl(entry.id)}
+            src={placementThumbnail(entry.id)}
             alt=""
             loading="lazy"
             onError={() => setMissing(true)}
@@ -318,4 +386,9 @@ function Tile({
       </span>
     </button>
   )
+}
+
+/** "218 models", for the card's screen-reader label. */
+function sizeLabel(size: number): string {
+  return `${size.toLocaleString()} model${size === 1 ? '' : 's'}`
 }

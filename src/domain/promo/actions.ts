@@ -175,6 +175,23 @@ const codeSchema = z.object({
    * one it cannot make is giving away €10.
    */
   tier: z.enum(TIERS).default(DEFAULT_TIER),
+  /**
+   * Bucks dropped in the redeemer's pocket on top of the month, and bearer
+   * codes they can pass on. 0 and 0 for a plain code.
+   *
+   * The ceilings match the columns' checks rather than being looser here, so a
+   * mistyped 500 is refused by the form with a sentence instead of by the
+   * database with a constraint name. Both defaulted, so every caller that
+   * predates them keeps minting the codes it always did.
+   */
+  bucks: z.coerce.number().int().min(0).max(50).default(0),
+  vouchers: z.coerce.number().int().min(0).max(50).default(0),
+  /**
+   * Coins into the wallet. A far looser ceiling than the other two, matching
+   * the column: bucks are priced in single digits and a coin is the small unit
+   * of an economy where a match pays seven.
+   */
+  coins: z.coerce.number().int().min(0).max(100_000).default(0),
 })
 
 /**
@@ -193,6 +210,9 @@ export async function createPromoCode(input: {
   maxUses: number
   days: number
   tier?: Tier
+  bucks?: number
+  vouchers?: number
+  coins?: number
 }): Promise<PromoResult> {
   const parsed = codeSchema.safeParse(input)
   if (!parsed.success) {
@@ -223,6 +243,9 @@ export async function createPromoCode(input: {
     free_days: parsed.data.freeDays,
     max_uses: parsed.data.maxUses > 0 ? parsed.data.maxUses : null,
     tier: parsed.data.tier,
+    bucks: parsed.data.bucks,
+    vouchers: parsed.data.vouchers,
+    coins: parsed.data.coins,
     expires_at: expires,
     created_by: user.id,
   })
@@ -246,6 +269,9 @@ export async function createPromoCode(input: {
       campaign: parsed.data.campaign || null,
       tier: parsed.data.tier,
       freeDays: parsed.data.freeDays,
+      bucks: parsed.data.bucks,
+      vouchers: parsed.data.vouchers,
+      coins: parsed.data.coins,
       maxUses: parsed.data.maxUses > 0 ? parsed.data.maxUses : null,
       expiresAt: expires,
     },

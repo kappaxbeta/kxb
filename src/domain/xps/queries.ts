@@ -26,6 +26,13 @@ export interface XpProjectRow {
   blurb: string | null
   state: XpState
   spacePolicy: XpSpacePolicy
+  /**
+   * Coins somebody else pays: to play it once, and to take a copy.
+   *
+   * Both `0` until an owner says otherwise. `docs/product/economy.md` §9.
+   */
+  priceOnce: number
+  priceRemix: number
   currentVersion: number
   publishedVersion: number | null
   coverPath: string | null
@@ -50,7 +57,7 @@ export interface XpProjectRow {
  * space library.
  */
 const COLUMNS =
-  'id, tenant_id, owner_id, name, blurb, state, space_policy, current_version, published_version, cover_path, bytes, updated_at'
+  'id, tenant_id, owner_id, name, blurb, state, space_policy, price_once, price_remix, current_version, published_version, cover_path, bytes, updated_at'
 
 type Row = {
   id: string
@@ -60,6 +67,8 @@ type Row = {
   blurb: string | null
   state: string
   space_policy: string
+  price_once: number | null
+  price_remix: number | null
   current_version: number
   published_version: number | null
   cover_path: string | null
@@ -75,6 +84,10 @@ const toProject = (row: Row): XpProjectRow => ({
   blurb: row.blurb,
   state: row.state as XpState,
   spacePolicy: row.space_policy as XpSpacePolicy,
+  // Null for a row written before levels could be priced. Free, which is what
+  // those levels were.
+  priceOnce: row.price_once ?? 0,
+  priceRemix: row.price_remix ?? 0,
   currentVersion: row.current_version,
   publishedVersion: row.published_version,
   coverPath: row.cover_path,

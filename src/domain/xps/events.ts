@@ -122,6 +122,67 @@ export type XpVersionSaved = DomainEvent<
   }
 >
 
+/**
+ * What this level costs, as the owner set it.
+ *
+ * `docs/product/economy.md` §9. One event for both prices because they are one
+ * decision - "what is this worth to somebody else" - made in one panel of the
+ * editor, and two events would mean two versions of the same thought that can
+ * disagree.
+ *
+ * ---------------------------------------------------------------------------
+ * Two prices, and they are not alternatives to each other
+ * ---------------------------------------------------------------------------
+ * `once` is what it costs to **play** it, paid a single time. `remix` is what
+ * it costs to **take a copy and change it**. Somebody can pay one and not the
+ * other, and an owner can charge for one and not the other - a level that is
+ * free to play and costs coins to fork is a perfectly ordinary thing to want,
+ * and so is the reverse.
+ *
+ * ---------------------------------------------------------------------------
+ * What `once` replaces
+ * ---------------------------------------------------------------------------
+ * The per-play stake. A level with a one-time price is bought rather than
+ * rented: the first entry charges `once` to its owner and every entry after
+ * that is free, including the 1-coin stake every other level takes. The two
+ * models are deliberately exclusive - being charged a toll on a level you have
+ * already bought is the kind of thing that makes people stop trusting a price.
+ *
+ * `0` means free, and is the default. Both of them. Nothing about this event
+ * existing changes what an untouched level costs.
+ *
+ * ---------------------------------------------------------------------------
+ * The prices are recorded here and read from the read model, never from a form
+ * ---------------------------------------------------------------------------
+ * Same rule `PropPlaced` states about `price`: the charge is made by a server
+ * action that read the stored number, so re-pricing a level next month cannot
+ * retroactively change what somebody paid for it last month - and no browser
+ * ever names an amount at the moment it is charged.
+ */
+export type XpPriced = DomainEvent<
+  'XpPriced',
+  {
+    /** Coins to play it, once and then never again. `0` is free. */
+    once: number
+    /** Coins to take a copy and edit it. `0` is free. */
+    remix: number
+    /**
+     * Who the remix money is split between, as whole percentages.
+     *
+     * Absent or empty means it is all the owner's, which is why there is no row
+     * saying so. What is *not* named here stays with the owner, so the shares
+     * need not add to 100 - and deliberately cannot be made to, because a level
+     * whose owner has given away every point is a level they are paid nothing
+     * for, which is a mistake rather than a configuration.
+     *
+     * It exists because levels are already made by more than one person - a
+     * world by one, the scripts by another - and a single payee would mean that
+     * arrangement lives in a private message instead of in the product.
+     */
+    split?: Record<string, number>
+  }
+>
+
 export type XpAccessSet = DomainEvent<'XpAccessSet', { spacePolicy: XpSpacePolicy }>
 
 export type XpShared = DomainEvent<'XpShared', { account: string; right: XpRight }>
@@ -196,6 +257,7 @@ export type XpEvent =
   | XpCreated
   | XpRenamed
   | XpVersionSaved
+  | XpPriced
   | XpAccessSet
   | XpShared
   | XpUnshared
@@ -214,6 +276,7 @@ export const XP_EVENT_LABELS: Record<XpEvent['type'], string> = {
   XpCreated: 'project created',
   XpRenamed: 'project renamed',
   XpVersionSaved: 'version saved',
+  XpPriced: 'price set',
   XpAccessSet: 'space access changed',
   XpShared: 'shared with somebody',
   XpUnshared: 'sharing revoked',

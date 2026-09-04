@@ -409,6 +409,14 @@ export interface WorldDict {
     searchPacks: string
     /** What picking one does. Said once, under the search. */
     browseHint: string
+    /**
+     * What drawing a new one costs, said once above the grid.
+     *
+     * Only drawn when there is a number - which is only in a space running the
+     * economy that is past the blueprints its plan includes. The coin and the
+     * figure follow it, so this ends without punctuation.
+     */
+    drawCosts: string
     /** How much there is to search. `{models}` and `{packs}` are counts. */
     catalogue: string
     yours: string
@@ -673,6 +681,7 @@ export const WORLD_EN: WorldDict = {
     browse: 'Thingiverse',
     searchPacks: 'Search the packs',
     browseHint: 'Pick one and it appears in front of you.',
+    drawCosts: 'Drawing a new one costs',
     catalogue: '{models} models across {packs} packs',
     yours: 'Yours',
     shared: 'Shared',
@@ -1116,6 +1125,7 @@ export const WORLD_DE: WorldDict = {
     browse: 'Thingiverse',
     searchPacks: 'Pakete durchsuchen',
     browseHint: 'Wählen Sie eines - es erscheint vor Ihnen.',
+    drawCosts: 'Ein neues zu zeichnen kostet',
     catalogue: '{models} Modelle in {packs} Paketen',
     yours: 'Ihre',
     shared: 'Geteilt',
@@ -1568,6 +1578,7 @@ export const WORLD_BG: WorldDict = {
     browse: 'Thingiverse',
     searchPacks: 'Търсене в пакетите',
     browseHint: 'Изберете нещо и то се появява пред вас.',
+    drawCosts: 'Ново струва',
     catalogue: '{models} модела в {packs} пакета',
     yours: 'Ваши',
     shared: 'Споделени',

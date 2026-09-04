@@ -192,7 +192,12 @@ export default async function PlayPage({
   const { look, variant } = await resolveLook((await searchParams).look)
 
   return (
-    <MarketingShell active="play">
+    <MarketingShell>
+      {/* No `active` here any more. The nav lost these three pills upstream — the
+          pages they marked moved into a section this repository does not carry —
+          so the prop narrowed to the one value left. This page is still real and
+          still wears the shell; it simply has nothing in the header to light up,
+          which is the honest state rather than a marker pointing at nothing. */}
       {/* `data-look` is the whole of the art-direction switch - see the note in
           globals.css. The markup below is identical in both arms. */}
       <div className="bento doc" data-look={look} data-variant={variant ?? undefined}>

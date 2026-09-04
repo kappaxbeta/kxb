@@ -651,6 +651,21 @@ function Output({
       <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
         <input
           type="checkbox"
+          checked={shot.bubbles}
+          onChange={(event) => patch({ bubbles: event.target.checked })}
+          className="accent-accent"
+        />
+        Draw what they say
+      </label>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Off records a clean plate — the same performance with no writing burned
+        into it, for a cut that is going to be subtitled or shown in another
+        language. The lines are still spoken, still in the link, and still in
+        the transcript the buttons under the viewport download.
+      </p>
+      <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
           checked={shot.ease}
           onChange={(event) => patch({ ease: event.target.checked })}
           className="accent-accent"
@@ -1274,8 +1289,19 @@ function ActorInspector({
         </>
       )}
 
-      <Slide label="Bubble up" value={actor.emoteHeight} min={0} max={8} step={0.05} onChange={(emoteHeight) => set({ emoteHeight })} />
-      <Slide label="Bubble size" value={actor.emoteSize} min={0.3} max={2.5} step={0.05} onChange={(emoteSize) => set({ emoteSize })} />
+      {/*
+        Two pairs, because a face and a sentence are two bubbles.
+
+        Both always shown here, unlike the still's panel: a shot is a timeline,
+        so whether this actor has an emote or a line up depends on where the
+        playhead is - and a slider that appears and disappears as you scrub is
+        a slider you cannot reach. See `PeepSpec.sayHeight` for why the sentence
+        stopped borrowing the face's numbers.
+      */}
+      <Slide label="Face up" value={actor.emoteHeight} min={0} max={8} step={0.05} onChange={(emoteHeight) => set({ emoteHeight })} />
+      <Slide label="Face size" value={actor.emoteSize} min={0.3} max={2.5} step={0.05} onChange={(emoteSize) => set({ emoteSize })} />
+      <Slide label="Speech up" value={actor.sayHeight} min={0} max={8} step={0.05} onChange={(sayHeight) => set({ sayHeight })} />
+      <Slide label="Speech size" value={actor.saySize} min={0.1} max={2} step={0.05} onChange={(saySize) => set({ saySize })} />
 
       {/* --- what they do ------------------------------------------------- */}
       {/* The way in to performing, next to the animal it performs. The button

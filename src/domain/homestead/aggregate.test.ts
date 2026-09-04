@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { prop as cafeProp, refundOf as cafeRefund } from '@kxb/dream-restaurant/catalog'
+import { dishPrice } from '@/domain/homestead/pricing'
 import {
   decide,
   evolve,
@@ -401,18 +402,30 @@ describe('buying ground', () => {
 })
 
 describe('earning', () => {
+  /*
+    Read from the catalogue rather than written down.
+
+    These were hardcoded at the burger's price of the day, and a price change
+    broke two of them - which is the wrong thing for a test about *earning* to
+    have an opinion on. What is being asserted here is that a payment lands in
+    the purse and that the ceiling clears an honest tip; neither is a claim
+    about what a burger costs, and neither should fail when somebody re-prices
+    the menu.
+  */
+  const BURGER = dishPrice('burger') as number
+
   test('a served customer adds their payment and counts', () => {
     const state = founded(0)
     const [event] = decide(state, {
       type: 'ServeCustomer',
       dish: 'burger',
-      payment: 14,
+      payment: BURGER,
     })
 
     const after = fold([event], state)
-    expect(after.coins).toBe(14)
+    expect(after.coins).toBe(BURGER)
     expect(after.served).toBe(1)
-    expect(after.earned).toBe(14)
+    expect(after.earned).toBe(BURGER)
   })
 
   test('a client cannot invent its own payday', () => {
@@ -427,11 +440,17 @@ describe('earning', () => {
   })
 
   test('a tip above the menu price is still accepted', () => {
-    // The ceiling has to clear a full-ambience tip, or honest play gets rejected.
+    /*
+      The ceiling has to clear a full-ambience tip, or honest play gets
+      rejected. Asserted at the menu price plus a quarter, which is comfortably
+      inside the multiplier and does not encode what that multiplier is - a test
+      that knew the exact ceiling would be a second copy of the rule rather than
+      a check on it.
+    */
     const [event] = decide(founded(), {
       type: 'ServeCustomer',
       dish: 'burger',
-      payment: 20,
+      payment: Math.ceil(BURGER * 1.25),
     })
     expect(event.type).toBe('CustomerServed')
   })
@@ -721,7 +740,7 @@ describe('handing coins to somebody else', () => {
 
   test('and the credit goes on to the receiver', () => {
     const state = founded(40)
-    const [event] = decide(state, { type: 'ReceiveCoins', from: 'bo', amount: 120, transfer })
+    const [event] = decide(state, { type: 'ReceiveCoins', from: 'bo', amount: 120, transfer, owner: 'ann' })
 
     expect(event.type).toBe('CoinsReceived')
     expect(fold([event], state).coins).toBe(160)
@@ -739,7 +758,7 @@ describe('handing coins to somebody else', () => {
         decide(founded(9_999_999), { type: 'SendCoins', to: 'ann', amount, transfer }),
       ).toThrow()
       expect(() =>
-        decide(founded(0), { type: 'ReceiveCoins', from: 'ann', amount, transfer }),
+        decide(founded(0), { type: 'ReceiveCoins', from: 'ann', amount, transfer, owner: 'bo' }),
       ).toThrow()
     }
   })
@@ -752,6 +771,7 @@ describe('handing coins to somebody else', () => {
       from: 'ann',
       amount: 25,
       transfer,
+      owner: 'bo',
     })
     expect(event.type).toBe('CoinsReceived')
     expect(fold([event], initialHomesteadState).coins).toBe(25)
@@ -763,12 +783,31 @@ describe('handing coins to somebody else', () => {
     ).toThrow()
   })
 
+  test('the credit names whose purse it lands in, not just who sent it', () => {
+    /*
+      The field that stops a transfer going missing. `events.actor_id` is
+      `auth.uid()`, forced by RLS in `append_events`, so the credit half - which
+      is appended to the *recipient's* stream by the *sender's* session - is
+      stamped with the sender. A projection that read the actor moved the wrong
+      purse, and the replay guard on that wrong row then skipped the write
+      altogether. `owner` is what the projection reads instead.
+    */
+    const [credit] = decide(founded(0), {
+      type: 'ReceiveCoins',
+      from: 'sender',
+      amount: 10,
+      transfer,
+      owner: 'recipient',
+    })
+    expect(credit.data).toMatchObject({ from: 'sender', owner: 'recipient' })
+  })
+
   test('a transfer moves exactly what it took, and nothing is created', () => {
     const sender = founded(500)
     const receiver = founded(100)
 
     const [debit] = decide(sender, { type: 'SendCoins', to: 'ann', amount: 75, transfer })
-    const [credit] = decide(receiver, { type: 'ReceiveCoins', from: 'bo', amount: 75, transfer })
+    const [credit] = decide(receiver, { type: 'ReceiveCoins', from: 'bo', amount: 75, transfer, owner: 'ann' })
 
     const before = sender.coins + receiver.coins
     const after = fold([debit], sender).coins + fold([credit], receiver).coins

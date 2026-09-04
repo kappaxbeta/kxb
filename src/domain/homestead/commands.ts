@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { EarnReason, SpendReason } from '@/domain/bank/reasons'
 import { MAX_TRANSFER, type DoorMode, type PlaceId } from '@/domain/homestead/events'
 
 /**
@@ -126,7 +127,49 @@ export type HomesteadCommand =
    * the only place that number is allowed to come from - see the note at the
    * top of this file about prices, which still holds.
    */
-  | ({ type: 'SpendCoins' } & { on: 'thing' | 'item'; what: string; cost: number })
+  | ({ type: 'SpendCoins' } & {
+      on?: 'thing' | 'item'
+      what: string
+      cost: number
+      reason?: SpendReason
+    })
+  /**
+   * A charge that takes what it can and forgives the rest.
+   *
+   * The only command in this file that is allowed to move less than it was
+   * asked for, and it exists for one case: `docs/product/economy.md` §7.5, a
+   * player at zero who loses a battle. `SpendCoins` refuses what cannot be
+   * afforded, which is right for everything somebody *chose* to buy - an extra
+   * blueprint you cannot pay for should not half-happen. A loss is not chosen,
+   * and refusing it would mean the player simply does not pay, which makes
+   * losing free for exactly the people who lose most.
+   *
+   * The shortfall is recorded and then dropped. No debt is carried - see the
+   * field's own note on `CoinsSpent`.
+   *
+   * Kept as its own command rather than a flag on `SpendCoins` because the two
+   * differ in the thing that matters most about a purse: whether a caller can
+   * rely on "it either happened or it did not". A boolean would put that
+   * question at every call site.
+   */
+  | ({ type: 'ChargeCoins' } & { what: string; amount: number; reason: SpendReason })
+  /**
+   * Coins arriving from outside. See `CoinsEarned`.
+   *
+   * No Zod schema, like its neighbours, and the reason is sharper here than for
+   * any of them: this is **the command that can create money.** Every amount it
+   * moves comes from a constant in `bank/prices.ts` or from a price an owner
+   * typed into an editor, read server-side. There is no path from a browser to
+   * this shape and there must never be one.
+   */
+  | ({ type: 'EarnCoins' } & {
+      amount: number
+      reason: EarnReason
+      what?: string
+      from?: string
+      /** Whose purse. Required - see `CoinsEarned.owner`. */
+      owner: string
+    })
   /**
    * The two halves of a transfer. See `CoinsSent`.
    *
@@ -136,4 +179,4 @@ export type HomesteadCommand =
    * has checked. The action parses the amount; these are what it issues.
    */
   | ({ type: 'SendCoins' } & { to: string; amount: number; transfer: string })
-  | ({ type: 'ReceiveCoins' } & { from: string; amount: number; transfer: string })
+  | ({ type: 'ReceiveCoins' } & { from: string; amount: number; transfer: string; owner: string })

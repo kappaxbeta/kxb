@@ -55,6 +55,13 @@ export interface TenantState {
    */
   chatEnabled: boolean
   /**
+   * Whether players get hungry here, and whether answering that costs coins.
+   *
+   * Both off until an owner says otherwise - see `SpaceNeedsSet`. A space that
+   * has never thought about needs is one where nothing starves.
+   */
+  needs: { hunger: boolean; charged: boolean }
+  /**
    * Which of the day-to-day switches the staff have turned *off*.
    *
    * An absent key means on, the same way `chatEnabled` above now defaults.
@@ -84,6 +91,7 @@ export const initialTenantState: TenantState = {
   isPublicLounge: false,
   loungeMode: 'battle',
   chatEnabled: true,
+  needs: { hunger: false, charged: false },
   capabilities: {},
   members: {},
   invitations: {},
@@ -236,6 +244,12 @@ export function evolve(state: TenantState, event: TenantEvent): TenantState {
 
     case 'ChatEnabledSet':
       return { ...state, chatEnabled: event.data.enabled }
+
+    case 'SpaceNeedsSet':
+      return {
+        ...state,
+        needs: { hunger: event.data.hunger, charged: event.data.charged },
+      }
 
     case 'SpaceCapabilitySet':
       return {
@@ -554,6 +568,38 @@ export function decide(state: TenantState, command: TenantCommand): TenantEvent[
       requireRole(state, command, ['owner', 'admin'])
       if (state.chatEnabled === command.enabled) return []
       return [{ type: 'ChatEnabledSet', data: { enabled: command.enabled } }]
+    }
+
+    /**
+     * The space's rules about needing things.
+     *
+     * **Owners only**, and that is a step up from the switches around it, which
+     * admins may also touch. The reason is what this one does when it goes on:
+     * it makes playing here cost money, and it can make a player who cannot pay
+     * unable to keep playing. That is a decision about what the space *is*, not
+     * a switch reached for during the day, and it belongs to whoever the space
+     * belongs to.
+     *
+     * `charged` is recorded even while `hunger` is off, where it does nothing.
+     * Normalising it to `false` would mean switching hunger back on lands the
+     * space on a default rather than on the arrangement its owner last chose -
+     * a small betrayal that only shows up months later.
+     */
+    case 'SetSpaceNeeds': {
+      assertActive(state)
+      requireRole(state, command, ['owner'])
+      if (
+        state.needs.hunger === command.hunger &&
+        state.needs.charged === command.charged
+      ) {
+        return []
+      }
+      return [
+        {
+          type: 'SpaceNeedsSet',
+          data: { hunger: command.hunger, charged: command.charged },
+        },
+      ]
     }
 
     /**

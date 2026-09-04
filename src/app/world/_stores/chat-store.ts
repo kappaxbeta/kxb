@@ -62,6 +62,15 @@ export interface ChatFeed {
   loading: boolean
   /** Switch conversation without moving. See `goToRoom` in the dock. */
   onRoom: (roomId: string | null) => void
+  /**
+   * Stop hearing somebody, from one of their lines.
+   *
+   * Published beside `onRoom` because it belongs to the same owner: the dock
+   * holds the list, so the dock is the only thing that can take somebody out of
+   * it. A panel that wrote the row itself would leave its own copy of the
+   * conversation still showing them.
+   */
+  onBlock: (userId: string) => void
 }
 
 let actions: ChatActions | null = null

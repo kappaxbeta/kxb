@@ -112,6 +112,19 @@ export async function claimFreeMonth(
       until,
       days: Math.max(1, Math.round((new Date(until).getTime() - Date.now()) / 86_400_000)),
       tier: asTier(row.granted_tier) ?? DEFAULT_TIER,
+      /*
+        Nothing but the month, and that is the whole difference between this and
+        a code.
+
+        `claim_free_month` has no code behind it - it is the win-back, taken by
+        somebody who was already here - so there is nothing that could have said
+        what else to hand over. Zeros rather than an optional field on
+        `RedeemGrant`, so every surface that shows a grant can ask the same
+        three questions of it and get an honest answer.
+      */
+      bucks: 0,
+      coins: 0,
+      voucherCodes: [],
     },
   }
 }

@@ -168,6 +168,8 @@ import { LOCAL_SPEAKER, onSaid } from '@/app/world/_stores/said-store'
 import type { EmoteId } from '@/domain/world/emotes'
 import { useEditBuffer } from '@/app/world/lounge/_hooks/use-edit-buffer'
 import { LoungeImages } from '@/app/world/lounge/_canvas/lounge-images'
+import { notePurseMoved } from '@/app/components/purse-signal'
+import { rewardThingKill } from '@/domain/thingiverse/kill-actions'
 import { LoungeThings, ThingPreview } from '@/app/world/lounge/_canvas/lounge-things'
 import { freeSeat, seatOf, Usables } from '@/app/world/lounge/_canvas/usables'
 import { ThingSolids } from '@/app/world/lounge/_sim/thing-solids'
@@ -195,9 +197,18 @@ import { saveWorldAsArena } from '@/domain/battlefields/actions'
 import { claimThing, myConn, slotsOn } from '@/app/world/_stores/thing-life-store'
 import { PocketPanel } from '@/app/world/lounge/_hud/pocket-panel'
 import { emptyPockets } from '@/app/world/_stores/pocket-store'
-import { POCKET_KEY } from '@/domain/thingiverse/pocket'
-import { heldIndex, heldNow, nextInPocket, takeFromPocket } from '@/app/world/_stores/pocket-store'
+import { inHand, POCKET_KEY } from '@/domain/thingiverse/pocket'
+import {
+  heldIndex,
+  heldNow,
+  nextInPocket,
+  takeFromPocket,
+  usePocket,
+} from '@/app/world/_stores/pocket-store'
 import { answersUse, priceOfSlot } from '@/domain/thingiverse/blueprint'
+import { itemLook, itemLooks } from '@/domain/thingiverse/craft'
+import { inFront, SHOT_ARC, SWING_ARC, type Target as AimTarget } from '@/app/world/lounge/_sim/aim'
+import { fireTracer } from '@/app/world/_stores/tracer-store'
 import { payToTake } from '@/domain/thingiverse/shop'
 import { reachFor } from '@/domain/thingiverse/craft'
 import { removeLoungeImage } from '@/domain/lounge/image-actions'
@@ -209,12 +220,12 @@ import type {
 } from '@/domain/thingiverse/queries'
 import { toClip } from '@/app/world/_canvas/baked-clip'
 import {
+  asAvatarClip,
   AVATAR_CLIPS,
-  type AvatarClip,
   DEFAULT_AVATAR,
   DUMMY_LOOK,
 } from '@/domain/lounge/avatars'
-import { chooseAvatar, wearDummy } from '@/domain/profile/avatar-actions'
+import { chooseAvatar } from '@/domain/profile/avatar-actions'
 import { chooseSkin, wearSkinInLounge } from '@/domain/skins/actions'
 import { blockKey } from '@/domain/lounge/events'
 import {
@@ -278,6 +289,7 @@ export function LoungeScene({
   initialImages,
   initialThings = [],
   initialShelf = [],
+  newThingPrice = 0,
   initialClips = [],
   stamina = false,
   initialGoals = [],
@@ -298,7 +310,6 @@ export function LoungeScene({
   animal,
   skins,
   xpBody = null,
-  asDummy = false,
   showXp = false,
   presence,
   perf,
@@ -331,6 +342,21 @@ export function LoungeScene({
    */
   initialThings?: ThingView[]
   initialShelf?: BlueprintView[]
+  /**
+   * What drawing one more blueprint costs this space, in coins.
+   *
+   * Zero means it is included in the plan, which is the answer for almost
+   * everybody and the answer for *everybody* in a space with the economy
+   * switched off - so the default is the free one, and a surface with no
+   * workspace behind it (the demo, the still renderer, the shot server) prints
+   * nothing rather than guessing.
+   *
+   * Passed in rather than read here for the reason every number on this scene
+   * is: a Server Action firing while the canvas runs is what this file is
+   * written throughout to avoid, and the price is a fact about the plan that
+   * cannot change while somebody is standing in the room.
+   */
+  newThingPrice?: number
   /**
    * The clips this space animated for itself.
    *
@@ -508,9 +534,14 @@ export function LoungeScene({
    * everywhere the moment they equipped a skin for the games.
    */
   xpBody?: string | null
-  /** Whether the peep half is the plain mannequin rather than the animal. */
-  asDummy?: boolean
-  /** The mode: draw the XP body in this world instead of the peep. */
+  /**
+   * The mode: draw the XP body in this world instead of the peep.
+   *
+   * The only control over which body is on screen. There used to be a second -
+   * a mannequin worn by the *peep* - and it existed only because this one was
+   * unavailable to anybody with no XP body equipped. It is available to
+   * everybody now: an XP body with nothing on it is the dummy.
+   */
   showXp?: boolean
   /**
    * Who you are on the presence channel. Absent for the public showcase, which
@@ -729,6 +760,9 @@ export function LoungeScene({
     selfEmoteRef,
     selfSaidRef,
     sendEmoteRef,
+    sendShotRef,
+    headingRef,
+    transformsRef,
     ballRef,
     kickoffRef,
     hostStalledRef,
@@ -817,9 +851,9 @@ export function LoungeScene({
    *
    * Deliberately *not* one "worn" value with the rest hanging off it. You have
    * a peep and an XP body at the same time and neither is spent by the other,
-   * so all three parts are held: `animal` and `dummy` are the peep half, `xp`
-   * is the other body, and `showXp` is a mode rather than a costume. What the
-   * renderer draws is derived from them below and stored nowhere, which is what
+   * so both are held plus the mode: `animal` is the peep, `xp` is the other body,
+   * and `showXp` is a mode rather than a costume. What the renderer draws is
+   * derived from them below and stored nowhere, which is what
    * makes it impossible for the two to drift apart again - equipping a skin
    * used to overwrite the single worn value, and the peep was gone from every
    * space until it was picked a second time.
@@ -831,11 +865,10 @@ export function LoungeScene({
    */
   const [look, setLook] = useState({
     animal: animal ?? avatar,
-    dummy: asDummy,
     xp: xpBody,
     showXp,
   })
-  const [seenProps, setSeenProps] = useState({ avatar, animal, xpBody, asDummy, showXp })
+  const [seenProps, setSeenProps] = useState({ avatar, animal, xpBody, showXp })
 
   /**
    * The body swap's own two pieces of state: why the last one was refused, and
@@ -851,29 +884,29 @@ export function LoungeScene({
     seenProps.avatar !== avatar ||
     seenProps.animal !== animal ||
     seenProps.xpBody !== xpBody ||
-    seenProps.asDummy !== asDummy ||
     seenProps.showXp !== showXp
   ) {
-    setSeenProps({ avatar, animal, xpBody, asDummy, showXp })
-    setLook({ animal: animal ?? avatar, dummy: asDummy, xp: xpBody, showXp })
+    setSeenProps({ avatar, animal, xpBody, showXp })
+    setLook({ animal: animal ?? avatar, xp: xpBody, showXp })
   }
 
   /**
-   * The one body on screen, worked out from the three above.
+   * The one body on screen: two bodies and a switch, and the switch decides.
    *
-   * The order is the one `readLoungeLook` writes down on the server, and it is
-   * written twice on purpose rather than shared: this one has to answer before
-   * the round trip lands, and the server's has to answer for everybody else in
-   * the room. They agree because both start from the mode.
+   * The same rule `readLoungeLook` writes down on the server, written twice on
+   * purpose rather than shared: this one has to answer before the round trip
+   * lands, and the server's has to answer for everybody else in the room.
+   *
+   * `?? DUMMY_LOOK` is the whole of what used to be a third body. An XP body
+   * with nothing equipped is the dummy, so asking for XP mode with an empty
+   * shelf is how somebody who owns nothing stands in the mannequin - which is
+   * what `asDummy` was invented to do, from the peep's side, where it did not
+   * belong.
    *
    * `avatar` is the fallback rather than `look.animal` for the showcase, where
    * there is no account behind any of this and the prop is the whole answer.
    */
-  const wearing = look.showXp
-    ? (look.xp ?? DUMMY_LOOK)
-    : look.dummy
-      ? DUMMY_LOOK
-      : (look.animal ?? avatar)
+  const wearing = look.showXp ? (look.xp ?? DUMMY_LOOK) : (look.animal ?? avatar)
 
   /**
    * Looking at the whole room from above, on purpose.
@@ -1787,6 +1820,7 @@ export function LoungeScene({
    */
   const thingSolids = useMemo(() => new ThingSolids(), [])
 
+
   /**
    * Where a summoned thing stands.
    *
@@ -1954,6 +1988,244 @@ export function LoungeScene({
   const staminaOn = staminaOverride ?? stamina
 
   /** What is in your hands is exactly where you put it. Nothing follows a look. */
+/**
+   * The shelf, as "what does this word look like".
+   *
+   * Rebuilt when the shelf changes and not per frame: a room with a kitchen in
+   * it resolves a word per filled socket per render, and a `find` over two
+   * hundred blueprints in that position is the sort of cost that only shows up
+   * on the space that has been using this for a year.
+   */
+  const itemModels = useMemo(
+    () =>
+      itemLooks(
+        thingShelf.map((entry) => ({
+          name: entry.name,
+          model: entry.spec.model,
+          scale: entry.spec.scale,
+          hold: entry.spec.hold,
+          weapon: entry.spec.fight?.weapon,
+        })),
+      ),
+    [thingShelf],
+  )
+
+  /**
+   * What is in our own hand, resolved to something a body can be drawn holding.
+   *
+   * The pocket is a module store rather than a prop for the reason it says: the
+   * keys that fill it are handled outside the Canvas. Read through its hook
+   * here so that taking a pistol out re-renders the one body that has to change
+   * - which is a render every few seconds at worst, and never in a frame loop.
+   *
+   * Null when the shelf has no grip for what we are holding: a burger nobody
+   * has posed is a burger that stays in the pocket panel, which is better than
+   * one drawn through the middle of a wrist.
+   */
+  const pocket = usePocket()
+  const ownHold = useMemo(() => {
+    const word = inHand(pocket)
+    if (!word) return null
+    const look = itemLook(itemModels, word)
+    if (!look?.hold) return null
+    return { model: look.model, hold: look.hold, scale: look.scale }
+  }, [pocket, itemModels])
+
+  /**
+   * Firing what is in your hand, or swinging it.
+   *
+   * ---------------------------------------------------------------------------
+   * Why the trigger is the left button and not a letter
+   * ---------------------------------------------------------------------------
+   * Because the room already has a rule about what the left button is for -
+   * "the thing in your hands takes the click" - and a gun is the same sentence
+   * as a bench: you are holding something and you are pointing it at the world.
+   * It collides with nothing, because the other two claimants are gated on
+   * creative mode: breaking a block and placing a thing both need `canBuild`,
+   * and a weapon only works where `combat` is on. The two modes never overlap.
+   *
+   * ---------------------------------------------------------------------------
+   * Everything about the shot is decided here
+   * ---------------------------------------------------------------------------
+   * What is in your hand, whether the cooldown is up, which way you are
+   * pointing, who was in the cone. All four are the scene's to know, and the
+   * one thing it cannot do is talk to the socket - which is exactly what
+   * `sendShotRef` crosses. The same division `sendEmoteRef` already makes.
+   *
+   * The attacker judging their own hit is the rule this room runs on: see
+   * `_sim/aim`, and `dashConnects` before it.
+   */
+  const ownWeapon = useMemo(() => {
+    const word = inHand(pocket)
+    if (!word) return null
+    const look = itemLook(itemModels, word)
+    if (!look?.weapon) return null
+    return { word, look, weapon: look.weapon }
+  }, [pocket, itemModels])
+
+  /** Read from a click handler, which must not be rebuilt when the pocket changes. */
+  const weaponRef = useRef(ownWeapon)
+  useEffect(() => {
+    weaponRef.current = ownWeapon
+  }, [ownWeapon])
+
+  /** When the next shot is allowed, on this client's own clock. */
+  const readyAt = useRef(0)
+
+  const fightingRef = useRef(combat)
+  useEffect(() => {
+    fightingRef.current = combat
+  }, [combat])
+
+  const thingsForAimRef = useRef<ThingView[]>([])
+  useEffect(() => {
+    thingsForAimRef.current = things
+  }, [things])
+
+  const fire = useCallback(() => {
+    const armed = weaponRef.current
+    if (!armed || !fightingRef.current) return
+
+    const now = performance.now()
+    if (now < readyAt.current) return
+    readyAt.current = now + armed.weapon.every * 1000
+
+    const eye = playerRef.current
+    const heading = headingRef.current
+    const flat = Math.hypot(heading.x, heading.z)
+    if (flat === 0) return
+    const dir = { x: heading.x / flat, z: heading.z / flat }
+
+    /*
+      Out of the hand rather than out of the eye: a bullet drawn from the exact
+      point the camera is at is a bullet nobody in first person can see, and one
+      that starts a whole body-width in front is a bullet that misses whoever is
+      standing on top of you. Half a cell forward and a little below the eye is
+      roughly where the hand holding it is.
+    */
+    const from = {
+      x: eye.x + dir.x * 0.5,
+      y: eye.y - 0.35,
+      z: eye.z + dir.z * 0.5,
+    }
+
+    const shot = armed.weapon.shot
+    const arc = shot ? SHOT_ARC : SWING_ARC
+    const aimAt = armed.weapon.at
+
+    /*
+      Everybody else, at the position they are *drawn* at - which is the same
+      answer `judgeDash` uses and for the same reason: what you see is what you
+      hit. Somebody already down is not a target; there is nothing left to take
+      off them.
+    */
+    const bodies: AimTarget[] = []
+    if (aimAt !== 'things') {
+      for (const [id, peer] of transformsRef.current ?? []) {
+        if (peer.health <= 0) continue
+        bodies.push({ id, at: peer.current })
+      }
+    }
+
+    /*
+      And the furniture, at the middle of the cell it stands in. A thing takes a
+      claim rather than a message: the room's machines are run by one client,
+      and telling it "I hit that crate" is what a claim is. Whether the crate
+      cares is its blueprint's business - see `honour`.
+    */
+    const props: AimTarget[] = []
+    if (aimAt !== 'people') {
+      for (const thing of thingsForAimRef.current) {
+        if (!thing.blueprint?.spec.fight?.health) continue
+        props.push({
+          id: thing.id,
+          at: { x: thing.x + 0.5, y: thing.y + 0.5, z: thing.z + 0.5 },
+        })
+      }
+    }
+
+    const reach = armed.weapon.reach
+    const onBodies = inFront(from, dir, reach, arc, bodies)
+    const onProps = inFront(from, dir, reach, arc, props)
+
+    /*
+      A bullet stops in the first thing it meets; a swing takes everything in
+      the arc. That is the whole of the difference between a rifle and a bat
+      once the geometry is done.
+    */
+    const bodiesHit = shot ? onBodies.slice(0, 1) : onBodies
+    const propsHit = shot ? onProps.slice(0, 1) : onProps
+
+    for (const hit of propsHit) claimThing({ i: hit.id, hit: armed.weapon.damage })
+
+    /*
+      Where the bullet ends: in whoever it hit, or out at the end of its reach.
+      A miss is drawn for the same reason a hit is - a room where you only ever
+      see the shots that landed is a room where aiming is invisible.
+    */
+    const nearest = shot ? (bodiesHit[0] ?? propsHit[0]) : undefined
+    const travelled = nearest?.distance ?? reach
+    const to = {
+      x: from.x + dir.x * travelled,
+      y: from.y,
+      z: from.z + dir.z * travelled,
+    }
+
+    if (shot) {
+      // Ours is drawn from the queue rather than from our own broadcast:
+      // Realtime does not echo to the sender, so this is the only way the
+      // shooter sees their own bullet. The same note `resetBallRef` carries.
+      fireTracer({
+        model: shot.model,
+        scale: shot.scale,
+        speed: shot.speed,
+        from,
+        to,
+      })
+    }
+
+    /*
+      One call for both halves - the tracer everybody draws and the damage one
+      person pays. A shot that hits nobody still goes out, because the miss is
+      the picture. See `PlayerShot`.
+    */
+    for (const hit of bodiesHit) {
+      sendShotRef.current?.({
+        from,
+        to,
+        ...(shot ? { model: shot.model } : {}),
+        scale: shot?.scale ?? 1,
+        speed: shot?.speed ?? 1,
+        hit: hit.id,
+        damage: armed.weapon.damage,
+      })
+    }
+    if (bodiesHit.length === 0) {
+      sendShotRef.current?.({
+        from,
+        to,
+        ...(shot ? { model: shot.model } : {}),
+        scale: shot?.scale ?? 1,
+        speed: shot?.speed ?? 1,
+        hit: null,
+        damage: 0,
+      })
+    }
+  }, [playerRef, headingRef, transformsRef, sendShotRef])
+
+  /**
+   * The trigger, behind a ref.
+   *
+   * The click handler is a `useCallback` with its own dependency list, and
+   * `fire` changes whenever the shelf does - listing it would rebuild the
+   * document-level mousedown listener every time somebody drew a blueprint.
+   * The same trick `placeThingRef` next to it plays, for the same reason.
+   */
+  const fireRef = useRef(fire)
+  useEffect(() => {
+    fireRef.current = fire
+  }, [fire])
+
   const carryAt = carriedThing?.at ?? null
 
   /**
@@ -2169,6 +2441,49 @@ export function LoungeScene({
     const made = initialClips.find((entry) => entry.name === bodyClip)
     return made ? toClip(made.clip) : null
   }, [bodyClip, initialClips])
+
+  /**
+   * The same lookup, by name, for everybody else's body.
+   *
+   * A function rather than a value because a room holds several peers and each
+   * may be doing something different, and cached because `toClip` allocates a
+   * `Float32Array` per bone track - a bench with three people on it would
+   * otherwise rebuild the same sit three times, and again on the next render.
+   *
+   * The cache is keyed on the clip list, so a space that animates something new
+   * gets a new one rather than a stale answer for a name that used to miss.
+   */
+  /**
+   * A ref rather than state, and read only from inside the callback below -
+   * which is where a cache belongs: it is not something anything renders from,
+   * and the compiler is right that a value built during render must not be
+   * quietly written to afterwards.
+   */
+  const poseCache = useRef<{
+    from: unknown
+    made: Map<string, THREE.AnimationClip | null>
+  }>({ from: null, made: new Map() })
+  const poseNamed = useCallback(
+    (name: string) => {
+      // Emptied when the space's clip list is a different one, so a name that
+      // used to miss is looked up again rather than answered from a cache built
+      // before it existed.
+      const cache = poseCache.current
+      if (cache.from !== initialClips) {
+        cache.from = initialClips
+        cache.made.clear()
+      }
+
+      const held = cache.made.get(name)
+      if (held !== undefined) return held
+
+      const found = initialClips.find((entry) => entry.name === name)
+      const built = found ? toClip(found.clip) : null
+      cache.made.set(name, built)
+      return built
+    },
+    [initialClips],
+  )
 
   /**
    * Which things are under somebody right now, and must not be drawn parked.
@@ -3062,6 +3377,18 @@ export function LoungeScene({
        * while holding something is somebody reaching for the other way to
        * place, not somebody asking for a block behind it.
        */
+      /*
+        A weapon in your hand takes the click before anything else does, for
+        exactly the reason a carried bench does one line below: it is the thing
+        you are holding, and it is what you are pointing at the world. Only in
+        a room where hitting happens - in creative mode the same button is
+        still building.
+      */
+      if (button === 0 && fightingRef.current && weaponRef.current) {
+        fireRef.current()
+        return
+      }
+
       if (carryingRef.current) {
         if (button === 0) void placeThingRef.current(carryAtRef.current)
         return
@@ -3610,12 +3937,64 @@ export function LoungeScene({
                   the E that would swing is the E that picks the crate up.
                 */
                 fighting={combat}
+                /*
+                  A coin for knocking something over.
+
+                  Handed in rather than reached for, like `live` above: the slug
+                  lives out here and the frame that decides a thing reached zero
+                  lives inside the Canvas.
+
+                  The result carries the new balance, so the rail is told with a
+                  number instead of going to look - a read per kill would
+                  re-render this page around the scene, which is exactly what
+                  made the café stutter. See `purse-signal.ts`.
+
+                  Silent on failure, and most kills fail: a thing only pays if
+                  it cost more to summon than the coin is worth, which is what
+                  stops free scenery being a coin printer. Nothing is wrong when
+                  nothing happens, so nothing is said.
+                */
+                onKill={useCallback(
+                  (thingId: string) => {
+                    void rewardThingKill(slug, thingId).then((result) => {
+                      if (result.ok) notePurseMoved(result.balance)
+                    })
+                  },
+                  [slug],
+                )}
+                /*
+                  How to draw what is on a table. Built from the shelf, which is
+                  the only place a word like "bun" can be turned into a model -
+                  see `itemLooks`, which also settles what two blueprints of the
+                  same name mean.
+                */
+                items={itemModels}
+                /*
+                  What a turret's bullet costs us. Routed through the same
+                  `takeDamage` a dash and the lava go through, so there is one
+                  place in this scene that decides what a hit does to our own
+                  bar - and so the flash, the sound and going down all happen for
+                  a shot exactly as they do for a punch.
+                */
+                onHit={takeDamage}
+                /*
+                  And being thrown by one. The same `takePush` a boot goes
+                  through, so a spring and a kick move you the same way - see
+                  `WeaponSpec.push`.
+                */
+                onPush={takePush}
               />
             </Rainbow>
 
             <CosmicGround />
             <SelfAvatar
               model={wearing}
+              /*
+                And what *we* are carrying. Read from the pocket store rather
+                than from the packets we send, so it appears in our own hand the
+                instant we take it rather than on the next heartbeat.
+              */
+              holding={ownHold}
               /*
                 A clip a thing is making the body play, mapped onto the four this
                 rig actually has. A blueprint may name any clip - which clips
@@ -3672,6 +4051,17 @@ export function LoungeScene({
                 name={presence.name}
                 avatar={wearing}
                 dancing={dancing}
+                /*
+                  What a thing is making our body do, told to the room.
+
+                  The name rather than the clip: everybody in here loaded the
+                  same list of what this space has animated, so each client
+                  resolves it against its own - see `MoveMessage.c`. Sitting
+                  down used to be a fact about this screen only, which made
+                  every seat's clip a private animation.
+                */
+                posing={bodyClip}
+                poseFor={poseNamed}
                 aboard={
                   usingThing?.blueprint?.spec && drivable(usingThing.blueprint.spec)
                     ? { thing: usingThing.id, seat: atWheel ? 0 : usingSeat }
@@ -3713,6 +4103,12 @@ export function LoungeScene({
                 onStatus={setPresenceStatus}
                 onCount={setPeerCount}
                 onPeers={notePeers}
+                /*
+                  What everybody in the room is carrying, drawn on their bodies.
+                  The word rides on the pose packet; this is how it is turned
+                  back into a model. See `MoveMessage.w`.
+                */
+                items={itemModels}
                 onDamaged={takeDamage}
                 onHitLanded={noteHitLanded}
                 onPushed={takePush}
@@ -3944,26 +4340,10 @@ export function LoungeScene({
               current: look.animal,
               onChange: (pick) => {
                 // The peep half only. The XP body is left exactly where it was,
-                // which is the point: picking a fox does not sell the Knight.
-                setLook((was) => ({ ...was, animal: pick, dummy: false }))
-                // `chooseAvatar` clears the dummy in the same write, so an
-                // animal never has to be picked twice to actually appear.
+                // which is the point: picking a fox does not sell the Knight -
+                // and neither does it change which of the two is on screen.
+                setLook((was) => ({ ...was, animal: pick }))
                 if (!demo) void chooseAvatar(pick)
-              },
-              /**
-               * The peep's mannequin, as a switch beside the animals.
-               *
-               * The animal is kept underneath, so taking it off gives back the
-               * one that was already there - see `wearDummy`. Nothing here
-               * touches the XP body.
-               */
-              dummy: {
-                on: look.dummy,
-                onToggle: (next) => {
-                  setLook((was) => ({ ...was, dummy: next }))
-                  if (demo) return
-                  void wearDummy(next)
-                },
               },
               /**
                * The other body, and the mode.
@@ -3987,16 +4367,17 @@ export function LoungeScene({
                     wearing: look.xp,
                     onWear: (id) => {
                       /**
-                       * Taking the XP body off takes the mode with it: a world
-                       * told to show a body that is not there would draw the
-                       * dummy while the switch claimed otherwise, and the save
-                       * refuses that combination anyway.
+                       * The mode is left exactly where it was, including when
+                       * the shelf is emptied.
+                       *
+                       * It used to be forced off by taking the XP body off, on
+                       * the grounds that a world told to show a body that is not
+                       * there would draw nothing. It draws the dummy - which is
+                       * a body, and the one somebody stripping back to nothing
+                       * is asking for. Turning the mode off here is what made
+                       * standing in the mannequin need a second switch.
                        */
-                      setLook((was) => ({
-                        ...was,
-                        xp: id,
-                        showXp: id === null ? false : was.showXp,
-                      }))
+                      setLook((was) => ({ ...was, xp: id }))
                       void chooseSkin(id)
                     },
                     showing: look.showXp,
@@ -4236,6 +4617,7 @@ export function LoungeScene({
         {browsing && (
           <ThingiverseView
             shelf={thingShelf}
+            newPrice={newThingPrice}
             dict={dict.things}
             onSummon={(match) => {
               // Placed *and* kept in hand: the chip becomes this, so putting a
@@ -4439,17 +4821,4 @@ export function LoungeScene({
   )
 }
 
-/**
- * A clip name off a blueprint, as one of the four this rig has.
- *
- * Null for anything else, including null itself. The blueprint's vocabulary is
- * deliberately open - see `UseSpec` - and this is the one place it meets a
- * closed one, so the narrowing happens here rather than at the boundary where
- * a name is written down.
- */
-function asAvatarClip(name: string | null): AvatarClip | null {
-  if (!name) return null
-  return (Object.values(AVATAR_CLIPS) as readonly string[]).includes(name)
-    ? (name as AvatarClip)
-    : null
-}
+

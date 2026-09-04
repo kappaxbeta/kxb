@@ -685,6 +685,121 @@ export async function closeEventNow(tenantId: string): Promise<EventResult> {
 }
 
 /**
+ * Ask for this event to get a machine of its own.
+ *
+ * Writes a request and returns. It does not provision anything, and it
+ * deliberately cannot: the credentials live with the agent, not the app - see
+ * the header of 20260828000000_event_machines.sql for why that split is the
+ * point rather than an inconvenience.
+ *
+ * `tenant_id` is the primary key of `event_machines`, so asking twice is a
+ * conflict rather than a second server. The upsert re-opens a `failed` or
+ * `gone` row instead of refusing, because "it broke, try again" and "we want
+ * another one next year" are both things an operator means by pressing this,
+ * and neither is served by an error telling them a row already exists.
+ */
+export async function requestMachine(
+  tenantId: string,
+  serverType?: string,
+): Promise<EventResult> {
+  const id = z.uuid().safeParse(tenantId)
+  if (!id.success) return { ok: false, error: 'Unknown event' }
+
+  // Constrained to the two shapes worth running an event on. Anything else is
+  // either too small to hold the Supabase stack or an expensive typo.
+  const type = z.enum(['ccx23', 'ccx33', 'cpx32', 'cpx42']).safeParse(serverType ?? 'ccx23')
+  if (!type.success) return { ok: false, error: 'Unknown server type' }
+
+  const { admin, user } = await requireBackofficeSection('events', 'write')
+
+  const { data: event } = await admin
+    .from('event_spaces')
+    .select('tenant_id')
+    .eq('tenant_id', id.data)
+    .maybeSingle()
+
+  if (!event) return { ok: false, error: 'That space is not an event' }
+
+  const { error } = await admin.from('event_machines').upsert(
+    {
+      tenant_id: id.data,
+      status: 'requested',
+      server_type: type.data,
+      requested_by: user.id,
+      // Cleared, so a retry does not show the last failure as though it were
+      // this one's.
+      error: null,
+      log: '',
+      ip: null,
+      guest_url: null,
+      claimed_by: null,
+      claimed_at: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'tenant_id' },
+  )
+
+  if (error) return { ok: false, error: `Could not request a machine: ${error.message}` }
+
+  await recordBackofficeAction({
+    actor: user,
+    section: 'events',
+    action: 'machine.request',
+    summary: `Requested a ${type.data} machine for event ${id.data}`,
+    detail: { tenantId: id.data, serverType: type.data },
+  })
+
+  revalidatePath(`/ovaloffice/events/${id.data}`)
+  return { ok: true }
+}
+
+/**
+ * Bring the event home and destroy its box.
+ *
+ * Also only a request. The agent runs `event-down`, which imports first,
+ * verifies every one of the box's events is on the main install, and only then
+ * deletes anything - so pressing this cannot lose a weekend's work even if the
+ * agent dies halfway.
+ *
+ * Refused unless there is something to retire, because the failure this
+ * prevents is quiet: a `retiring` row for a machine that never existed would be
+ * claimed, fail, and sit there as a red badge nobody can clear.
+ */
+export async function retireMachine(tenantId: string): Promise<EventResult> {
+  const id = z.uuid().safeParse(tenantId)
+  if (!id.success) return { ok: false, error: 'Unknown event' }
+
+  const { admin, user } = await requireBackofficeSection('events', 'write')
+
+  const { data: machine } = await admin
+    .from('event_machines')
+    .select('status')
+    .eq('tenant_id', id.data)
+    .maybeSingle()
+
+  if (!machine) return { ok: false, error: 'That event has no machine' }
+  if (machine.status === 'gone') return { ok: false, error: 'That machine is already gone' }
+
+  const { error } = await admin
+    .from('event_machines')
+    .update({ status: 'retiring', error: null, updated_at: new Date().toISOString() })
+    .eq('tenant_id', id.data)
+
+  if (error) return { ok: false, error: `Could not retire it: ${error.message}` }
+
+  await recordBackofficeAction({
+    actor: user,
+    section: 'events',
+    action: 'machine.retire',
+    summary: `Requested retirement of the machine for event ${id.data}`,
+    detail: { tenantId: id.data },
+  })
+
+  revalidatePath(`/ovaloffice/events/${id.data}`)
+  return { ok: true }
+}
+
+/**
  * Put this event on the front page, or take it off.
  *
  * Ours, not the host's, and that is the only interesting thing about it. The

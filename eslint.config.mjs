@@ -68,6 +68,19 @@ const eslintConfig = defineConfig([
     "src/components/ui/**",
     "src/hooks/use-mobile.ts",
 
+    /*
+     * The phone apps used to be excluded here.
+     *
+     * They were `packages/native` and `packages/shell`, React Native bundles
+     * with their own dependencies, installs and tsconfigs, and this config is
+     * `eslint-config-next`: it would have linted them against rules about a
+     * framework they do not use, with plugins their `node_modules` do not
+     * have, and could not resolve one of their imports. They live in
+     * repositories of their own now - kxbxo and kxbshell - and lint and
+     * typecheck themselves there, which is what the exclusion was standing in
+     * for all along.
+     */
+
     /**
      * Agent skills, which are installed rather than authored.
      *

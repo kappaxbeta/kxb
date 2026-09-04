@@ -54,6 +54,30 @@ export const STEP_HEIGHT = 1.05
 /** Terminal velocity, so a fall off the edge of the world stops accelerating. */
 export const MAX_FALL_SPEED = 55
 
+/**
+ * How far a rising deck may carry you in one frame.
+ *
+ * The same number as a step, and for the same reason: a surface that comes up
+ * under your feet by less than a step is something you ride, and one that comes
+ * up by more has hit you rather than collected you. Without a bound at all, a
+ * crusher on its way back up would fish somebody off the floor and park them on
+ * its roof.
+ */
+const RIDE_UP = STEP_HEIGHT
+
+/**
+ * How far below the feet a deck still counts as the thing you are standing on.
+ *
+ * A descending lift outruns you: gravity has you falling at `v` and the deck at
+ * whatever its own speed is, so for the frames where the deck is quicker your
+ * feet are genuinely in the air above it. Sticking to it across that gap is the
+ * difference between riding a lift down and bouncing down behind it.
+ *
+ * Deliberately small, and *only* consulted while falling: reach further and a
+ * jump off a lift would snap straight back onto it.
+ */
+const RIDE_DOWN = 0.6
+
 export interface Vec3 {
   x: number
   y: number
@@ -135,6 +159,48 @@ export function separate(
 /** Is the unit cell whose minimum corner is (x, y, z) filled? */
 export type SolidTest = (x: number, y: number, z: number) => boolean
 
+/**
+ * A moving surface, as the character controller needs to see it.
+ *
+ * Structural rather than imported, so this file stays the framework-free island
+ * it has always been - `ThingSolids` happens to satisfy it. Four numbers,
+ * because a rider needs four different things:
+ *
+ *  - `top`, unrounded, because that is where the feet go and rounding it is the
+ *    whole reason a lift used to slide up through them.
+ *  - `id`, because "am I still on the same platform" is a different question
+ *    from "is there a platform here", and stepping from one onto another must
+ *    not read as the first one having teleported.
+ *  - `minX`/`minZ`, a corner to measure from. A rising deck can be ridden by
+ *    snapping to an absolute height, and sideways has no equivalent: a rider is
+ *    not at the platform's edge or its middle but *somewhere on it*, and the
+ *    only way to stay in that spot is to remember where it was relative to the
+ *    platform and put it back there. See `Riding`.
+ */
+export interface Deck {
+  id: string
+  top: number
+  minX: number
+  minZ: number
+}
+
+/**
+ * Where a rider is standing, in the platform's own frame.
+ *
+ * Carried between frames by the caller, exactly like `velocityY` and `jumps`:
+ * it is state the simulation needs and has nowhere to keep. Recomputed from
+ * where the body actually finishes each frame, so walking about on a moving
+ * platform composes - the platform puts you back where you were on it, and then
+ * your own movement runs from there.
+ */
+export interface Riding {
+  /** Which deck this offset is measured against. */
+  id: string
+  /** Offset from the deck's `minX`/`minZ`. */
+  x: number
+  z: number
+}
+
 export interface StepInput {
   /** The eye. Feet are `EYE_HEIGHT` below it. */
   position: Vec3
@@ -168,6 +234,31 @@ export interface StepInput {
    * out of a world that has no blocks in it yet.
    */
   floorY?: number
+  /**
+   * The top of the highest *moving* surface across a horizontal span, if any.
+   *
+   * The one thing in this file that is not a cell, and the reason it exists is
+   * that a lift is not a cell either. `isSolid` rounds a deck's top down to the
+   * boundary below it, so a platform drawn at 1.3 reports a surface at 1.0 -
+   * and standing on 1.0 while the picture is at 1.3, then teleporting when it
+   * crosses 1.5, is exactly the "i get lifted but i am not on the object" the
+   * cell path produces. See `ThingSolids.surfaceUnder`.
+   *
+   * Optional: a room with nothing moving in it passes nothing and this file
+   * behaves exactly as it did before decks existed.
+   */
+  deckUnder?: (
+    x: number,
+    z: number,
+    radius: number,
+    lowest: number,
+    highest: number,
+  ) => Deck | null
+  /**
+   * Where this body was standing on its deck last frame. Feed `StepResult.rides`
+   * straight back in; null on the first frame and whenever it is not on one.
+   */
+  rides?: Riding | null
 }
 
 export interface StepResult {
@@ -176,6 +267,17 @@ export interface StepResult {
   grounded: boolean
   /** Feed back in as `jumps` next frame. Zero whenever `grounded` is true. */
   jumps: number
+  /**
+   * Whether a moving deck is what is holding this body up.
+   *
+   * Reported rather than kept, because the caller has uses for it this file
+   * does not: a rider whose lift is carrying them is not walking, and the gait
+   * has no other way to tell the difference between standing still on a moving
+   * platform and standing still on the floor.
+   */
+  riding?: boolean
+  /** Feed back in as `rides` next frame. Null whenever `riding` is false. */
+  rides: Riding | null
 }
 
 /**
@@ -342,12 +444,75 @@ function escapeFrom(
  * ever needs to predict.
  */
 export function step(input: StepInput): StepResult {
-  const { position, moveX, moveZ, jump, jumpPressed, delta, isSolid, floorY = 0 } = input
+  const { position, moveX, moveZ, jump, jumpPressed, delta, isSolid, floorY = 0, deckUnder } = input
 
   let { x, y, z } = position
   let velocityY = input.velocityY
   let grounded = input.grounded
   let jumps = input.jumps ?? 0
+  let riding = false
+  const was = input.rides ?? null
+
+  /**
+   * The deck this body is standing on, if it is standing on one.
+   *
+   * Only while not rising: a body on the way up through a deck is jumping off
+   * it, or has been fired through it, and neither wants to be pulled back down.
+   */
+  const deckUnderfoot = (): Deck | null => {
+    if (!deckUnder || velocityY > 0) return null
+    const feet = y - EYE_HEIGHT
+    return deckUnder(x, z, PLAYER_RADIUS, feet - RIDE_DOWN, feet + RIDE_UP)
+  }
+
+  /**
+   * Carried, before anything else looks at where we are.
+   *
+   * First because a lift that has risen into the body this frame has left it
+   * below the surface, and the escape below would read that the way it reads
+   * being built on: as something to shove out of. A shove out of a lift goes
+   * *sideways* if the platform is narrow enough - `escapeFrom` prices sideways
+   * cheaper than up - and upward otherwise, and either way the body comes out
+   * with `grounded` false and falls back in on the next frame. Ride it first
+   * and there is nothing to escape from.
+   *
+   * Before the walk, too, so the two compose in the order they happen: the
+   * platform takes you where it is going, and then you walk from wherever that
+   * put you. The other way round, a step onto the back of a slider would be
+   * taken from where the platform *was*.
+   *
+   * The vertical half is done again after gravity, below, because the frame has
+   * to *end* standing on the deck: this pass is what makes the horizontal rules
+   * run at the right height, and that one is what makes `grounded` true so a
+   * rider can jump.
+   */
+  const boarded = deckUnderfoot()
+  if (boarded !== null) {
+    y = boarded.top + EYE_HEIGHT
+    velocityY = 0
+    grounded = true
+    riding = true
+
+    /**
+     * And sideways, by putting the body back where it was on the platform.
+     *
+     * A delta would have been the obvious thing and it is the wrong thing: it
+     * has to be produced by whoever registers the deck, consumed exactly once,
+     * and it goes wrong the moment the two frame loops run in an order nobody
+     * promised. An offset is a fact about this body, kept by this body, and it
+     * is correct no matter who ran first or how many frames were dropped.
+     *
+     * One axis at a time and only if it is legal, so a platform sliding into a
+     * wall grinds you along it rather than through it - the same rule the walk
+     * below keeps, for the same reason.
+     */
+    if (was && was.id === boarded.id) {
+      const wantX = boarded.minX + was.x
+      const wantZ = boarded.minZ + was.z
+      if (wantX !== x && !collides(wantX, y, z, isSolid)) x = wantX
+      if (wantZ !== z && !collides(x, y, wantZ, isSolid)) z = wantZ
+    }
+  }
 
   /**
    * Inside something? Out of it first, before anything else is decided.
@@ -367,6 +532,7 @@ export function step(input: StepInput): StepResult {
       // downward speed it had belonged to the fall that buried it.
       velocityY = 0
       grounded = false
+      riding = false
     }
   }
 
@@ -456,6 +622,38 @@ export function step(input: StepInput): StepResult {
     y = floorY + EYE_HEIGHT
     velocityY = 0
     grounded = true
+    riding = false
+  }
+
+  /**
+   * Still on the deck at the end of the frame.
+   *
+   * Gravity has just pulled the body a fraction below a surface that no cell
+   * reports - a deck's top cell is deliberately not solid, or you could not
+   * stand on a surface that sits inside it - so without this the frame ends
+   * airborne by a millimetre. Invisible as a position and very visible as a
+   * rule: `grounded` false is a jump that does not fire, on a platform you are
+   * plainly standing on.
+   */
+  let rides: Riding | null = null
+  const still = deckUnderfoot()
+  if (still !== null && still.top + EYE_HEIGHT >= y - 1e-9) {
+    y = still.top + EYE_HEIGHT
+    velocityY = 0
+    grounded = true
+    riding = true
+  }
+
+  /*
+    And where on it we finished, for next frame to put us back.
+
+    Measured from the final position rather than carried over from the pass at
+    the top, which is what makes walking about on a moving platform work: the
+    offset is wherever your own feet took you, not wherever the platform put you
+    before you moved.
+  */
+  if (riding && still !== null) {
+    rides = { id: still.id, x: x - still.minX, z: z - still.minZ }
   }
 
   /**
@@ -481,5 +679,5 @@ export function step(input: StepInput): StepResult {
   if (grounded) jumps = 0
   else if (jumps === 0) jumps = 1
 
-  return { position: { x, y, z }, velocityY, grounded, jumps }
+  return { position: { x, y, z }, velocityY, grounded, jumps, riding, rides }
 }

@@ -738,7 +738,10 @@ export function SummonWizard({
                   {xpOnSale ? (
                     <Link
                       href={`/t/${slug}/billing`}
-                      className="mt-1 text-sm text-accent hover:underline"
+                      // Gone inside the installed app, which sells nothing -
+                      // guideline 3.1.1, and the price in the label is exactly
+                      // what may not be shown there.
+                      className="not-in-app mt-1 text-sm text-accent hover:underline"
                     >
                       {fill(t.moveToXp, { price: tierPricePerMonth('xp') })}
                     </Link>

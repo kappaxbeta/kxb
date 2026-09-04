@@ -180,6 +180,7 @@ const REFUSALS_DE: Readonly<Record<string, string>> = {
     'Das ist nicht durchgegangen. Versuchen Sie es noch einmal.',
   'That did not take. Try again.': 'Das hat nicht gegriffen. Versuchen Sie es noch einmal.',
   'That does not look like a scene': 'Das sieht nicht nach einer Szene aus',
+  'That event has no machine': 'Diese Veranstaltung hat keine Maschine',
   'That export is empty': 'Dieser Export ist leer',
   'That export is too large': 'Dieser Export ist zu groß',
   'That has no versions to update': 'Das hat keine Versionen, die zu aktualisieren wären',
@@ -198,6 +199,7 @@ const REFUSALS_DE: Readonly<Record<string, string>> = {
   'That is not your current password': 'Das ist nicht Ihr aktuelles Passwort',
   'That is your own space — use the lounge': 'Das ist Ihr eigener Space — nehmen Sie die Lounge',
   'That link no longer exists': 'Diesen Link gibt es nicht mehr',
+  'That machine is already gone': 'Diese Maschine ist bereits weg',
   'That match had a winner — record it instead':
     'Dieses Match hatte eine Siegerin — halten Sie das Ergebnis stattdessen fest',
   'That match has no battle to replay':
@@ -280,6 +282,7 @@ const REFUSALS_DE: Readonly<Record<string, string>> = {
   'Unknown preset': 'Unbekannter Modus',
   'Unknown radio reach': 'Unbekannte Radioreichweite',
   'Unknown scope': 'Unbekannter Bereich',
+  'Unknown server type': 'Unbekannter Servertyp',
   'XP is not switched on for this space': 'XP ist für diesen Space nicht eingeschaltet',
   'XP not found': 'XP nicht gefunden',
   'You already have a challenge waiting with that space':
@@ -453,6 +456,7 @@ const REFUSALS_BG: Readonly<Record<string, string>> = {
     'Това не мина. Опитайте пак.',
   'That did not take. Try again.': 'Това не хвана. Опитайте пак.',
   'That does not look like a scene': 'Това не прилича на сцена',
+  'That event has no machine': 'Това събитие няма машина',
   'That export is empty': 'Този експорт е празен',
   'That export is too large': 'Този експорт е твърде голям',
   'That has no versions to update': 'Това няма версии, които да се обновят',
@@ -471,6 +475,7 @@ const REFUSALS_BG: Readonly<Record<string, string>> = {
   'That is not your current password': 'Това не е текущата ви парола',
   'That is your own space — use the lounge': 'Това е вашият собствен спейс — минете през лоунджа',
   'That link no longer exists': 'Този линк вече не съществува',
+  'That machine is already gone': 'Тази машина вече я няма',
   'That match had a winner — record it instead':
     'Този мач имаше победител — запишете резултата вместо това',
   'That match has no battle to replay':
@@ -552,6 +557,7 @@ const REFUSALS_BG: Readonly<Record<string, string>> = {
   'Unknown preset': 'Непознат режим',
   'Unknown radio reach': 'Непознат обхват на радиото',
   'Unknown scope': 'Непознат обхват',
+  'Unknown server type': 'Непознат вид сървър',
   'XP is not switched on for this space': 'XP не е включено за този спейс',
   'XP not found': 'XP не е намерено',
   'You already have a challenge waiting with that space':

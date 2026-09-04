@@ -7,6 +7,7 @@ import { attempt } from '@/app/components/connection'
 import { fill } from '@/app/i18n/fill'
 import type { WorkspaceDict } from '@/app/i18n/workspace'
 import { ReportControl } from '@/app/t/[slug]/thingiverse/report-control'
+import { AVATAR_CLIPS } from '@/domain/lounge/avatars'
 import { thumbnailFor } from '@/domain/thingiverse/models'
 import {
   renameBlueprint,
@@ -59,6 +60,7 @@ import type { BlueprintView } from '@/domain/thingiverse/queries'
 export function Shelf({
   slug,
   shelf,
+  clips = [],
   t,
   /**
    * Whether to draw its own heading.
@@ -72,6 +74,16 @@ export function Shelf({
 }: {
   slug: string
   shelf: BlueprintView[]
+  /**
+   * What this space has animated, by name, for the seat clips.
+   *
+   * Defaulted to none rather than required, because two of the three surfaces
+   * that draw a shelf have no reason to load them - and a row whose clip picker
+   * offers only the body's own four is a row that still works. See `ClipPick`
+   * in the composer, which makes the same argument at length about why this is
+   * a list rather than a text field.
+   */
+  clips?: readonly string[]
   t: WorkspaceDict['thingiverse']
   headed?: boolean
 }) {
@@ -92,7 +104,7 @@ export function Shelf({
         <ul className="space-y-3">
           {mine.map((entry) => (
             <li key={entry.id}>
-              <Row slug={slug} entry={entry} t={t} />
+              <Row slug={slug} entry={entry} clips={clips} t={t} />
             </li>
           ))}
         </ul>
@@ -147,10 +159,12 @@ export function Shelf({
 function Row({
   slug,
   entry,
+  clips,
   t,
 }: {
   slug: string
   entry: BlueprintView
+  clips: readonly string[]
   t: WorkspaceDict['thingiverse']
 }) {
   const router = useRouter()
@@ -207,7 +221,16 @@ function Row({
 
   return (
     <div className="rounded-xl border border-line/60 bg-surface p-3">
-      <div className="flex items-center gap-3">
+      {/*
+        Wrapping, because five things do not fit across a phone.
+
+        Thumbnail, name, badge, bench and the fold add up to 340px at their
+        narrowest against 343px of column - which held on a 375px phone by three
+        pixels and did not on anything narrower. The name takes a `basis` wide
+        enough to be a name rather than an ellipsis, and the three controls move
+        down as one group rather than breaking up between two lines.
+      */}
+      <div className="flex flex-wrap items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={thumbnailFor(spec.model)}
@@ -215,40 +238,42 @@ function Row({
           loading="lazy"
           className="size-12 rounded-lg bg-surface-raised object-contain"
         />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40">
           <p className="truncate text-sm font-medium text-ink">{entry.name}</p>
           <p className="truncate font-mono text-[10px] text-ink-muted">{spec.model}</p>
         </div>
-        <span className="rounded-full border border-line/60 px-2 py-0.5 text-[10px] text-ink-muted">
-          {entry.visibility === 'public' ? t.shared : t.mine}
-        </span>
-        {/*
-          The bench, and the panel, side by side.
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <span className="rounded-full border border-line/60 px-2 py-0.5 text-[10px] text-ink-muted">
+            {entry.visibility === 'public' ? t.shared : t.mine}
+          </span>
+          {/*
+            The bench, and the panel, side by side.
 
-          Two doors onto one blueprint, and they are not redundant: this row's
-          panel is nine fields you set while scanning a list - how bouncy, what
-          it is called, does it block - and the bench is a viewport you orbit to
-          decide where the lamp goes. Somebody making a ball never needs the
-          bench; somebody building a market stall cannot use anything else.
+            Two doors onto one blueprint, and they are not redundant: this row's
+            panel is nine fields you set while scanning a list - how bouncy, what
+            it is called, does it block - and the bench is a viewport you orbit to
+            decide where the lamp goes. Somebody making a ball never needs the
+            bench; somebody building a market stall cannot use anything else.
 
-          The link first, because it is the one that goes somewhere, and a
-          control that navigates should not be tucked behind the one that
-          expands in place.
-        */}
-        <Link
-          href={`/t/${slug}/thingiverse/blueprint/${entry.id}`}
-          className="rounded-lg border border-line/60 px-2 py-1 text-xs text-ink-muted transition hover:border-accent/50 hover:text-ink"
-        >
-          {t.composer.heading}
-        </Link>
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setOpen((was) => !was)}
-          className="rounded-lg border border-line/60 px-2 py-1 text-xs text-ink transition hover:bg-surface-raised"
-        >
-          {open ? '−' : '+'}
-        </button>
+            The link first, because it is the one that goes somewhere, and a
+            control that navigates should not be tucked behind the one that
+            expands in place.
+          */}
+          <Link
+            href={`/t/${slug}/thingiverse/blueprint/${entry.id}`}
+            className="rounded-lg border border-line/60 px-2 py-1 text-xs text-ink-muted transition hover:border-accent/50 hover:text-ink"
+          >
+            {t.composer.heading}
+          </Link>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((was) => !was)}
+            className="rounded-lg border border-line/60 px-2 py-1 text-xs text-ink transition hover:bg-surface-raised"
+          >
+            {open ? '−' : '+'}
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -377,6 +402,7 @@ function Row({
             {spec.use && (
               <UseFields
                 use={spec.use}
+                clips={clips}
                 t={t}
                 onChange={(next) => change({ use: next })}
               />
@@ -487,14 +513,24 @@ function Row({
  */
 function UseFields({
   use,
+  clips,
   t,
   onChange,
 }: {
   use: UseSpec
+  clips: readonly string[]
   t: WorkspaceDict['thingiverse']
   onChange: (next: UseSpec) => void
 }) {
   const set = (patch: Partial<UseSpec>) => onChange({ ...use, ...patch })
+
+  /**
+   * Every clip a body here can play: the pack's own four, plus this space's.
+   *
+   * Deduped and in that order, exactly as the lounge builds it for `/clip` -
+   * a space that animates one called `dance` has one name with one answer.
+   */
+  const bodyClips = [...new Set([...Object.values(AVATAR_CLIPS), ...clips])]
 
   return (
     <div className="space-y-3">
@@ -507,16 +543,33 @@ function UseFields({
           ] as const
         ).map(([field, label]) => (
           <Field key={field} label={label}>
-            <input
+            {/*
+              A list, not a text box. A clip name is looked up on the body when
+              it plays, and a name that finds nothing plays nothing - which on a
+              body that has not moved yet is indistinguishable from the field
+              working. There is no error to show, so the wrong answer has to be
+              unreachable instead. A name the space has since deleted stays in
+              the list as its own option rather than quietly becoming "none".
+
+              Blank goes back to null rather than to an empty string: null is
+              "no clip" and is the only spelling of it, which is what stops a
+              round trip growing a field nobody wrote.
+            */}
+            <select
               value={use[field] ?? ''}
-              /*
-                Blank goes back to null rather than to an empty string: null is
-                "no clip" and is the only spelling of it, which is what stops a
-                round trip growing a field nobody wrote.
-              */
-              onChange={(event) => set({ [field]: event.target.value.trim() || null })}
+              onChange={(event) => set({ [field]: event.target.value || null })}
               className={INPUT}
-            />
+            >
+              <option value="">{t.noClip}</option>
+              {(use[field] && !bodyClips.includes(use[field]!)
+                ? [use[field]!, ...bodyClips]
+                : bodyClips
+              ).map((clip) => (
+                <option key={clip} value={clip}>
+                  {clip}
+                </option>
+              ))}
+            </select>
           </Field>
         ))}
       </div>
@@ -701,8 +754,17 @@ function ActionRow({
   )
 }
 
+/**
+ * `w-full`, because the label above it is a block and the box was not.
+ *
+ * An input's default width is a font-relative twenty characters, which happens
+ * to fit beside its own label on a two-column desktop grid and does not on a
+ * phone: the pair sat on one line and the box was squeezed to the few pixels the
+ * word left it. Nine fields wide enough to type a number into is the whole point
+ * of the panel. See `Field`.
+ */
 const INPUT =
-  'rounded-lg border border-line/60 bg-surface px-2 py-1 text-xs text-ink placeholder:text-ink-muted'
+  'w-full rounded-lg border border-line/60 bg-surface px-2 py-1 text-xs text-ink placeholder:text-ink-muted'
 
 const BUTTON =
   'rounded-lg border border-line/60 px-2 py-1 text-xs text-ink transition hover:bg-surface-raised disabled:opacity-40'
@@ -718,7 +780,15 @@ function Field({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-xs font-medium text-ink">{label}</span>
+      {/*
+        A block, so `space-y-1` has something to space.
+
+        The wrapper always said `space-y-1` and it never did anything: the
+        selector is `> * + *` and both children were inline, so the label and the
+        box shared a line with no gap between them and the panel read as a form
+        somebody had forgotten to lay out.
+      */}
+      <span className="block text-xs font-medium text-ink">{label}</span>
       {children}
       {hint && <span className="block text-[11px] text-ink-muted">{hint}</span>}
     </label>

@@ -1,31 +1,29 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { XpDocument } from '@kxb/xp'
-import type { XpPlayer, XpSocket } from '@kxb/xp/host'
-import { useLocale } from '@/app/i18n/locale-context'
-import { useIsTouch } from '@/app/xp/_runtime/hud/touch-controls'
 import {
   flowAllows,
   flowOnEvent,
   flowSays,
   flowTick,
-  packFlow,
-  readPackedFlow,
-  startFlow,
-  type SketchFlowState,
-} from '@/app/xp/_sketch/flow-driver'
-import {
   MAX_SENDS_PER_SECOND,
+  packFlow,
+  readFrameMessage,
+  readPackedFlow,
+  readWireControl,
+  startFlow,
   WIRE_CONTROL,
   WIRE_DATA,
   WIRE_EMIT,
   WIRE_FLOW,
   WIRE_STATE,
-  readFrameMessage,
-  readWireControl,
+  type SketchFlowState,
   type StageMessage,
-} from '@/app/xp/_sketch/protocol'
+  type XpDocument,
+} from '@kxb/xp'
+import type { XpPlayer, XpSocket } from '@kxb/xp/host'
+import { useLocale } from '@/app/i18n/locale-context'
+import { useIsTouch } from '@/app/xp/_runtime/hud/touch-controls'
 import { sketchSrcdoc } from '@/app/xp/_sketch/srcdoc'
 
 /**

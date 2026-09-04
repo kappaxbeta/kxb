@@ -181,7 +181,13 @@ export function WorkspaceDeactivated({
               Two primary buttons is no emphasis at all, and the one that should
               win here is the one that asks for nothing.
             */}
-            <div className="flex flex-wrap justify-center gap-2">
+            {/*
+              Hidden inside the installed app, which sells nothing: guideline
+              3.1.1, and `startCheckout` refuses there anyway. The free month
+              above stays - it takes no card and is not a sale - so a lapsed
+              owner on a phone is not left with a dead end.
+            */}
+            <div className="not-in-app flex flex-wrap justify-center gap-2">
               {PAID_TIERS.map((tier) => (
                 <button
                   key={tier}

@@ -59,6 +59,28 @@
  * opens up on its own.
  *
  * ---------------------------------------------------------------------------
+ * Whose send interval, and why it is measured rather than assumed
+ * ---------------------------------------------------------------------------
+ * "Two send intervals" used to mean two of *ours* - the `SEND_HZ = 8` constant
+ * this package ships - and that was the same mistake as easing, one level up: a
+ * number picked once, describing a peer nobody had listened to.
+ *
+ * It matters now because the rate is no longer one number. A room broadcasts
+ * faster when there are three people in it than when there are twenty (see
+ * `sendHzFor`), so the peer standing next to you may be sending at 20Hz while
+ * the constant here says 8 - and a buffer floored at two of *those* draws them
+ * 250ms in the past when 100ms would have been honest. The lag people describe
+ * as "the connection is not great" is mostly this: not the network, the
+ * headroom we were holding against it.
+ *
+ * So the cadence is estimated from the gaps between arrivals, exactly as the
+ * clock offset is estimated from their delays, and everything downstream - the
+ * jitter spread, the delay floor, what counts as a keepalive rather than a
+ * late packet - is scaled off the estimate rather than off a constant. A client
+ * that has not reloaded since this shipped is a sender at 8Hz and is measured
+ * as one, which is the whole point of measuring.
+ *
+ * ---------------------------------------------------------------------------
  * Clocks
  * ---------------------------------------------------------------------------
  * `MoveMessage.t` is the sender's `performance.now()` - a monotonic clock whose
@@ -108,8 +130,44 @@ const HISTORY_MS = 2000
 export const MIN_PLAYOUT_DELAY = SEND_INTERVAL * 2
 const MAX_DELAY = 600
 
+/**
+ * The floor under the *measured* delay, and the one number here that is not
+ * measured.
+ *
+ * Two frames at 60Hz. Below this the render instant is close enough to the
+ * newest sample that an ordinary frame-time wobble walks past it, and walking
+ * past the newest sample is the starvation this module exists to avoid - it is
+ * worse than easing, not better. It is the guard on the estimate being wrong,
+ * not a target: nothing aims for it.
+ */
+const FLOOR_DELAY = 32
+
+/**
+ * Bounds on what a sender's cadence may be estimated as.
+ *
+ * The fast end is 40Hz, which is faster than anything in this product sends and
+ * slower than a burst of two packets arriving back to back - so a stalled
+ * connection that dumps its queue cannot convince us the peer is a firehose.
+ * The slow end is 4Hz: a sender whose frame loop is that starved is a sender we
+ * should be holding a quarter of a second for, and anything slower than it is
+ * silence rather than cadence.
+ */
+const MIN_CADENCE = 25
+const MAX_CADENCE = 250
+
 /** How quickly the delay is allowed to follow the jitter estimate. */
 const DELAY_EASE = 0.05
+
+/**
+ * How many packets a peer gets at the impatient weights.
+ *
+ * The estimate starts at *our* send interval, which is a guess about somebody
+ * we have not heard from yet, and a guess corrected at 0.05 a packet takes a
+ * couple of seconds to stop being wrong. Sixteen packets is a fifth of a second
+ * at 20Hz and two seconds at 8Hz - long enough to average out a bad one, short
+ * enough that nobody watches a peer catch up to their own timeline.
+ */
+const WARMUP_PACKETS = 16
 
 /** A gap this long means the peer went away; re-baseline the clock. */
 const REBASELINE_MS = 5000
@@ -118,15 +176,30 @@ export interface MotionBuffer {
   snaps: Snapshot[]
   /** `localTime - senderTime`, running minimum. `null` until the first packet. */
   offset: number | null
-  /** Smoothed spread of arrival intervals around `SEND_INTERVAL`, in ms. */
+  /** Smoothed spread of arrival intervals around `cadence`, in ms. */
   jitter: number
+  /**
+   * How often this peer actually sends, in ms. Estimated from the gaps between
+   * arrivals; starts as a guess at our own rate. See the header.
+   */
+  cadence: number
   /** Current playout delay in ms. */
   delay: number
   lastArrival: number | null
+  /** Arrivals folded into `cadence` so far, capped. See `WARMUP_PACKETS`. */
+  heard: number
 }
 
 export function newMotionBuffer(): MotionBuffer {
-  return { snaps: [], offset: null, jitter: 0, delay: MIN_PLAYOUT_DELAY, lastArrival: null }
+  return {
+    snaps: [],
+    offset: null,
+    jitter: 0,
+    cadence: SEND_INTERVAL,
+    delay: MIN_PLAYOUT_DELAY,
+    lastArrival: null,
+    heard: 0,
+  }
 }
 
 /**
@@ -149,21 +222,45 @@ export function record(
     buffer.snaps.length = 0
     buffer.offset = null
     buffer.jitter = 0
+    buffer.cadence = SEND_INTERVAL
     buffer.delay = MIN_PLAYOUT_DELAY
+    buffer.heard = 0
   }
 
-  // How far each arrival strays from the cadence it was sent at. Keepalives are
-  // ignored: a still peer sends every KEEPALIVE_MS and that is not jitter.
-  if (gap != null && gap < SEND_INTERVAL * 4) {
-    const spread = Math.abs(gap - SEND_INTERVAL)
+  /*
+    How often this peer sends, and how far each arrival strays from it.
+
+    Keepalives are ignored: a still peer sends every KEEPALIVE_MS and that is
+    not jitter, it is silence. The window is the estimate's own four intervals
+    *or* half a second, whichever is wider - and the floor under it is the
+    interesting half. Without it a burst of two packets arriving back to back
+    can drag the estimate down to its minimum, at which point every real gap
+    looks like a keepalive, nothing is ever folded in again, and the buffer is
+    stuck believing in a 40Hz peer that does not exist.
+  */
+  if (gap != null && gap < Math.max(buffer.cadence * 4, MAX_CADENCE * 2)) {
+    const spread = Math.abs(gap - buffer.cadence)
     buffer.jitter = buffer.jitter * 0.9 + spread * 0.1
+
+    // Impatient while the estimate is still our guess about somebody we had not
+    // heard from, steady once it is theirs. See `WARMUP_PACKETS`.
+    const weight = buffer.heard < WARMUP_PACKETS ? 0.25 : 0.05
+    buffer.cadence = clamp(
+      buffer.cadence + (gap - buffer.cadence) * weight,
+      MIN_CADENCE,
+      MAX_CADENCE,
+    )
+    if (buffer.heard < WARMUP_PACKETS) buffer.heard += 1
   }
 
-  const wanted = Math.min(MAX_DELAY, Math.max(MIN_PLAYOUT_DELAY, SEND_INTERVAL * 2 + buffer.jitter * 2))
+  const wanted = clamp(buffer.cadence * 2 + buffer.jitter * 2, FLOOR_DELAY, MAX_DELAY)
   // Open up fast, close down slowly: a buffer that shrinks eagerly starves on
   // the next late packet, which is the failure this whole module is avoiding.
+  // Except while warming up, where "slowly" would mean holding a fast peer a
+  // quarter of a second behind for the first two seconds of watching them.
+  const ease = buffer.heard < WARMUP_PACKETS ? 0.25 : DELAY_EASE
   buffer.delay =
-    wanted > buffer.delay ? wanted : buffer.delay + (wanted - buffer.delay) * DELAY_EASE
+    wanted > buffer.delay ? wanted : buffer.delay + (wanted - buffer.delay) * ease
 
   const stamp = sent ?? now
   const candidate = now - stamp
@@ -235,6 +332,10 @@ export function sample(buffer: MotionBuffer, now: number, out: Pose): boolean {
   out.z = a.z + (b.z - a.z) * f
   out.yaw = a.yaw + angleDelta(a.yaw, b.yaw) * f
   return true
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value))
 }
 
 function copyInto(out: Pose, from: Pose): void {

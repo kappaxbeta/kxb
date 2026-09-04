@@ -26,6 +26,11 @@ const project = (over: Partial<XpProjectRow> = {}): XpProjectRow => ({
   blurb: null,
   state: 'draft',
   spacePolicy: 'none',
+  // Free, like every level until its owner puts a price on it. Nothing in
+  // this file reads them; they are here so the fixture is a whole
+  // `XpProjectRow` rather than a cast.
+  priceOnce: 0,
+  priceRemix: 0,
   currentVersion: 1,
   publishedVersion: null,
   coverPath: null,

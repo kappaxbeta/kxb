@@ -72,6 +72,20 @@ export interface AuthDict {
    */
   offerDays: string
   offerForever: string
+  /**
+   * The second half of an offer that carries bucks, on its own line under the
+   * headline. `{n}` is how many.
+   *
+   * Its own key rather than a suffix baked into `offerDays`, because it is not
+   * always there: most codes are a month and nothing else, and a headline
+   * template with an empty tail in it would leave a dangling "plus" in two
+   * languages the day somebody minted one.
+   */
+  offerBucks: string
+  /** `{n}` bearer codes to pass on. Rare, and never shown at 0. */
+  offerVouchers: string
+  /** `{n}` coins into the wallet. */
+  offerCoins: string
   offerNote: string
   offerSpaces: string
   offerRemaining: string
@@ -143,6 +157,9 @@ export const AUTH_EN: AuthDict = {
   codeApplied: 'Your code is ready. Create the account and the free month starts.',
   offerDays: '{n} days of {tier}, free',
   offerForever: '{tier}, free, with no end',
+  offerBucks: 'plus {n} bucks to spend on skins',
+  offerVouchers: 'plus {n} voucher codes to give away',
+  offerCoins: 'plus {n} coins',
   offerNote: 'No card, and nothing is charged when it runs out.',
   offerSpaces: 'Covers {n} of your spaces.',
   offerRemaining: '{n} left',
@@ -209,6 +226,9 @@ export const AUTH_DE: AuthDict = {
     'Ihr Code liegt bereit. Legen Sie das Konto an, dann startet der Gratismonat.',
   offerDays: '{n} Tage {tier}, gratis',
   offerForever: '{tier}, gratis, ohne Ende',
+  offerBucks: 'plus {n} Bucks für Skins',
+  offerVouchers: 'plus {n} Gutscheincodes zum Weitergeben',
+  offerCoins: 'plus {n} Coins',
   offerNote: 'Ohne Karte, und am Ende wird nichts abgebucht.',
   offerSpaces: 'Gilt für {n} Ihrer Räume.',
   offerRemaining: 'noch {n}',

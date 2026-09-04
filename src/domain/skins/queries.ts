@@ -2,7 +2,7 @@ import 'server-only'
 import type { Client } from '@/es/store'
 import { resolveFeatures } from '@/domain/flags/queries'
 import { DUMMY_LOOK } from '@/domain/lounge/avatars'
-import { readAvatarHere, readAsDummy } from '@/domain/profile/avatar-queries'
+import { readAvatarHere, readShowXp } from '@/domain/profile/avatar-queries'
 import type { ShopView, SkinView, VoucherView } from '@/domain/skins/application'
 
 /**
@@ -131,14 +131,19 @@ export async function readXpBody(
   supabase: Client,
   userId: string,
 ): Promise<{ model: string | null; inLounge: boolean }> {
-  const { data, error } = await supabase
-    .from('profile_skins')
-    .select('model, in_lounge')
-    .eq('user_id', userId)
-    .maybeSingle()
+  /**
+   * Two rows now, because the two halves live in two places and always should
+   * have: the body is a skin you own, the mode is a fact about you. What forced
+   * them apart is that `wearSkin(null)` *deletes* the skin row - so a mode kept
+   * beside the model could not survive taking the model off, and taking it off
+   * is how you ask to be the dummy.
+   */
+  const [skin, showXp] = await Promise.all([
+    supabase.from('profile_skins').select('model').eq('user_id', userId).maybeSingle(),
+    readShowXp(supabase, userId),
+  ])
 
-  if (error || !data) return { model: null, inLounge: false }
-  return { model: data.model, inLounge: data.in_lounge }
+  return { model: skin.error ? null : (skin.data?.model ?? null), inLounge: showXp }
 }
 
 /**
@@ -177,21 +182,25 @@ export async function readLookFor(
 }
 
 /**
- * What this person stands in *in the lounge*: their skin if they asked for it
- * there, the dummy if they asked for that, otherwise their animal.
+ * What this person stands in *in the lounge*: their XP body if they asked to be
+ * drawn as it, otherwise their peep.
  *
  * The lounge's own reader, separate from `readWornLook` above, because the two
- * answer different questions: a skin is worn in the games by default and in
- * the lounge only on request. Returns whatever the presence channel and the
+ * answer different questions: an XP body is worn in the games by default and in
+ * a room only on request. Returns whatever the presence channel and the
  * renderer both understand - a bare animal name, or a qualified catalogue id.
  *
- * Three bodies, one order, written down here so nothing else has to decide it:
- * a skin worn in here outranks the dummy, and the dummy outranks the animal.
- * That is what makes taking a skin off put back whichever of the other two you
- * were before you put it on, rather than asking you to pick again.
+ * **Two bodies and one switch**, and the switch is the only thing that decides.
+ * There used to be a third answer wedged in the middle - `as_dummy`, a mannequin
+ * you could put on your *peep* - and it was the same question asked twice: it
+ * existed only because the mode was kept on the skin row, which vanishes when
+ * the skin does, so somebody who owned nothing had no way to say "draw my XP
+ * body". They do now. `?? GUEST_LOOK` is that sentence: an XP body with nothing
+ * on it is the dummy, which is exactly what a player is in the games before
+ * they are anybody, and what a visitor with no account is standing in already.
  *
- * Falls back to the animal on any failure, and on a row whose flag is off, so
- * the lounge always has a body to draw.
+ * Falls back to the peep whenever the mode is off, so a room always has a body
+ * to draw and nothing changes for anybody who never asked.
  */
 export async function readLoungeLook(
   supabase: Client,
@@ -201,15 +210,9 @@ export async function readLoungeLook(
   const animal = await readAvatarHere(supabase, userId, tenantId)
   if (!userId) return animal
 
-  const { data, error } = await supabase
-    .from('profile_skins')
-    .select('model, in_lounge')
-    .eq('user_id', userId)
-    .maybeSingle()
+  if (!(await readShowXp(supabase, userId))) return animal
 
-  if (!error && data?.in_lounge && data.model) return data.model
-
-  return (await readAsDummy(supabase, userId)) ? DUMMY_LOOK : animal
+  return (await readProfileSkin(supabase, userId)) ?? GUEST_LOOK
 }
 
 /**
@@ -312,11 +315,28 @@ export interface VoucherAdminRow {
  *
  * The full list, not just the unredeemed - "was this code ever real, and what
  * happened to it" is the question support actually gets asked.
+ *
+ * ---------------------------------------------------------------------------
+ * Except the bucks a promo code dropped in a pocket
+ * ---------------------------------------------------------------------------
+ * Those carry a code because the column requires one, and nobody is ever shown
+ * it: they arrive owned and redeemed, straight into the pocket of whoever
+ * spent the promo. They are not codes in the sense this log means, and a
+ * campaign that goes well would put five of them here per sign-up - burying
+ * every code an operator ever minted by hand under a list nobody can read.
+ *
+ * The bearer codes a promo hands over *do* appear, because those are exactly
+ * what this log is for: unclaimed strings out in the world, and "is this real"
+ * is about to be asked about one of them.
  */
 export async function listVouchersAdmin(admin: Client, limit = 100): Promise<VoucherAdminRow[]> {
   const { data } = await admin
     .from('skin_vouchers')
     .select('id, code, source, owner_id, spent_on, created_at')
+    // Not `source <> 'promo'`: the half of a promo grant that is a code belongs
+    // here. What is filtered is "minted already owned", which is the property
+    // that makes a row uninteresting to a log of codes.
+    .or('promo_redemption_id.is.null,owner_id.is.null')
     .order('created_at', { ascending: false })
     .limit(limit)
 

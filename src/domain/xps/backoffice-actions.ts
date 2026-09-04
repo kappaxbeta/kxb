@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { xpDecider } from '@/domain/xps/aggregate'
+import { payAcceptance } from '@/domain/xps/dues'
 import { reasonSchema, type XpCommand } from '@/domain/xps/commands'
 import { xpsProjection } from '@/domain/xps/projection'
 import { executeCommand } from '@/es/command'
@@ -81,6 +82,31 @@ async function tenantFor(admin: Client, xpId: string): Promise<string | null> {
   return data?.tenant_id ?? null
 }
 
+/**
+ * Who the acceptance reward belongs to, and what the thing is called.
+ *
+ * The *owner*, which is not always the submitter: a project can be transferred
+ * between going into the queue and coming out of it, and the reward belongs to
+ * whoever owns the thing that got published.
+ *
+ * `null` for a project with no owner - one whose owner left the space, which
+ * the removal paths allow. Nothing is paid then, rather than the coins going
+ * somewhere arbitrary.
+ */
+async function payeeFor(
+  admin: Client,
+  xpId: string,
+): Promise<{ owner: string; name: string } | null> {
+  const { data } = await admin
+    .from('xps_read_model')
+    .select('owner_id, name')
+    .eq('id', xpId)
+    .maybeSingle()
+
+  if (!data?.owner_id) return null
+  return { owner: data.owner_id, name: data.name }
+}
+
 export async function publishXp(formData: FormData): Promise<ReviewResult> {
   const { user, admin } = await requireBackofficeSection('xp', 'write')
   const xpId = String(formData.get('xpId') ?? '')
@@ -88,14 +114,47 @@ export async function publishXp(formData: FormData): Promise<ReviewResult> {
   const tenantId = await tenantFor(admin, xpId)
   if (!tenantId) return { ok: false, error: 'That project could not be found' }
 
+  /*
+    What this acceptance is worth, if the reviewer said. `docs/product/economy.md`
+    §10: the reward is a *floor*, not a price - "this is good" and "this is
+    extraordinary" should not pay the same, and only a person can tell the
+    difference. An absent or unreadable field falls to the minimum rather than
+    refusing the publish, because the review decision is the important half and
+    a number nobody typed should not block it.
+  */
+  const typed = Number(formData.get('reward'))
+  const reward = Number.isFinite(typed) ? typed : undefined
+
+  const payee = await payeeFor(admin, xpId)
+
   const result = await run(admin, tenantId, xpId, { type: 'PublishXp', actorId: user.id })
   if (result.ok) {
+    /*
+      The reward, paid after the publish landed.
+
+      No idempotency key needed, unlike a battle payout: the decider throws for
+      a project that is not waiting for review, so a second publish never
+      reaches `ok` and never pays twice.
+
+      A failure to pay is logged rather than surfaced, and the publish stands.
+      The reviewer's decision is the thing that mattered and it is recorded; a
+      payout that did not land is in neither purse and is findable, where a
+      publish rolled back over a purse error would be a moderation decision
+      undone by a network blip.
+    */
+    if (payee) {
+      const paid = await payAcceptance(admin, tenantId, payee.owner, payee.name, reward)
+      if (!paid.ok) console.warn(`Acceptance reward not paid for ${xpId}: ${paid.error}`)
+    }
+
     await recordBackofficeAction({
       actor: user,
       section: 'xp',
       action: 'xp.publish',
       summary: `Published project ${xpId}`,
-      detail: { xpId, tenantId },
+      // The amount is in the audit trail because it is the one number in this
+      // economy an operator names that is then created - see open question 4.
+      detail: { xpId, tenantId, reward: reward ?? null, paidTo: payee?.owner ?? null },
     })
     revalidateSurfaces(xpId)
   }

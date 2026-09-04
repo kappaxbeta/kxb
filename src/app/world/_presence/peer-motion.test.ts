@@ -5,7 +5,13 @@ import {
   record,
   sample,
 } from '@/app/world/_presence/peer-motion'
-import { SEND_INTERVAL, type Pose } from '@/app/world/_presence/presence-core'
+import {
+  SEND_HZ,
+  SEND_INTERVAL,
+  sendHzFor,
+  sendIntervalFor,
+  type Pose,
+} from '@/app/world/_presence/presence-core'
 
 const SPEED = 4 // units/s, a steady jog
 const FRAME = 1000 / 60
@@ -192,5 +198,131 @@ describe('the playout delay', () => {
     record(buffer, pose(99), 60_000, 60_000)
     expect(buffer.snaps.length).toBe(1)
     expect(buffer.delay).toBeCloseTo(SEND_INTERVAL * 2, 0)
+  })
+})
+
+/**
+ * The half of this module that stopped being a constant.
+ *
+ * A room does not send at one rate any more - see `sendHzFor` - so the delay a
+ * buffer holds has to come from what a peer is actually doing rather than from
+ * what this package's own loop does. These are the tests that say so: the same
+ * link, twice, at two rates, drawn at two delays.
+ */
+describe('the cadence estimate', () => {
+  /** Play a peer sending every `interval` ms on a clean link, and hand back the buffer. */
+  function heard(interval: number, seconds = 6): MotionBuffer {
+    const buffer = newMotionBuffer()
+    for (let t = 0; t <= seconds * 1000; t += interval) {
+      record(buffer, pose((SPEED * t) / 1000), t, t + 10)
+    }
+    return buffer
+  }
+
+  test('follows a peer sending faster than we do', () => {
+    const buffer = heard(sendIntervalFor(1))
+    expect(buffer.cadence).toBeCloseTo(sendIntervalFor(1), 0)
+    // The point of the whole exercise: 100ms behind rather than 250.
+    expect(buffer.delay).toBeLessThan(SEND_INTERVAL * 2 * 0.6)
+  })
+
+  test('leaves a peer sending at the old rate exactly where it found them', () => {
+    const buffer = heard(SEND_INTERVAL)
+    expect(buffer.cadence).toBeCloseTo(SEND_INTERVAL, 0)
+    expect(buffer.delay).toBeCloseTo(SEND_INTERVAL * 2, 0)
+  })
+
+  test('holds longer for a peer whose own frame loop is starved', () => {
+    const slow = heard(200)
+    expect(slow.delay).toBeGreaterThan(heard(SEND_INTERVAL).delay)
+  })
+
+  test('a fast peer is still drawn steadily', () => {
+    const buffer = newMotionBuffer()
+    const drawn = out()
+    const interval = sendIntervalFor(1)
+    const speeds: number[] = []
+    let previous: number | null = null
+    let next = 0
+
+    for (let t = 0; t <= 12_000; t += FRAME) {
+      while (next <= t) {
+        record(buffer, pose((SPEED * next) / 1000), next, next + 8)
+        next += interval
+      }
+      if (sample(buffer, t, drawn)) {
+        if (previous != null && t > 4000) {
+          speeds.push(Math.abs(drawn.z - previous) / (FRAME / 1000))
+        }
+        previous = drawn.z
+      }
+    }
+
+    const mean = speeds.reduce((a, b) => a + b, 0) / speeds.length
+    const sd = Math.sqrt(speeds.reduce((a, b) => a + (b - mean) ** 2, 0) / speeds.length)
+    expect(mean).toBeCloseTo(SPEED, 1)
+    expect((sd / mean) * 100).toBeLessThan(5)
+  })
+
+  test('a burst of packets does not convince it the peer is a firehose', () => {
+    const buffer = newMotionBuffer()
+    let t = 0
+
+    // Six sends' worth of stalled traffic, delivered in one gulp.
+    for (let i = 0; i < 6; i++) record(buffer, pose(i), i * SEND_INTERVAL, t += 2)
+
+    // Back to normal. The estimate has to find its way home, which it cannot do
+    // if the burst has pulled the keepalive window below a real gap.
+    for (let i = 0; i < 60; i++) {
+      t += SEND_INTERVAL
+      record(buffer, pose(6 + i), (6 + i) * SEND_INTERVAL, t)
+    }
+
+    expect(buffer.cadence).toBeCloseTo(SEND_INTERVAL, 0)
+  })
+
+  test('a keepalive from somebody standing still is silence, not a slow peer', () => {
+    const buffer = newMotionBuffer()
+    let t = 0
+    for (let i = 0; i < 40; i++) record(buffer, pose(i), t, (t += SEND_INTERVAL))
+
+    // Two seconds of stillness, then they move again.
+    t += 2000
+    record(buffer, pose(40), t, t)
+
+    expect(buffer.cadence).toBeCloseTo(SEND_INTERVAL, 0)
+  })
+})
+
+describe('how fast a room sends', () => {
+  test('a quiet room sends faster than a crowded one', () => {
+    expect(sendHzFor(1)).toBeGreaterThan(sendHzFor(19))
+  })
+
+  test('a crowded room pays exactly what it used to', () => {
+    expect(sendHzFor(19)).toBe(SEND_HZ)
+    expect(sendHzFor(8)).toBe(SEND_HZ)
+  })
+
+  test('the rate never rises as the room fills', () => {
+    for (let peers = 1; peers < 40; peers++) {
+      expect(sendHzFor(peers)).toBeLessThanOrEqual(sendHzFor(peers - 1))
+    }
+  })
+
+  /**
+   * The bill this whole tiering is about: messages leaving the server is
+   * `peers x hz x peers`, and no tier may cost more than the twenty-player room
+   * the flat rate was chosen for.
+   */
+  test('no room costs more than the room the flat rate was picked for', () => {
+    const worst = 20 * SEND_HZ * 20
+    for (let people = 2; people <= 20; people++) {
+      expect(people * sendHzFor(people - 1) * people).toBeLessThanOrEqual(worst)
+    }
+  })
+
+  test('an interval is the same answer the other way up', () => {
+    expect(sendIntervalFor(1)).toBeCloseTo(1000 / sendHzFor(1), 6)
   })
 })

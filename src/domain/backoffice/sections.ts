@@ -39,7 +39,18 @@ export const BACKOFFICE_SECTIONS: readonly BackofficeSection[] = [
   // the right shape: reviewing submissions and editing what we publish are
   // different jobs and different amounts of trust.
   { key: 'xps', label: 'Our XPs', path: '/ovaloffice/xps', group: 'Management' },
+  // A third queue of somebody else's work, next to `xp` and for the same
+  // reason: a member submits, an operator reads it, and nothing goes out
+  // unread. Separately grantable because reviewing a level and reading an
+  // episode of prose are different jobs - see `docs/product/channels.md` §5.
+  { key: 'channels', label: 'Channel review', path: '/ovaloffice/channels', group: 'Management' },
   { key: 'studio', label: 'Studio', path: '/ovaloffice/studio', group: 'Management' },
+  // Beside the studio, and the difference is who the picture is for. The studio
+  // makes a film of a space for the people in it; this one makes the twelve
+  // panels that go to App Store Connect, which is the same art pointed at a
+  // stranger. Separately grantable because writing the store listing and
+  // rendering a scene are different jobs.
+  { key: 'banners', label: 'Store banners', path: '/ovaloffice/banners', group: 'Management' },
   { key: 'scenes', label: 'Scenes', path: '/ovaloffice/scenes', group: 'Management' },
   { key: 'renders', label: 'Renders', path: '/ovaloffice/renders', group: 'Management' },
   { key: 'pictures', label: 'Pictures', path: '/ovaloffice/pictures', group: 'Management' },
@@ -51,10 +62,40 @@ export const BACKOFFICE_SECTIONS: readonly BackofficeSection[] = [
   // Beside the codes, because half the job is minting another kind: the shelf
   // of character skins, their words and prices, and the vouchers that buy them.
   { key: 'skins', label: 'Skins', path: '/ovaloffice/skins', group: 'Operations' },
+  // The prize draw: its dates, its prizes, and the code that makes entering
+  // free. Beside Codes and Skins because it is made of both - the page is
+  // mostly a check that one particular promo code still keeps a promise made in
+  // a legal document, which is not a question the promos list can ask.
+  { key: 'gewinnspiel', label: 'Gewinnspiel', path: '/ovaloffice/gewinnspiel', group: 'Operations' },
   { key: 'experiments', label: 'Experiments', path: '/ovaloffice/experiments', group: 'Operations' },
   { key: 'reports', label: 'Reports', path: '/ovaloffice/reports', group: 'Operations' },
+  // Where the coins came from, and who is not on a best list.
+  //
+  // Operations rather than System, though it is mostly a set of numbers, because
+  // the job it exists for is a judgement about a person: "is this space printing
+  // money" and "should this player be on that ranking" are moderation questions
+  // that happen to be answered with figures. It sits beside Reports for the same
+  // reason - both are somebody deciding what to do about somebody else.
+  //
+  // Read is the whole of it for most people. Write is the shadow-ban, and the
+  // separation matters: seeing where an economy's money comes from should be
+  // cheap to grant, and quietly editing a ranking should not be.
+  { key: 'money', label: 'Money', path: '/ovaloffice/money', group: 'Operations' },
   { key: 'events', label: 'Events', path: '/ovaloffice/events', group: 'Operations' },
   { key: 'news', label: 'News', path: '/ovaloffice/news', group: 'Operations' },
+  // Beside News and the channel, and the third thing in that cluster that is
+  // the platform speaking rather than a space. The difference from the other
+  // two is the direction: those decide what goes out, this holds the addresses
+  // of people who asked to receive it - which makes it the one section here
+  // that is mostly a consent log, and is why it shows the wording each person
+  // ticked rather than just a list of emails.
+  { key: 'newsletter', label: 'Newsletter', path: '/ovaloffice/newsletter', group: 'Operations' },
+  // Beside News, because it is the other thing the platform says in its own
+  // voice rather than a space's. The difference is what the switch does: News
+  // writes the words and publishes them together, this one only decides which
+  // already-written chapter is showing - the prose arrives through a pull
+  // request, because a book wants the review a banner does not.
+  { key: 'xo-universe', label: 'XO Universe', path: '/ovaloffice/xo-universe', group: 'Operations' },
   // System
   { key: 'analytics', label: 'Analytics', path: '/ovaloffice/analytics', group: 'System' },
   { key: 'errors', label: 'Errors', path: '/ovaloffice/errors', group: 'System' },

@@ -6,6 +6,7 @@ import {
   type XpSpacePolicy,
   type XpState,
 } from '@/domain/xps/events'
+import { MAX_PRICE } from '@/domain/bank/prices'
 import { DomainError } from '@/es/errors'
 import type { Decider } from '@/es/types'
 
@@ -32,6 +33,8 @@ export interface XpProjectState {
    */
   releases: readonly number[]
   cover: string | null
+  /** What it costs to play once, and to fork. Both `0` until an owner says otherwise. */
+  price: { once: number; remix: number; split: Readonly<Record<string, number>> }
 }
 
 export const initialXpState: XpProjectState = {
@@ -45,6 +48,7 @@ export const initialXpState: XpProjectState = {
   publishedVersion: null,
   releases: [],
   cover: null,
+  price: { once: 0, remix: 0, split: {} },
 }
 
 export function evolve(state: XpProjectState, event: XpEvent): XpProjectState {
@@ -60,6 +64,16 @@ export function evolve(state: XpProjectState, event: XpEvent): XpProjectState {
         ...state,
         currentVersion: event.data.version,
         cover: event.data.cover ?? state.cover,
+      }
+
+    case 'XpPriced':
+      return {
+        ...state,
+        price: {
+          once: event.data.once,
+          remix: event.data.remix,
+          split: event.data.split ?? {},
+        },
       }
 
     case 'XpAccessSet':
@@ -169,6 +183,63 @@ export function decide(state: XpProjectState, command: XpCommand): XpEvent[] {
             files: command.files,
             by: command.actorId,
             ...(command.cover ? { cover: command.cover } : {}),
+          },
+        },
+      ]
+    }
+
+    /**
+     * Put a price on it, or take one off.
+     *
+     * The owner's, like sharing and unlike publishing - what a thing is worth
+     * is not a decision the space it happens to live in gets to make.
+     *
+     * Every bound is checked here rather than at the form, because this is the
+     * number a purse will later be charged and `MAX_PRICE` is the guard that
+     * makes a stray zero a refusal instead of an emptied purse. The shares are
+     * checked for the same reason in a different direction: a percentage
+     * outside 0-100 is meaningless, and shares totalling more than 100 would
+     * pay out more than came in - which is minting, dressed as a split.
+     */
+    case 'PriceXp': {
+      assertOwner(state, command.actorId, 'price')
+
+      for (const amount of [command.once, command.remix]) {
+        if (!Number.isInteger(amount) || amount < 0 || amount > MAX_PRICE) {
+          throw new DomainError('That is not a plausible price', 'xp_bad_price')
+        }
+      }
+
+      const split = command.split ?? {}
+      let total = 0
+      for (const share of Object.values(split)) {
+        if (!Number.isInteger(share) || share <= 0 || share > 100) {
+          throw new DomainError('A share is a whole percentage of the price', 'xp_bad_share')
+        }
+        total += share
+      }
+      // Not `!== 100`. What is unallocated stays with the owner, so a split of
+      // one 30% collaborator is complete - see `XpPriced.split`. What cannot
+      // happen is paying out more than arrived.
+      if (total > 100) {
+        throw new DomainError('Those shares add up to more than the price', 'xp_bad_share')
+      }
+
+      const same =
+        state.price.once === command.once &&
+        state.price.remix === command.remix &&
+        JSON.stringify(state.price.split) === JSON.stringify(split)
+      if (same) return []
+
+      return [
+        {
+          type: 'XpPriced',
+          data: {
+            once: command.once,
+            remix: command.remix,
+            // Omitted rather than written empty, so an unshared level carries
+            // no key at all and the common case stays the small one.
+            ...(Object.keys(split).length === 0 ? {} : { split }),
           },
         },
       ]

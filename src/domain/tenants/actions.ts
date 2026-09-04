@@ -6,31 +6,22 @@ import { redirect } from 'next/navigation'
 import { tenantDecider } from '@/domain/tenants/aggregate'
 import {
   changeRoleSchema,
-  createTenantSchema,
   inviteeKeySchema,
   inviteMemberSchema,
   memberIdSchema,
   renameTenantSchema,
   type TenantCommand,
 } from '@/domain/tenants/commands'
+import { tenantLimit } from '@/domain/billing/quota'
 import { makeSpace } from '@/domain/tenants/create'
+import {
+  acceptInvitationFor,
+  declineInvitationFor,
+} from '@/domain/tenants/invitations'
 import { isSpaceCapability, tokenInvitee, userInvitee } from '@/domain/tenants/events'
-import { findTenantIdBySlug } from '@/domain/tenants/queries'
 import { executeCommand } from '@/es/command'
 import { ConcurrencyError, DomainError } from '@/es/errors'
-import type { Client } from '@/es/store'
 import { requireUser } from '@/lib/auth'
-import {
-  countOwnedTenants,
-  entitlementMessage,
-  readLiveGrants,
-  syncUserEntitlement,
-  unpaidSpaces,
-} from '@/domain/billing/entitlement'
-import { resolveFeatures } from '@/domain/flags/queries'
-import { freeSpaceLimit, tenantLimit } from '@/domain/billing/quota'
-import { withinLimit } from '@/domain/billing/limits'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTenant, writeBlockedReason } from '@/lib/tenant'
 
 /**
@@ -44,9 +35,6 @@ import { requireTenant, writeBlockedReason } from '@/lib/tenant'
  */
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
-
-/** Postgres unique violation - the slug was claimed while we were deciding. */
-const UNIQUE_VIOLATION = '23505'
 
 function toResult(error: unknown): ActionResult {
   if (error instanceof DomainError) {
@@ -483,36 +471,8 @@ export async function leaveTenant(slug: string): Promise<ActionResult> {
 export async function acceptInvitation(tenantSlug: string): Promise<ActionResult> {
   const { user, supabase } = await requireUser()
 
-  const tenantId = await findTenantIdBySlug(supabase, tenantSlug)
-  if (!tenantId) return { ok: false, error: 'That space no longer exists' }
-
-  const invitee = await findMyInvitee(supabase, tenantId)
-  if (!invitee) {
-    return { ok: false, error: 'That invitation is no longer valid' }
-  }
-
-  try {
-    await executeCommand({
-      supabase,
-      decider: tenantDecider,
-      tenantId,
-      streamId: tenantId,
-      command: {
-        type: 'AcceptInvitation',
-        actorId: user.id,
-        invitee,
-        // Resolved through RPCs that answer for a workspace the caller is not
-        // a member of - which is exactly what an accepter is, and why
-        // `resolve_features` cannot be used here. Both `tenant_tier` and
-        // `tenant_feature_limit` are SECURITY DEFINER for that reason.
-        seatLimit: await tenantLimit(supabase, tenantId, 'seats'),
-      },
-      metadata: { actorId: user.id },
-    })
-  } catch (error) {
-    return toResult(error)
-  }
-
+  const accepted = await acceptInvitationFor(supabase, user, tenantSlug)
+  if (!accepted.ok) return accepted
 
   revalidatePath('/invitations')
   revalidatePath('/tenants')
@@ -525,51 +485,10 @@ export async function acceptInvitation(tenantSlug: string): Promise<ActionResult
 export async function declineInvitation(tenantSlug: string): Promise<ActionResult> {
   const { user, supabase } = await requireUser()
 
-  const tenantId = await findTenantIdBySlug(supabase, tenantSlug)
-  if (!tenantId) return { ok: false, error: 'That space no longer exists' }
-
-  const invitee = await findMyInvitee(supabase, tenantId)
-  // Nothing to decline is the outcome the caller wanted anyway.
-  if (!invitee) return { ok: true }
-
-  try {
-    await executeCommand({
-      supabase,
-      decider: tenantDecider,
-      tenantId,
-      streamId: tenantId,
-      command: {
-        type: 'DeclineInvitation',
-        actorId: user.id,
-        invitee,
-      },
-      metadata: { actorId: user.id },
-    })
-  } catch (error) {
-    return toResult(error)
-  }
+  const declined = await declineInvitationFor(supabase, user, tenantSlug)
+  if (!declined.ok) return declined
 
   revalidatePath('/invitations')
   return { ok: true }
 }
 
-/**
- * Which invitation in this workspace is addressed to the caller.
- *
- * Answered by the database, under SECURITY DEFINER, scoped to auth.uid() - the
- * key never comes from the request. That matters more than it looks: the key is
- * what the decider matches an acceptance against, so a caller who could choose
- * it could redeem somebody else's invitation. Same reason `actorId` is stamped
- * from the session and never read from an argument.
- */
-async function findMyInvitee(supabase: Client, tenantId: string): Promise<string | null> {
-  const { data, error } = await supabase.rpc('my_tenant_invitation', {
-    p_tenant_id: tenantId,
-  })
-
-  if (error) {
-    throw new Error(`Failed to find your invitation: ${error.message}`)
-  }
-
-  return data ?? null
-}

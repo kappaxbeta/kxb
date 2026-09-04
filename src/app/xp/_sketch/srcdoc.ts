@@ -1,7 +1,6 @@
 import { PACKS } from '@kxb/xp/packs'
 import { SOUND_PACK, XP_SOUNDS } from '@kxb/xp/sounds'
-import { runsInSketch, type XpFlow, type XpSketch } from '@kxb/xp'
-import { SKETCH_SDK } from '@/app/xp/_sketch/sdk'
+import { runsInSketch, SKETCH_SDK, type XpFlow, type XpSketch } from '@kxb/xp'
 
 /**
  * The container's document, built as a string for `srcdoc`.

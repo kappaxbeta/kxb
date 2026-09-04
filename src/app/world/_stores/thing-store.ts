@@ -42,6 +42,18 @@ export interface ThingiverseState {
   /** Whether this person may change anything here at all. */
   canBuild: boolean
   /**
+   * What the body you are wearing can be asked to do.
+   *
+   * The pack's own four plus whatever this space animated for itself, already
+   * deduped and resolved by the scene - see `bodyClips`. Published for the same
+   * reason the shelf is: the list is the *body's*, it changes when you change
+   * animal, and the rail cannot know either.
+   *
+   * Names only. Playing one is an action, because what a clip does lives inside
+   * the Canvas and cannot be handed out.
+   */
+  clips: readonly string[]
+  /**
    * Whether the next thing summoned stays when its owner leaves.
    *
    * A preference of this browser's rather than a fact about the world - see
@@ -85,6 +97,14 @@ export interface ThingiverseActions {
   hand: (blueprintId: string, ownerId: string) => void
   rename: (blueprintId: string, name: string) => void
   retire: (blueprintId: string) => void
+  /**
+   * Make your body do one, right now.
+   *
+   * Local and unannounced, exactly as `/clip` is: it moves your own body, and
+   * everybody else sees it because presence is already broadcasting where every
+   * limb is. Nothing is written down - a wave is not a fact about the world.
+   */
+  playClip: (clip: string) => void
 }
 
 let actions: ThingiverseActions | null = null
@@ -118,6 +138,7 @@ export function publishThingiverse(
     current.things === state.things &&
     current.selectedId === state.selectedId &&
     current.canBuild === state.canBuild &&
+    current.clips === state.clips &&
     current.keepDefault === state.keepDefault &&
     current.busy === state.busy &&
     current.error === state.error

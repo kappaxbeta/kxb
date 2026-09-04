@@ -98,6 +98,16 @@ export interface LiveThing {
   h?: number
   /** What is on it: socket name, then the item's word. */
   o?: readonly (readonly [string, string])[]
+  /**
+   * How far into its trip it is, in seconds. Absent for anything that stands
+   * still, which is most things.
+   *
+   * On the heartbeat rather than in a message of its own, and run forward
+   * locally between packets exactly as `t` is - see `drift`. A lift that only
+   * moved when a packet landed would advance in four steps a second, which is
+   * a lift nobody would stand on.
+   */
+  p?: number
 }
 
 /** What the driver sends, four times a second. */
@@ -131,6 +141,23 @@ export interface Pulse {
    */
   gave?: readonly (readonly [string, string])[]
   /**
+   * Things that broke this frame, and who broke each one.
+   *
+   * `[conn, thingId]`, exactly `gave`'s shape and for exactly `gave`'s reason:
+   * the driver is the only client that knows a thing reached zero, and the
+   * person who *earned* something for it is somebody else. So the driver names
+   * the winner and the named client acts on it - which is what makes the coin
+   * exactly-once without anybody agreeing about anything.
+   *
+   * The driver's own kills do not travel. It applies them the frame it decides
+   * them, the same way its own takes never ride a pulse.
+   *
+   * A break nobody can be credited for is simply absent rather than carrying a
+   * null: a crate that fell to a bump is not an event anybody is owed for, and
+   * a pulse should not carry rows that mean nothing happened.
+   */
+  broke?: readonly (readonly [string, string])[]
+  /**
    * Words shouted since the last pulse.
    *
    * On the pulse rather than sent the instant they happen, and that costs up to
@@ -140,6 +167,36 @@ export interface Pulse {
    * that said it has changed. Splitting them would make that race a coin toss.
    */
   said?: readonly string[]
+  /**
+   * Shots fired since the last pulse: the thing that fired, and at whom.
+   *
+   * ---------------------------------------------------------------------------
+   * Two fields, because everything else about a bullet is already everywhere
+   * ---------------------------------------------------------------------------
+   * What it looks like, how fast it goes, where the barrel is and what a hit is
+   * worth are all on the blueprint, and every client in the room has the
+   * blueprint - so putting any of them on the wire would be sending a fact four
+   * times a second that cannot change. What nobody else can work out is the two
+   * things the *driver decided*: that a shot went off at all (its cooldown is
+   * the driver's clock) and who it was aimed at (its `nearest` is the driver's
+   * arithmetic).
+   *
+   * `to` is a connection id, because a shot has to reach the one client that
+   * gets to decide what it costs them. That is the rule `_sim/combat.ts` states
+   * and this inherits whole: the attacker says a hit happened, the victim
+   * applies it to their own bar, and nobody writes to anybody else's health.
+   * The driver's own name for itself (`me` inside the simulation) is translated
+   * on the way out, so what travels is a name everybody in the room shares.
+   */
+  shots?: readonly Shot[]
+}
+
+/** One shot, as it travels. See `Pulse.shots`. */
+export interface Shot {
+  /** The thing that fired it. Its blueprint says what a bullet looks like. */
+  i: string
+  /** Whose bar it is about to cost something. A connection id. */
+  to: string
 }
 
 /**
@@ -235,6 +292,8 @@ export interface Watched {
   since: number
   health?: number
   slots: ReadonlyMap<string, string>
+  /** How far into its trip it is. See `LiveThing.p`. */
+  phase: number
   /**
    * When this last heard from the driver, on the client's own clock.
    *
@@ -247,7 +306,7 @@ export interface Watched {
 
 /** A thing nobody has heard anything about yet. */
 export function unheard(now: number): Watched {
-  return { since: 0, slots: new Map(), heard: now }
+  return { since: 0, slots: new Map(), phase: 0, heard: now }
 }
 
 /**
@@ -264,6 +323,7 @@ export function apply(live: LiveThing, now: number): Watched {
     since: live.t ?? 0,
     health: live.h,
     slots: new Map(live.o ?? []),
+    phase: live.p ?? 0,
     heard: now,
   }
 }
@@ -277,7 +337,10 @@ export function apply(live: LiveThing, now: number): Watched {
  */
 export function drift(was: Watched, dt: number): Watched {
   if (dt <= 0) return was
-  return { ...was, since: was.since + dt }
+  // Both clocks, because both are read as "how far through something are we":
+  // one fills a bar and one carries a platform, and a platform that only moved
+  // on a packet would carry somebody in four steps a second.
+  return { ...was, since: was.since + dt, phase: was.phase + dt }
 }
 
 /**
@@ -334,6 +397,23 @@ export function honour(
  */
 export function gather(claims: readonly Claim[], id: string): {
   hit: number
+  /**
+   * Who dealt the biggest hit this frame, when anybody said.
+   *
+   * The damage itself adds up and this one does not, because it answers a
+   * different question: `hit` is "how much did the thing take", and this is
+   * "whose name goes on it". Two people hitting a crate in the same frame both
+   * count towards its health, and only one of them can be credited.
+   *
+   * The *biggest* rather than the last, because the order of claims in a frame
+   * is the order packets happened to arrive - arbitrary, and different on every
+   * machine. Biggest is at least a fact about the swing.
+   *
+   * A claim from somebody who did not name themselves is `null`, which is the
+   * same answer as nobody hitting it: an unattributable kill pays nobody rather
+   * than paying whoever happens to be driving.
+   */
+  hitBy: string | null
   used: boolean
   touched: boolean
   put: (readonly [string, string])[]
@@ -341,6 +421,8 @@ export function gather(claims: readonly Claim[], id: string): {
   took: { socket: string; by: string | null }[]
 } {
   let hit = 0
+  let hitBy: string | null = null
+  let biggest = 0
   let used = false
   let touched = false
   const put: (readonly [string, string])[] = []
@@ -350,12 +432,21 @@ export function gather(claims: readonly Claim[], id: string): {
     if (claim.i !== id) continue
     // Damage adds up: two people hitting one crate in one frame is two hits,
     // and this is the one field where "it counts once" would be wrong.
-    if (claim.hit !== undefined) hit += Math.max(0, claim.hit)
+    if (claim.hit !== undefined) {
+      const dealt = Math.max(0, claim.hit)
+      hit += dealt
+      // Strictly greater, so a tie keeps whoever got here first rather than
+      // flipping on packet order - see `hitBy`.
+      if (dealt > biggest && claim.c !== undefined) {
+        biggest = dealt
+        hitBy = claim.c
+      }
+    }
     if (claim.used) used = true
     if (claim.touched) touched = true
     if (claim.put) put.push(claim.put)
     if (claim.took) took.push({ socket: claim.took, by: claim.c ?? null })
   }
 
-  return { hit, used, touched, put, took }
+  return { hit, hitBy, used, touched, put, took }
 }

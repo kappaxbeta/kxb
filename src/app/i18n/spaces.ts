@@ -120,12 +120,16 @@ export interface SpacesDict {
     /** Summary label the collapsed create form hides behind. */
     newSpace: string
     /**
-     * The switch under the roster: stand in the plain dummy instead of an
-     * animal. Reads as a body, not as an absence - it is what a player is in
-     * the games before they own a skin, and what a visitor with no account
-     * already stands in.
+     * The switch between the locker's two halves: have rooms draw the xp body
+     * rather than the peep.
+     *
+     * A mode, not a costume, and the only control over which body is seen -
+     * there used to be a second one here that dressed the *peep* as a
+     * mannequin, which was the same question asked twice. An xp body with
+     * nothing equipped is the dummy, so this is also how somebody who owns
+     * nothing stands in it.
      */
-    dummy: string
+    showXp: string
     /** The XP half of the locker. */
     skins: string
     shop: string
@@ -229,7 +233,7 @@ export const SPACES_EN: SpacesDict = {
     close: 'Close',
     search: 'Search spaces…',
     newSpace: 'New space',
-    dummy: 'Stand in the dummy',
+    showXp: 'Stand as your xp body',
     skins: 'Your skin',
     shop: 'Shop →',
     shopClosed: 'See the shelf →',
@@ -340,7 +344,7 @@ export const SPACES_DE: SpacesDict = {
     close: 'Schließen',
     search: 'Spaces durchsuchen …',
     newSpace: 'Neuer Space',
-    dummy: 'Als Dummy stehen',
+    showXp: 'Als XP-Körper stehen',
     skins: 'Ihr Skin',
     shop: 'Shop →',
     shopClosed: 'Zum Regal →',
@@ -449,7 +453,7 @@ export const SPACES_BG: SpacesDict = {
     close: 'Затвори',
     search: 'Търсене на спейсове…',
     newSpace: 'Нов спейс',
-    dummy: 'Стой като дъми',
+    showXp: 'Стой като xp тяло',
     skins: 'Вашият скин',
     shop: 'Магазин →',
     shopClosed: 'Към рафта →',

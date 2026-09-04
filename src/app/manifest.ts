@@ -21,7 +21,7 @@ import type { MetadataRoute } from 'next'
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'kxb',
+    name: 'kxb.team',
     short_name: 'kxb',
     description:
       'Invite your friends or colleagues to play or hangout together in a virtual team space.',

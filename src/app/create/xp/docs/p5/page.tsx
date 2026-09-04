@@ -77,8 +77,9 @@ export default function P5Page() {
           Up to sixteen files, half a megabyte across the project. Every file runs in the order
           written; <C>entry</C> runs <Em>last</Em>, so helpers exist by the time the main file
           does. Ship-along examples to read: <C>neon-pond</C> (2D, a flow with rounds),{' '}
-          <C>peep-beat</C> (a rhythm game — lanes, pack art, a live scoreboard), and{' '}
-          <C>cube-yard</C> (p5&apos;s WEBGL mode).
+          <C>peep-beat</C> (a rhythm game — lanes, pack art, a live scoreboard),{' '}
+          <C>conways-gambit</C> (a two-player board game — one shared table, turns asked
+          for over <C>xp.send</C>), and <C>cube-yard</C> (p5&apos;s WEBGL mode).
         </P>
       </Section>
 

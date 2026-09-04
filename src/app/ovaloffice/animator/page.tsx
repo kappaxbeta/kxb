@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { Animator } from '@/app/ovaloffice/animator/animator'
 import { requireBackofficeSection } from '@/lib/backoffice'
 
@@ -29,6 +30,14 @@ export default async function AnimatorPage() {
           lower the hips and you get a crouch instead of a figure sinking through the floor.
         </p>
       </header>
+
+      <p className="mb-4 text-sm text-muted-foreground">
+        Or{' '}
+        <Link href="/ovaloffice/animator/capture" className="text-accent underline underline-offset-2">
+          do the movement in front of a webcam
+        </Link>{' '}
+        and key over what comes back.
+      </p>
 
       <p className="mb-4 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground xl:hidden">
         On a phone: one finger drags a dot or turns the camera, and the panel is below the viewport.

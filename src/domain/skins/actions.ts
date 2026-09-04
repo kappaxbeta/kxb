@@ -11,6 +11,7 @@ import { requireUser } from '@/lib/auth'
 import { requireBackofficeSection } from '@/lib/backoffice'
 import { env } from '@/lib/env'
 import { stripe } from '@/lib/stripe'
+import { isAppShell, NOT_FOR_SALE_IN_APP } from '@/lib/app-shell'
 
 /**
  * Buying, redeeming, gifting and wearing a skin.
@@ -80,8 +81,13 @@ export async function chooseSkin(model: string | null): Promise<SkinActionResult
  * Off is the default and stays the default, so a space draws a peep until
  * somebody deliberately asks it not to.
  *
- * Refuses when there is no XP body to show, because a world told to draw
- * "nothing, but in the lounge" would draw nothing.
+ * It used to refuse when there was no XP body equipped - *"put a skin on first"*
+ * - on the grounds that a world told to draw nothing would draw nothing. That
+ * was wrong about what nothing is: an XP body with no skin on it is the dummy,
+ * the body every player already is before they are anybody, and refusing here
+ * is what made the dummy unreachable to everybody who owns no skin. It was
+ * papered over by a *second* switch that dressed the peep as a mannequin; that
+ * switch is gone, and this is the one control over which body a world draws.
  */
 export async function wearSkinInLounge(wear: boolean): Promise<SkinActionResult> {
   const { user, supabase } = await requireUser()
@@ -254,6 +260,11 @@ export async function claimFreeSkin(skinId: string): Promise<SkinActionResult> {
  * redirect - the person is mid-shop, and "make an account" is the answer.
  */
 export async function startSkinCheckout(skinId: string): Promise<SkinActionResult | never> {
+  // Nothing is sold inside the installed app - see `isAppShell`. Checked here
+  // and not only in the UI, because a Server Action is a public POST endpoint
+  // and a hidden button is a rendering decision.
+  if (await isAppShell()) return { ok: false, error: NOT_FOR_SALE_IN_APP }
+
   const { user, supabase } = await requireUser()
 
   const features = await resolveFeatures(supabase, null)

@@ -12,6 +12,8 @@ function room(id: string, cap: number | null = null): RoomView {
     mode: 'creative',
     cap,
     guestBuild: true,
+    // Free, like every room until an owner puts a price on the door.
+    doorPrice: 0,
     // Capacity is the same question for a level as for a lounge room: how many
     // heads fit. Nothing here reads it, and it is present so the fixture is a
     // whole RoomView rather than a cast.

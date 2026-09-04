@@ -60,6 +60,7 @@ import {
   type RecipeSpec,
 } from '@/domain/thingiverse/craft'
 import { gather, honour, type Claim } from '@/domain/thingiverse/live'
+import { cycleOf, offsetAt, type MotionSpec } from '@/domain/thingiverse/motion'
 
 /**
  * One thing in the room, as this file needs it.
@@ -75,6 +76,31 @@ export interface Alive {
   states?: States
   fight?: FightSpec
   craft?: CraftSpec
+  /** Where it goes on its own, if anywhere. See `@/domain/thingiverse/motion`. */
+  motion?: MotionSpec
+  /**
+   * How far this thing's shouts carry, in cells. Absent is the whole room.
+   *
+   * A fact about the *thing* and not about its kind, which is why it arrives
+   * here off `ThingTuning` rather than off the blueprint: the same button is a
+   * doorbell in a corridor and a fire alarm in a hall, and which one it is is
+   * decided by whoever put it there. See `heard`.
+   */
+  reach?: number
+  /**
+   * The things this one's shouts go to, and nothing else hears them.
+   *
+   * Empty or absent is the room, which is what a signal has always been. A
+   * non-empty list is a *wire*: this button opens that door, and the identical
+   * button by the other door is not listening to it.
+   *
+   * Ids rather than words, because that is what a wire is - two objects
+   * somebody pointed at, in a room where four doors are all called "Door" and
+   * all wait for `open`. The word still travels (a wired thing hears the word
+   * it was always waiting for, so nothing about a blueprint changes), and what
+   * the wire narrows is *who* is in earshot.
+   */
+  wires?: readonly string[]
 }
 
 /** What one thing is doing, between frames, on the driver. */
@@ -87,13 +113,22 @@ export interface Life {
   slots: Map<string, string>
   /** Seconds until its weapon may go again. */
   cooling: number
+  /**
+   * How far into its trip it is, in seconds. See `@/domain/thingiverse/motion`.
+   *
+   * Kept even for things that do not move, at zero, so that nothing downstream
+   * has to ask twice - and wrapped to the cycle every frame, so a room left
+   * open overnight is not carrying a number with six figures in it through a
+   * float that has stopped being able to represent a fiftieth of a second.
+   */
+  phase: number
   /** A recipe part-way through, and how long it has left. */
   cooking?: { recipe: RecipeSpec; left: number }
 }
 
 /** A thing as it starts: in its first state, with a full bar and nothing on it. */
 export function born(thing: Alive): Life {
-  const life: Life = { slots: new Map(), cooling: 0 }
+  const life: Life = { slots: new Map(), cooling: 0, phase: 0 }
   if (thing.states) life.standing = standing(thing.states)
   if (thing.fight?.health) life.health = thing.fight.health.max
   // A rack arrives with its pan on it. See `SlotSpec.gives`.
@@ -101,6 +136,13 @@ export function born(thing: Alive): Life {
     if (slot.gives) life.slots.set(slot.socket, slot.gives)
   }
   return life
+}
+
+/** One word, and where it came from. See `Effects.said`. */
+export interface Signal {
+  word: string
+  /** The thing that shouted it. */
+  from: string
 }
 
 /** Somebody in the room, as this file needs them. */
@@ -113,14 +155,28 @@ export interface Body {
 
 /** What the driver has to do about this frame, once the sums are done. */
 export interface Effects {
-  /** Words to shout at the room, from every thing that shouted one. */
-  said: string[]
+  /**
+   * Words shouted this frame, each with the thing that shouted it.
+   *
+   * The source rides along because delivery is no longer "everybody hears
+   * everything": a shout may carry a limited distance or run down a wire, and
+   * both of those are facts about the *shouter* that the hearer has to be able
+   * to look up. See `heard`.
+   */
+  said: Signal[]
   /** Clips to play, by thing id. */
   play: { id: string; clip: string }[]
   /** Shots that left a barrel this frame. */
   shots: { from: string; at: { x: number; y: number; z: number }; toward: string | null }[]
-  /** Things that are now at zero. */
-  broke: string[]
+  /**
+   * Things that are now at zero, and who put them there.
+   *
+   * `by` is the connection that dealt the biggest hit in the frame that
+   * finished it, or `null` when nobody claimed one - a crate that fell to a
+   * bump, or a hit from a client that did not name itself. An unattributable
+   * kill pays nobody rather than paying whoever happens to be driving.
+   */
+  broke: { id: string; by: string | null }[]
   /** Items a recipe produced: the thing, the socket, and the item's word. */
   made: { id: string; socket: string | undefined; item: string }[]
   /** Items a slot handed over: the thing, the socket, what, and to whom. */
@@ -160,9 +216,30 @@ export function stepRoom(
   claims: readonly Claim[],
   dt: number,
   /** Words shouted last frame, which is when the room gets to hear them. */
-  said: readonly string[] = [],
+  said: readonly Signal[] = [],
 ): Effects {
   const effects = noEffects()
+
+  /*
+    Who can hear what, worked out once for the frame.
+
+    A signal used to be a word on a list every thing read, which is still the
+    default and still the common case. What is added is two narrowings, both
+    facts about the *shouter*: a `reach` (only things within so many cells) and
+    a set of `wires` (only these things, wherever they are). Resolved here
+    rather than per thing so the emitter is looked up once per word instead of
+    once per word per thing - a room with sixty machines in it would otherwise
+    do sixty lookups to deliver one ding.
+  */
+  const shouted = said.map((signal) => {
+    const from = things.find((one) => one.id === signal.from)
+    return {
+      word: signal.word,
+      at: from?.at,
+      reach: from?.reach,
+      wires: from?.wires,
+    }
+  })
 
   for (const thing of things) {
     let life = lives.get(thing.id)
@@ -171,8 +248,22 @@ export function stepRoom(
       lives.set(thing.id, life)
     }
 
+    /*
+      Where it is this frame, which for most things is where it was put.
+
+      Advanced before anything else reads a position, because everything that
+      follows is about *where the thing is*: what is in reach of its weapon, how
+      hard somebody ran into it, and where a bullet leaves from. A crusher whose
+      reach was measured at its parked cell would catch people standing under
+      where it used to be.
+    */
+    if (thing.motion) {
+      life.phase = (life.phase + dt) % cycleOf(thing.motion)
+    }
+    const at = thing.motion ? shifted(thing.at, offsetAt(thing.motion, life.phase)) : thing.at
+
     const heard = gather(claims, thing.id)
-    const near = nearest(thing, bodies)
+    const near = nearest({ ...thing, at }, bodies)
 
     // --- what somebody did to it -------------------------------------------
 
@@ -188,7 +279,7 @@ export function stepRoom(
       { health: life.health, hurtable: hurtable(thing.fight) },
     )
     life.health = verdict.health
-    if (verdict.broken) effects.broke.push(thing.id)
+    if (verdict.broken) effects.broke.push({ id: thing.id, by: heard.hitBy })
 
     // --- what went on it, and what came off --------------------------------
 
@@ -203,7 +294,7 @@ export function stepRoom(
       if (!slot || !accepts(slot, item) || life.slots.has(socket)) continue
       life.slots.set(socket, item)
       filled.push(socket)
-      if (slot.emit) effects.said.push(slot.emit)
+      if (slot.emit) effects.said.push({ word: slot.emit, from: thing.id })
     }
 
     for (const { socket, by } of heard.took) {
@@ -225,7 +316,7 @@ export function stepRoom(
     if (thing.states && life.standing) {
       const what: Happened = {
         dt,
-        signals: said,
+        signals: earshot(shouted, thing),
         used: heard.used,
         touched: heard.touched || (near !== null && near.distance <= TOUCH),
         broken: verdict.broken,
@@ -234,7 +325,7 @@ export function stepRoom(
       }
       const went = stepState(thing.states, life.standing, what)
       life.standing = went.standing
-      effects.said.push(...went.emit)
+      effects.said.push(...went.emit.map((word) => ({ word, from: thing.id })))
       // Coming back with a full bar, which is the other half of coming back.
       if (went.restore && thing.fight?.health) life.health = thing.fight.health.max
     }
@@ -251,11 +342,23 @@ export function stepRoom(
     if (weapon && life.cooling === 0 && near && near.distance <= weapon.reach) {
       if (weapon.at !== 'things') {
         life.cooling = weapon.every
-        if (weapon.shot) {
-          effects.shots.push({ from: thing.id, at: thing.at, toward: near.body.id })
-        } else {
-          effects.play.push({ id: thing.id, clip: 'attack' })
-        }
+        /*
+          A swing goes on the same list as a shot, and that is not a fudge.
+
+          What this list is *for* is "something was aimed at somebody, and the
+          driver decided it landed" - which is exactly as true of a spike plate
+          as of a turret. The difference is what is drawn on the way: a shot has
+          a model and takes a moment to arrive, and a swing has neither, so it
+          is paid for the instant it is heard. Whoever draws these tells them
+          apart by asking the blueprint whether the weapon has anything to fire,
+          which every client can do without being told.
+
+          Keeping them apart was the alternative and it would have meant a
+          second wire field, a second queue and a second path to the one place
+          that may write to somebody's health.
+        */
+        effects.shots.push({ from: thing.id, at, toward: near.body.id })
+        if (!weapon.shot) effects.play.push({ id: thing.id, clip: 'attack' })
       }
     }
   }
@@ -306,7 +409,54 @@ function cook(
   life.cooking = undefined
 
   effects.made.push({ id, socket: landsAt(recipe, used), item: recipe.makes })
-  if (recipe.emit) effects.said.push(recipe.emit)
+  if (recipe.emit) effects.said.push({ word: recipe.emit, from: id })
+}
+
+/**
+ * Which of this frame's words this thing actually hears.
+ *
+ * Three rules, in the order they decide:
+ *
+ *   - a **wire** is exclusive. A thing that has been wired to something shouts
+ *     down the wire and nowhere else, which is the whole point of running one:
+ *     the button by the airlock should not open the four doors upstairs.
+ *   - a **reach** is a radius from the shouter, in cells, measured the way
+ *     everything else in this file measures - centre to centre, on all three
+ *     axes, so a bell on a balcony does not ring the room below it.
+ *   - with neither, the room hears it, which is what a signal has always been
+ *     and what every blueprint written before wires existed still means.
+ *
+ * A shouter that has since been dismissed (no `at`) is heard by everybody: its
+ * word is already in flight, and losing it because the thing that said it was
+ * cleared away in the same frame would be a bell that sometimes does not ring.
+ */
+function earshot(
+  shouted: readonly { word: string; at?: { x: number; y: number; z: number }; reach?: number; wires?: readonly string[] }[],
+  thing: Alive,
+): string[] {
+  const words: string[] = []
+  for (const signal of shouted) {
+    if (signal.wires && signal.wires.length > 0) {
+      if (signal.wires.includes(thing.id)) words.push(signal.word)
+      continue
+    }
+    if (signal.reach !== undefined && signal.at) {
+      const dx = thing.at.x - signal.at.x
+      const dy = thing.at.y - signal.at.y
+      const dz = thing.at.z - signal.at.z
+      if (Math.hypot(dx, dy, dz) > signal.reach) continue
+    }
+    words.push(signal.word)
+  }
+  return words
+}
+
+/** A point, moved by an offset. Its own line because it is done twice. */
+function shifted(
+  at: { x: number; y: number; z: number },
+  by: { x: number; y: number; z: number },
+): { x: number; y: number; z: number } {
+  return { x: at.x + by.x, y: at.y + by.y, z: at.z + by.z }
 }
 
 /** Whether anything at all can take health off this. */

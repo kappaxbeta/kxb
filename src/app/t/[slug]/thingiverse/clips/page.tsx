@@ -6,9 +6,10 @@ import { ClipStudio } from '@/app/t/[slug]/thingiverse/clips/clip-studio'
 import { isSkinLook } from '@/domain/lounge/avatars'
 import { readLookFor } from '@/domain/skins/queries'
 import { thingiverseProjection } from '@/domain/thingiverse/projection'
-import { findClipDoc, listClips } from '@/domain/thingiverse/queries'
+import { coinsOf, nextPrice } from '@/domain/bank/next'
+import { countClips, findClipDoc, listClips } from '@/domain/thingiverse/queries'
 import { runProjection } from '@/es/projection'
-import { requireFeature, requireTenant, requireTier } from '@/lib/tenant'
+import { requireTenant, requireThingiverse } from '@/lib/tenant'
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: workspaceDict(await readLocale()).thingiverse.clips.heading }
@@ -52,8 +53,7 @@ export default async function ClipsPage({
   const { edit } = await searchParams
 
   const context = await requireTenant(slug)
-  requireFeature(context, 'thingiverse')
-  requireTier(context, 'xo')
+  requireThingiverse(context)
 
   const { supabase, tenant, user } = context
   const t = workspaceDict(await readLocale()).thingiverse
@@ -78,6 +78,15 @@ export default async function ClipsPage({
    */
   const opened = edit ? await findClipDoc(supabase, tenant.id, edit) : null
 
+  /*
+    What keeping a *new* clip costs, from the same helper `saveClip` charges
+    from. Counted with `countClips` and not `clips.length`: the list is filtered
+    to what this person may see, and a quota is about what the space holds.
+  */
+  const price = coinsOf(
+    await nextPrice(supabase, tenant.id, tenant.tier, 'clips', await countClips(supabase, tenant.id)),
+  )
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8">
       <header className="space-y-2">
@@ -96,6 +105,7 @@ export default async function ClipsPage({
       <ClipStudio
         slug={slug}
         clips={clips}
+        price={price}
         t={t.clips}
         editing={edit && opened ? { id: edit, name: opened.name, doc: opened.doc } : null}
         /*

@@ -197,6 +197,21 @@ export type SetChatEnabled = {
   actorId: string
   enabled: boolean
 }
+/**
+ * The space's rules about needing things. See `SpaceNeedsSet` in events.ts.
+ *
+ * Both switches together rather than one each, because they are one decision
+ * with two parts and setting them separately would let a space pass through a
+ * state its owner never chose - hunger on and charging on, for the instant
+ * between two writes, in a space that meant to have neither.
+ */
+export type SetSpaceNeeds = {
+  type: 'SetSpaceNeeds'
+  actorId: string
+  hunger: boolean
+  charged: boolean
+}
+
 /** One of the host's day-to-day switches. See SpaceCapabilitySet in events.ts. */
 export type SetSpaceCapability = {
   type: 'SetSpaceCapability'
@@ -238,6 +253,7 @@ export type TenantCommand = (
   | SetLoungePublicity
   | SetLoungeMode
   | SetChatEnabled
+  | SetSpaceNeeds
   | SetSpaceCapability
 ) &
   PlatformActor

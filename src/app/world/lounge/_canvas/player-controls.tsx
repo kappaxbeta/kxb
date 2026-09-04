@@ -22,6 +22,7 @@ import {
 } from '@/app/world/lounge/_sim/entry-view'
 import {
   EYE_HEIGHT,
+  type Riding as RidingOn,
   separate,
   step as stepPhysics,
   underfoot,
@@ -326,6 +327,20 @@ export function PlayerControls({
     [blocks, solids],
   )
 
+  /**
+   * The surface of whatever is moving under us, which cells cannot answer.
+   *
+   * Blocks are not consulted: a block never moves, so its top is always a cell
+   * boundary and `isSolidHere` already reports it exactly. This is only ever a
+   * lift, a crusher or a sliding platform, and in a room with none of them it
+   * is a walk over an empty map. See `ThingSolids.surfaceUnder`.
+   */
+  const deckUnder = useCallback(
+    (x: number, z: number, radius: number, lowest: number, highest: number) =>
+      solids?.surfaceUnder(x, z, radius, lowest, highest) ?? null,
+    [solids],
+  )
+
   const {
     moveRef,
     lookRef,
@@ -406,6 +421,14 @@ export function PlayerControls({
   const grounded = useRef(false)
   /** Jumps spent since the last landing. See MAX_JUMPS in physics.ts. */
   const jumps = useRef(0)
+  /**
+   * Where we are standing on whatever is carrying us, in its own frame.
+   *
+   * A ref beside the other three for the same reason they are: it is state the
+   * simulation needs between frames and nothing may re-render for it. This is
+   * what makes a sliding platform take you with it - see `physics.Riding`.
+   */
+  const rides = useRef<RidingOn | null>(null)
   /**
    * Whether the jump control was already down last frame.
    *
@@ -823,12 +846,15 @@ export function PlayerControls({
         grounded: grounded.current,
         delta: dt,
         isSolid: (x, y, z) => isSolidHere(x, y, z),
+        deckUnder,
+        rides: rides.current,
       })
 
       player.set(result.position.x, result.position.y, result.position.z)
       velocityY.current = result.velocityY
       grounded.current = result.grounded
       jumps.current = result.jumps
+      rides.current = result.rides
 
       // A wall is what it looks like from in here: the physics granted a
       // fraction of the move the drive asked for. The speed pays for it.
@@ -972,6 +998,10 @@ export function PlayerControls({
               velocityY: 0,
               grounded: true,
               jumps: 0,
+              // A chair is not a deck. Sitting down lets go of whatever was
+              // carrying you, so standing up starts from the seat rather than
+              // from a platform that has since gone somewhere else.
+              rides: null,
             }
           : stepPhysics({
               position: player,
@@ -987,12 +1017,15 @@ export function PlayerControls({
               grounded: grounded.current,
               delta: dt,
               isSolid: (x, y, z) => isSolidHere(x, y, z),
+              deckUnder,
+              rides: rides.current,
             })
 
         player.set(result.position.x, result.position.y, result.position.z)
         velocityY.current = result.velocityY
         grounded.current = result.grounded
         jumps.current = result.jumps
+        rides.current = result.rides
 
         /**
          * And out of anybody we ended up standing inside.

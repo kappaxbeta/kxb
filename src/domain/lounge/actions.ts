@@ -1,14 +1,14 @@
 'use server'
 
 import { loungeDecider } from '@/domain/lounge/aggregate'
-import { type LoungeEdit, loungeEditSchema } from '@/domain/lounge/commands'
+import { type LoungeEdit } from '@/domain/lounge/commands'
 import {
   type BlockPlacement,
   CHUNK_SIZE,
   chunkOf,
   DEFAULT_WORLD_SIZE,
-  MAX_WORLD_BLOCKS,
 } from '@/domain/lounge/events'
+import { applyEditsFor } from '@/domain/lounge/edit'
 import { chunkStreamId } from '@/domain/lounge/streams'
 import { loungeGoalDecider } from '@/domain/lounge/goal-aggregate'
 import { loungeGoalsProjection } from '@/domain/lounge/goal-projection'
@@ -18,7 +18,7 @@ import { findTemplate } from '@/domain/lounge/templates'
 import { clearWorld, copyWorld, countBlocks, MAX_COPY_BLOCKS } from '@/domain/lounge/copy'
 import { DEFAULT_GROUND_MODEL, isKnownModel } from '@/domain/lounge/palette'
 import { loungeProjection } from '@/domain/lounge/projection'
-import { groupByChunk, layTemplate, occupiedChunks } from '@/domain/lounge/lay-template'
+import { layTemplate, occupiedChunks } from '@/domain/lounge/lay-template'
 import { buildMode, resolveWorld } from '@/domain/lounge/world-access'
 import { executeCommand } from '@/es/command'
 import { ConcurrencyError, DomainError } from '@/es/errors'
@@ -56,166 +56,14 @@ export async function applyLoungeEdits(
   /** Omitted means the workspace's own lounge. A battlefield passes its id. */
   worldId?: string,
 ): Promise<LoungeResult> {
-  const parsed = loungeEditSchema.safeParse(edit)
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid edit' }
-  }
-
-  const { place, remove } = parsed.data
-
-  // The allow-list check. `model` is written to an immutable log, so an unknown
-  // id must never reach it - Zod only proved it was a short string.
-  const unknown = place.find((block) => !isKnownModel(block.model))
-  if (unknown) {
-    return { ok: false, error: `Unknown block type: ${unknown.model}` }
-  }
-
+  /**
+   * Everything after the door - the schema, the allow-list, the mode, the
+   * budget, the per-chunk commands - moved to ./edit.ts when the native app
+   * became a second caller, exactly the split chat made for say.ts. This
+   * wrapper is the cookie door; `/api/m` holds the bearer one.
+   */
   const context = await requireTenant(slug)
-  const { supabase, tenant, user } = context
-
-  const blocked = writeBlockedReason(context)
-  if (blocked) return { ok: false, error: blocked }
-
-  if (place.length === 0 && remove.length === 0) {
-    return { ok: true, applied: 0 }
-  }
-
-  // Which world is being edited, resolved once. A battlefield's id has to be
-  // proven to belong to this space before it is written to, or a member of one
-  // workspace could address another's arena by guessing its id.
-  const world = await resolveWorld(supabase, tenant.id, worldId)
-  if (!world.ok) return world
-
-  /**
-   * Building is creative mode only.
-   *
-   * Checked here and not merely in the scene, because hiding a control hides
-   * nothing - this is a public endpoint, and a client that kept sending edits
-   * would otherwise be able to wall an opponent in mid-fight.
-   *
-   * After `resolveWorld` rather than before it, which it used to be: the mode
-   * that governs this edit depends on which world it lands in - the tenant's
-   * column for the lounge, the room's own for a room - and only that call can
-   * say which. A battlefield answers to neither; it is edited from its own
-   * builder, gated on being an owner or admin of the space that made it.
-   */
-  const blockedByMode = buildMode(world, tenant.loungeMode)
-  if (blockedByMode) return { ok: false, error: blockedByMode }
-
-  /**
-   * Is there room left in this world?
-   *
-   * Counted from the read model rather than tracked in an aggregate, because
-   * the budget is a fact about the *world* and the aggregate is a chunk - no
-   * chunk can see the total, and a world-wide aggregate is precisely the
-   * quadratic replay this design exists to avoid (see the note at the top of
-   * ./events.ts).
-   *
-   * Only on placement, and only when something is actually being placed, so
-   * removing blocks from a full world always works - otherwise a world that hit
-   * the ceiling would be frozen rather than merely full.
-   *
-   * The count is approximate by the time it is used: another builder may commit
-   * between the count and the write. That is deliberate and safe. Overshooting
-   * by a few hundred blocks costs nothing - the number that matters is
-   * MAX_BLOCKS_LOADED, which sits well above this - and the alternative is
-   * serialising every placement in the world behind one lock, which would cost
-   * far more than the slack does.
-   */
-  if (place.length > 0) {
-    const { count, error } = await supabase
-      .from('lounge_blocks_read_model')
-      .select('x', { count: 'exact', head: true })
-      .eq('tenant_id', tenant.id)
-      .eq('world_id', world.worldId)
-
-    if (error) {
-      return { ok: false, error: `Could not check the world's size: ${error.message}` }
-    }
-
-    // `place` is the batch as sent, so this over-counts the blocks that turn out
-    // to be no-ops - a drag re-sending cells that already hold that model. Erring
-    // that way keeps the check cheap; the alternative is resolving every
-    // placement against state before knowing whether it is allowed.
-    if ((count ?? 0) + place.length > MAX_WORLD_BLOCKS) {
-      return {
-        ok: false,
-        error: `This world is full — ${MAX_WORLD_BLOCKS.toLocaleString()} blocks is the limit. Remove some to build more.`,
-      }
-    }
-  }
-
-  const placeByChunk = groupByChunk(place)
-  const removeByChunk = groupByChunk(remove)
-  const touched = new Set([...placeByChunk.keys(), ...removeByChunk.keys()])
-
-  let applied = 0
-
-  for (const key of touched) {
-    const [cx, cz] = key.split(',').map(Number)
-    const streamId = chunkStreamId(world.worldId, cx, cz)
-
-    try {
-      // Removals first. Within one flush a player may break a block and place
-      // another in the same cell; doing it in this order means the placement
-      // wins, which is what they saw happen on screen.
-      const removals = removeByChunk.get(key)
-      if (removals && removals.length > 0) {
-        const events = await executeCommand({
-          supabase,
-          decider: loungeDecider,
-          tenantId: tenant.id,
-          streamId,
-          command: {
-            type: 'RemoveBlocks',
-            worldId: world.worldId,
-            cx,
-            cz,
-            positions: removals,
-          },
-          metadata: { actorId: user.id },
-        })
-        applied += events.length
-      }
-
-      const placements = placeByChunk.get(key)
-      if (placements && placements.length > 0) {
-        const events = await executeCommand({
-          supabase,
-          decider: loungeDecider,
-          tenantId: tenant.id,
-          streamId,
-          command: {
-            type: 'PlaceBlocks',
-            worldId: world.worldId,
-            cx,
-            cz,
-            blocks: placements,
-          },
-          metadata: { actorId: user.id },
-        })
-        applied += events.length
-      }
-    } catch (error) {
-      if (error instanceof DomainError) {
-        return { ok: false, error: error.message }
-      }
-      if (error instanceof ConcurrencyError) {
-        return {
-          ok: false,
-          error: 'Someone else was building right there. Try again.',
-        }
-      }
-      throw error
-    }
-  }
-
-  // One projection run for the whole flush, not one per chunk: runProjection
-  // reads forward across the tenant's log, so a single pass picks up every
-  // chunk we just touched.
-  await runProjection(supabase, loungeProjection, tenant.id)
-
-  return { ok: true, applied }
+  return applyEditsFor(context, edit, worldId)
 }
 
 /**

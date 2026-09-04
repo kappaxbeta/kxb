@@ -16,6 +16,8 @@ import { TeamRing } from '@/app/world/_canvas/team-ring'
 import { FaceCircle } from '@/app/world/_canvas/face-circle'
 import { useLocalFace } from '@/app/world/_stores/face-store'
 import type { AvatarClip } from '@/domain/lounge/avatars'
+import { HeldThing } from '@/app/world/lounge/_canvas/held-thing'
+import type { HoldSpec } from '@/domain/thingiverse/hold'
 
 /**
  * The avatar gets its own scratch, rather than borrowing the controller's.
@@ -54,6 +56,7 @@ const RUN_SPEED = 16
  */
 export function SelfAvatar({
   model,
+  holding,
   tone,
   visible,
   dancing,
@@ -94,6 +97,15 @@ export function SelfAvatar({
   party: string | null
   /** Whether we are the one who started it, and so cycle rather than sit still. */
   partyHost: boolean
+  /**
+   * What is in your hand, resolved to something drawable, or nothing.
+   *
+   * Resolved outside rather than read from the pocket here, because turning a
+   * word into a model needs the *shelf* - which belongs to `use-things`, out
+   * beyond the Canvas. This component is handed the answer, exactly as it is
+   * handed a clip the space made.
+   */
+  holding?: { model: string; hold: HoldSpec; scale: number } | null
 }) {
   const { playerRef, headingRef, kickLungeRef, selfEmoteRef, selfSaidRef } = useSceneRefs()
 
@@ -193,6 +205,19 @@ export function SelfAvatar({
           rim={party ? partyColour : null}
         />
       </Suspense>
+
+      {/*
+        Whatever is in your hand, drawn on your own body.
+
+        Inside the visibility gate with the body it hangs off: in first person
+        there is no body, and a pistol floating where your chest would be is the
+        one prop a first-person camera is guaranteed to be looking straight
+        through. The HUD's pocket panel is where you check what you are holding
+        when you cannot see your hands.
+      */}
+      {holding && (
+        <HeldThing model={holding.model} hold={holding.hold} scale={holding.scale} />
+      )}
 
       {/* Inside the visibility gate with the body, because it is drawn at our
           own feet: in first person there is no body for it to belong to, and

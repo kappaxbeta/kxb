@@ -1,4 +1,4 @@
-import { isBuildable } from '@/domain/builder/catalogue'
+import { isPlaceable } from '@/domain/builder/props'
 import {
   type BuilderWorld,
   DEFAULT_WORLD,
@@ -299,7 +299,7 @@ export function decodeWorld(code: string | undefined | null): BuilderWorld {
       // Checked here as well as in `parseWorld` so a bad palette entry costs
       // its own group rather than being expanded into thousands of placements
       // that are then all thrown away one at a time.
-      if (typeof model === 'string' && isBuildable(model)) {
+      if (typeof model === 'string' && isPlaceable(model)) {
         groups.push({ model, rotation, scale, rows })
       }
     }

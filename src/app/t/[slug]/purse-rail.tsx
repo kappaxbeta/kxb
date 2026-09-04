@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useTransition } from 'react'
 
+import { CoinMark } from '@/app/components/coin-mark'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
 import { railDict } from '@/app/i18n/rail'
 import { sendCoins } from '@/domain/homestead/actions'
+import { notePurseMoved, onPurseMoved } from '@/app/components/purse-signal'
 import { readPurse, type PurseView } from '@/domain/homestead/purse-actions'
 
 /**
@@ -35,6 +37,17 @@ import { readPurse, type PurseView } from '@/domain/homestead/purse-actions'
 export function PurseRail({ slug }: { slug: string }) {
   const t = railDict(useLocale()).purse
   const [purse, setPurse] = useState<PurseView | null>(null)
+  /**
+   * Whether the first read has come back at all, which is not the same question
+   * as whether there is a purse.
+   *
+   * Without it the box below could not tell "still asking" from "asked, and the
+   * answer was nothing", and those two want opposite things: a shape held open,
+   * and no shape at all. Set by every read, including the ones that fail - a
+   * rail that keeps a skeleton up forever because a request 500'd is worse than
+   * one that quietly has no purse in it.
+   */
+  const [asked, setAsked] = useState(false)
   const [open, setOpen] = useState(false)
   const [to, setTo] = useState('')
   const [amount, setAmount] = useState('')
@@ -43,19 +56,71 @@ export function PurseRail({ slug }: { slug: string }) {
 
   useEffect(() => {
     let alive = true
-    void readPurse(slug).then((result) => {
-      // The rail can be closed before this lands, and setting state on a
-      // component that has gone is a warning nobody can act on.
-      if (alive && result.ok) setPurse(result.purse)
+
+    const read = () => {
+      void readPurse(slug)
+        .then((result) => {
+          // The rail can be closed before this lands, and setting state on a
+          // component that has gone is a warning nobody can act on.
+          if (!alive) return
+          if (result.ok) setPurse(result.purse)
+          setAsked(true)
+        })
+        .catch(() => {
+          // A refused or dropped request is still an answer as far as the
+          // placeholder is concerned: stop holding the space open.
+          if (alive) setAsked(true)
+        })
+    }
+
+    read()
+
+    /*
+      And again whenever a coin actually moves.
+
+      Not a poll - see `purse-signal.ts`. The scenes fire this after the server
+      has confirmed a movement, so no round trip happens unless something
+      changed, and the canvas is never re-rendered on a timer. What it fixes is
+      the café: the rail sits beside the one place in this product that mints
+      coins, and without this it spent the whole session showing whatever the
+      balance was when the page loaded - two numbers for one purse, on one
+      screen.
+    */
+    const stop = onPurseMoved((coins) => {
+      /*
+        A number came with the signal, so there is nothing to fetch. This is the
+        common case and the reason the whole thing is cheap: a café shift moves
+        the purse every few seconds, and a `readPurse` per movement would mean a
+        `requireTenant` per movement - cookies written, page re-rendered, canvas
+        stuttering. It did exactly that until the number was made to travel.
+      */
+      if (typeof coins === 'number') {
+        setPurse((was) => (was ? { ...was, coins } : was))
+        return
+      }
+      read()
     })
+
     return () => {
       alive = false
+      stop()
     }
   }, [slug])
 
-  // Nothing to say until the first read lands. A skeleton here would be a
-  // shimmer on a single number, which reads as slower than nothing at all.
-  if (!purse) return null
+  /**
+   * The box, before there is a number in it.
+   *
+   * This used to draw nothing until the first read landed, on the argument that
+   * a shimmer over one number reads as slower than nothing at all. That is true
+   * of the shimmer and false of the space: the rail is a column of blocks, so a
+   * purse that appears a moment later pushes everything under it down - and
+   * what is under it is the tab body somebody is already reading. Holding the
+   * height costs one grey bar and takes the jump out.
+   *
+   * Only while the answer is genuinely outstanding. A space with no purse gets
+   * no box, same as before.
+   */
+  if (!purse) return asked ? null : <PurseWaiting label={t.heading} />
 
   const coins = Number(amount)
   const sendable =
@@ -67,7 +132,12 @@ export function PurseRail({ slug }: { slug: string }) {
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
           {t.heading}
         </span>
-        <span className="font-mono text-sm tabular-nums text-ink">{purse.coins}</span>
+        <span className="font-mono text-sm tabular-nums text-ink">
+          {/* Inline rather than a flex row, so the span keeps a text baseline
+              and the digits stay level with the heading beside them. */}
+          <CoinMark size={12} className="mr-1 inline-block align-[-1px]" />
+          {purse.coins}
+        </span>
       </div>
 
       {purse.people.length > 0 && (
@@ -131,6 +201,9 @@ export function PurseRail({ slug }: { slug: string }) {
                 // half-second where it is a moment behind.
                 const fresh = await readPurse(slug)
                 if (fresh.ok) setPurse(fresh.purse)
+                // Everybody else drawing a balance, including the money card
+                // on the space's front page.
+                notePurseMoved()
                 setAmount('')
                 setNote(fill(t.sent, { n: String(coins) }))
               })
@@ -141,6 +214,46 @@ export function PurseRail({ slug }: { slug: string }) {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * The purse, holding its own place.
+ *
+ * The same box, the same padding and the same heading as the real one - the
+ * only thing missing is the figure, because the figure is the only thing that
+ * had to be asked for. Everything else is known before the round trip, so
+ * drawing a blank card here would throw away information to look busy.
+ *
+ * `.holo-bar` is the app's one skeleton bar - it is what the page-level
+ * skeleton is built from, and it already stops moving under
+ * `prefers-reduced-motion`. `aria-hidden` on the bar alone: the heading is real
+ * text and should be read, while a bar standing in for a number has nothing to
+ * say to a screen reader.
+ */
+function PurseWaiting({ label }: { label: string }) {
+  return (
+    <div className="rounded-xl border border-line/60 bg-surface/60 px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
+          {label}
+        </span>
+        {/*
+          The same span as the real figure, down to the type it is set in - the
+          line box of `text-sm` is what makes this row twenty pixels tall, and a
+          placeholder built out of divs would hold the wrong amount of space,
+          which is the same jump in a smaller costume.
+
+          The coin is not part of the wait: it is the same coin whatever the
+          number turns out to be, so it arrives with the box rather than with
+          the answer, and only the digits are a bar.
+        */}
+        <span className="font-mono text-sm tabular-nums text-ink-muted">
+          <CoinMark size={12} className="mr-1 inline-block align-[-1px]" />
+          <span className="holo-bar inline-block h-3 w-7 rounded align-[-1px]" aria-hidden />
+        </span>
+      </div>
     </div>
   )
 }

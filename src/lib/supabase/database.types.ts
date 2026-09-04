@@ -173,6 +173,7 @@ export type Database = {
       }
       analytics_events: {
         Row: {
+          country: string | null
           id: number
           name: string
           occurred_at: string
@@ -183,6 +184,7 @@ export type Database = {
           visitor_hash: string
         }
         Insert: {
+          country?: string | null
           id?: never
           name: string
           occurred_at?: string
@@ -193,6 +195,7 @@ export type Database = {
           visitor_hash: string
         }
         Update: {
+          country?: string | null
           id?: never
           name?: string
           occurred_at?: string
@@ -393,6 +396,27 @@ export type Database = {
           },
         ]
       }
+      battle_payouts: {
+        Row: {
+          battle_id: string
+          paid_at: string
+          phase: string
+          tenant_id: string
+        }
+        Insert: {
+          battle_id: string
+          paid_at?: string
+          phase: string
+          tenant_id: string
+        }
+        Update: {
+          battle_id?: string
+          paid_at?: string
+          phase?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       battle_scores: {
         Row: {
           played: number
@@ -579,6 +603,24 @@ export type Database = {
           },
         ]
       }
+      blocked_users: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       board_posts_read_model: {
         Row: {
           body: string
@@ -656,6 +698,461 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      channel_bible_read_model: {
+        Row: {
+          created_at: string
+          doc: Json
+          id: string
+          image_url: string | null
+          kind: string
+          model: string | null
+          name: string
+          position: number
+          show_id: string
+          summary: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          doc?: Json
+          id: string
+          image_url?: string | null
+          kind?: string
+          model?: string | null
+          name: string
+          position?: number
+          show_id: string
+          summary?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          doc?: Json
+          id?: string
+          image_url?: string | null
+          kind?: string
+          model?: string | null
+          name?: string
+          position?: number
+          show_id?: string
+          summary?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_bible_read_model_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "channel_shows_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_bible_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_bible_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_comments_read_model: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          body: string
+          created_at: string
+          episode_id: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          tenant_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name: string
+          body: string
+          created_at?: string
+          episode_id: string
+          id: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          tenant_id: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          body?: string
+          created_at?: string
+          episode_id?: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_comments_read_model_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "channel_episodes_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_comments_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_comments_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_episode_access: {
+        Row: {
+          episode_id: string
+          paid: number
+          paid_at: string
+          user_id: string
+        }
+        Insert: {
+          episode_id: string
+          paid: number
+          paid_at?: string
+          user_id: string
+        }
+        Update: {
+          episode_id?: string
+          paid?: number
+          paid_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_episode_access_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "channel_episodes_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_episodes_read_model: {
+        Row: {
+          created_at: string
+          doc: Json
+          id: string
+          major: number
+          minor: number
+          number: number
+          patch: number
+          price: number
+          season_id: string
+          show_id: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          doc?: Json
+          id: string
+          major?: number
+          minor?: number
+          number: number
+          patch?: number
+          price?: number
+          season_id: string
+          show_id: string
+          status?: string
+          tenant_id: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          doc?: Json
+          id?: string
+          major?: number
+          minor?: number
+          number?: number
+          patch?: number
+          price?: number
+          season_id?: string
+          show_id?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_episodes_read_model_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "channel_seasons_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_episodes_read_model_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "channel_shows_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_episodes_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_episodes_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_releases_read_model: {
+        Row: {
+          aired_at: string
+          channel_slug: string
+          doc: Json
+          episode_id: string
+          first_aired_at: string
+          hidden: boolean
+          number: number
+          price: number
+          season: number
+          show_id: string
+          show_slug: string
+          show_title: string
+          tenant_id: string
+          title: string
+          version: string
+        }
+        Insert: {
+          aired_at?: string
+          channel_slug: string
+          doc: Json
+          episode_id: string
+          first_aired_at?: string
+          hidden?: boolean
+          number: number
+          price?: number
+          season: number
+          show_id: string
+          show_slug: string
+          show_title: string
+          tenant_id: string
+          title: string
+          version: string
+        }
+        Update: {
+          aired_at?: string
+          channel_slug?: string
+          doc?: Json
+          episode_id?: string
+          first_aired_at?: string
+          hidden?: boolean
+          number?: number
+          price?: number
+          season?: number
+          show_id?: string
+          show_slug?: string
+          show_title?: string
+          tenant_id?: string
+          title?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_releases_read_model_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: true
+            referencedRelation: "channel_episodes_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_releases_read_model_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "channel_shows_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_releases_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_releases_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_seasons_read_model: {
+        Row: {
+          created_at: string
+          id: string
+          number: number
+          show_id: string
+          tenant_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          number: number
+          show_id: string
+          tenant_id: string
+          title?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          number?: number
+          show_id?: string
+          tenant_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_seasons_read_model_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "channel_shows_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_seasons_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_seasons_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_show_members: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          role: string
+          show_id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          role: string
+          show_id: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          role?: string
+          show_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_show_members_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "channel_shows_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_shows_read_model: {
+        Row: {
+          cover_url: string | null
+          created_at: string
+          created_by: string | null
+          first_aired_at: string | null
+          id: string
+          logline: string
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          first_aired_at?: string | null
+          id: string
+          logline?: string
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          first_aired_at?: string | null
+          id?: string
+          logline?: string
+          slug?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_shows_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_shows_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chat_message_reports: {
         Row: {
@@ -748,6 +1245,27 @@ export type Database = {
           tenant_id?: string
           updated_at?: string
           version?: number
+        }
+        Relationships: []
+      }
+      closed_accounts: {
+        Row: {
+          closed_at: string
+          spaces_archived: number
+          spaces_left: number
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string
+          spaces_archived?: number
+          spaces_left?: number
+          user_id: string
+        }
+        Update: {
+          closed_at?: string
+          spaces_archived?: number
+          spaces_left?: number
+          user_id?: string
         }
         Relationships: []
       }
@@ -864,6 +1382,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contest_settings: {
+        Row: {
+          code: string
+          draws_on: string
+          ends_on: string
+          handle: string
+          hashtag: string
+          id: boolean
+          live: boolean
+          min_age: number
+          prizes: number[]
+          starts_on: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          code?: string
+          draws_on?: string
+          ends_on?: string
+          handle?: string
+          hashtag?: string
+          id?: boolean
+          live?: boolean
+          min_age?: number
+          prizes?: number[]
+          starts_on?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          code?: string
+          draws_on?: string
+          ends_on?: string
+          handle?: string
+          hashtag?: string
+          id?: boolean
+          live?: boolean
+          min_age?: number
+          prizes?: number[]
+          starts_on?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       error_reports: {
         Row: {
@@ -1552,6 +2115,45 @@ export type Database = {
         }
         Relationships: []
       }
+      leaderboard_hidden: {
+        Row: {
+          created_at: string
+          hidden_by: string
+          reason: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hidden_by: string
+          reason: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          hidden_by?: string
+          reason?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leaderboard_hidden_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leaderboard_hidden_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       login_streaks_read_model: {
         Row: {
           current_streak: number
@@ -1852,6 +2454,133 @@ export type Database = {
           },
         ]
       }
+      news_subscribers: {
+        Row: {
+          confirm_token: string
+          confirmed_at: string | null
+          consent_text: string
+          consented_at: string
+          created_at: string
+          email: string
+          id: string
+          locale: string
+          source_path: string | null
+          unsubscribed_at: string | null
+        }
+        Insert: {
+          confirm_token?: string
+          confirmed_at?: string | null
+          consent_text: string
+          consented_at?: string
+          created_at?: string
+          email: string
+          id?: string
+          locale?: string
+          source_path?: string | null
+          unsubscribed_at?: string | null
+        }
+        Update: {
+          confirm_token?: string
+          confirmed_at?: string | null
+          consent_text?: string
+          consented_at?: string
+          created_at?: string
+          email?: string
+          id?: string
+          locale?: string
+          source_path?: string | null
+          unsubscribed_at?: string | null
+        }
+        Relationships: []
+      }
+      oasis_chapters: {
+        Row: {
+          published: boolean
+          published_at: string | null
+          slug: string
+          updated_at: string
+          updated_by: string | null
+          work: string
+        }
+        Insert: {
+          published?: boolean
+          published_at?: string | null
+          slug: string
+          updated_at?: string
+          updated_by?: string | null
+          work?: string
+        }
+        Update: {
+          published?: boolean
+          published_at?: string | null
+          slug?: string
+          updated_at?: string
+          updated_by?: string | null
+          work?: string
+        }
+        Relationships: []
+      }
+      page_comments_read_model: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          body: string
+          created_at: string
+          id: string
+          page_id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          tenant_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name: string
+          body: string
+          created_at?: string
+          id: string
+          page_id: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          tenant_id: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          body?: string
+          created_at?: string
+          id?: string
+          page_id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_comments_read_model_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages_read_model"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_comments_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_comments_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       page_views: {
         Row: {
           country: string | null
@@ -1997,20 +2726,20 @@ export type Database = {
       }
       profile_avatars: {
         Row: {
-          as_dummy: boolean
           model: string
+          show_xp: boolean
           updated_at: string
           user_id: string
         }
         Insert: {
-          as_dummy?: boolean
           model: string
+          show_xp?: boolean
           updated_at?: string
           user_id: string
         }
         Update: {
-          as_dummy?: boolean
           model?: string
+          show_xp?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -2036,19 +2765,16 @@ export type Database = {
       }
       profile_skins: {
         Row: {
-          in_lounge: boolean
           model: string
           updated_at: string
           user_id: string
         }
         Insert: {
-          in_lounge?: boolean
           model: string
           updated_at?: string
           user_id: string
         }
         Update: {
-          in_lounge?: boolean
           model?: string
           updated_at?: string
           user_id?: string
@@ -2091,8 +2817,6 @@ export type Database = {
           failed: number
           id: number
           ms: number
-          parked: number
-          parked_spaces: Json | null
           pending: number
           projections: number
           ran_at: string
@@ -2106,8 +2830,6 @@ export type Database = {
           failed: number
           id?: never
           ms: number
-          parked?: number
-          parked_spaces?: Json | null
           pending: number
           projections: number
           ran_at?: string
@@ -2121,8 +2843,6 @@ export type Database = {
           failed?: number
           id?: never
           ms?: number
-          parked?: number
-          parked_spaces?: Json | null
           pending?: number
           projections?: number
           ran_at?: string
@@ -2134,8 +2854,10 @@ export type Database = {
       }
       promo_codes: {
         Row: {
+          bucks: number
           campaign: string | null
           code: string
+          coins: number
           created_at: string
           created_by: string | null
           expires_at: string | null
@@ -2148,10 +2870,13 @@ export type Database = {
           starts_at: string | null
           tier: string
           uses: number
+          vouchers: number
         }
         Insert: {
+          bucks?: number
           campaign?: string | null
           code: string
+          coins?: number
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -2164,10 +2889,13 @@ export type Database = {
           starts_at?: string | null
           tier?: string
           uses?: number
+          vouchers?: number
         }
         Update: {
+          bucks?: number
           campaign?: string | null
           code?: string
+          coins?: number
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -2180,6 +2908,7 @@ export type Database = {
           starts_at?: string | null
           tier?: string
           uses?: number
+          vouchers?: number
         }
         Relationships: []
       }
@@ -2188,10 +2917,13 @@ export type Database = {
           campaign: string | null
           code_id: string
           created_at: string
+          granted_bucks: number
+          granted_coins: number
           granted_days: number | null
           granted_spaces: number | null
           granted_tier: string
           granted_until: string | null
+          granted_vouchers: number
           id: string
           source: string
           tenant_id: string | null
@@ -2201,10 +2933,13 @@ export type Database = {
           campaign?: string | null
           code_id: string
           created_at?: string
+          granted_bucks?: number
+          granted_coins?: number
           granted_days?: number | null
           granted_spaces?: number | null
           granted_tier?: string
           granted_until?: string | null
+          granted_vouchers?: number
           id?: string
           source?: string
           tenant_id?: string | null
@@ -2214,10 +2949,13 @@ export type Database = {
           campaign?: string | null
           code_id?: string
           created_at?: string
+          granted_bucks?: number
+          granted_coins?: number
           granted_days?: number | null
           granted_spaces?: number | null
           granted_tier?: string
           granted_until?: string | null
+          granted_vouchers?: number
           id?: string
           source?: string
           tenant_id?: string | null
@@ -2550,6 +3288,33 @@ export type Database = {
         }
         Relationships: []
       }
+      room_door_charges: {
+        Row: {
+          created_at: string
+          day: string
+          paid: number
+          room_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          paid: number
+          room_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          paid?: number
+          room_id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       room_marks: {
         Row: {
           pinned_at: string | null
@@ -2703,6 +3468,7 @@ export type Database = {
           closed: boolean
           created_at: string
           created_by: string | null
+          door_price: number
           guest_build: boolean
           mode: string
           name: string
@@ -2724,6 +3490,7 @@ export type Database = {
           closed?: boolean
           created_at?: string
           created_by?: string | null
+          door_price?: number
           guest_build?: boolean
           mode?: string
           name: string
@@ -2745,6 +3512,7 @@ export type Database = {
           closed?: boolean
           created_at?: string
           created_by?: string | null
+          door_price?: number
           guest_build?: boolean
           mode?: string
           name?: string
@@ -2855,6 +3623,8 @@ export type Database = {
           created_by: string | null
           id: string
           owner_id: string | null
+          promo_redemption_id: string | null
+          promo_seq: number | null
           redeemed_at: string | null
           source: string
           spent_at: string | null
@@ -2869,6 +3639,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           owner_id?: string | null
+          promo_redemption_id?: string | null
+          promo_seq?: number | null
           redeemed_at?: string | null
           source: string
           spent_at?: string | null
@@ -2883,6 +3655,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           owner_id?: string | null
+          promo_redemption_id?: string | null
+          promo_seq?: number | null
           redeemed_at?: string | null
           source?: string
           spent_at?: string | null
@@ -2892,6 +3666,13 @@ export type Database = {
           stripe_session_seq?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "skin_vouchers_promo_redemption_id_fkey"
+            columns: ["promo_redemption_id"]
+            isOneToOne: false
+            referencedRelation: "promo_redemptions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "skin_vouchers_spent_on_fkey"
             columns: ["spent_on"]
@@ -2968,6 +3749,54 @@ export type Database = {
             foreignKeyName: "space_avatars_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      space_bank_read_model: {
+        Row: {
+          coins: number
+          created_at: string
+          paid_out: number
+          stream_id: string
+          taken: number
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          coins?: number
+          created_at?: string
+          paid_out?: number
+          stream_id: string
+          taken?: number
+          tenant_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          coins?: number
+          created_at?: string
+          paid_out?: number
+          stream_id?: string
+          taken?: number
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_bank_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "space_bank_read_model_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
             referencedRelation: "tenants_read_model"
             referencedColumns: ["id"]
           },
@@ -3057,6 +3886,42 @@ export type Database = {
           {
             foreignKeyName: "space_challenges_challenger_tenant_id_fkey"
             columns: ["challenger_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      space_extras: {
+        Row: {
+          bought: number
+          key: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bought?: number
+          key: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bought?: number
+          key?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_extras_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "space_extras_tenant_id_fkey"
+            columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants_read_model"
             referencedColumns: ["id"]
@@ -3423,6 +4288,7 @@ export type Database = {
           is_public_lounge: boolean
           lounge_mode: string
           name: string
+          needs: Json
           slug: string
           updated_at: string
           version: number
@@ -3436,6 +4302,7 @@ export type Database = {
           is_public_lounge?: boolean
           lounge_mode?: string
           name: string
+          needs?: Json
           slug: string
           updated_at: string
           version: number
@@ -3449,9 +4316,34 @@ export type Database = {
           is_public_lounge?: boolean
           lounge_mode?: string
           name?: string
+          needs?: Json
           slug?: string
           updated_at?: string
           version?: number
+        }
+        Relationships: []
+      }
+      thing_kills: {
+        Row: {
+          created_at: string
+          paid: number
+          tenant_id: string
+          thing_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          paid: number
+          tenant_id: string
+          thing_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          paid?: number
+          tenant_id?: string
+          thing_id?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3856,6 +4748,90 @@ export type Database = {
         }
         Relationships: []
       }
+      voucher_claims: {
+        Row: {
+          coins: number
+          created_at: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          coins: number
+          created_at?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          coins?: number
+          created_at?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voucher_claims_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_claims_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallet_ledger: {
+        Row: {
+          amount: number
+          balance: number
+          created_at: string
+          id: string
+          tenant_id: string | null
+          transfer: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          balance: number
+          created_at?: string
+          id?: string
+          tenant_id?: string | null
+          transfer: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          balance?: number
+          created_at?: string
+          id?: string
+          tenant_id?: string | null
+          transfer?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallets: {
+        Row: {
+          coins: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          coins?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          coins?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       world_copies: {
         Row: {
           created_at: string
@@ -4202,6 +5178,38 @@ export type Database = {
           },
         ]
       }
+      xp_purchases: {
+        Row: {
+          account_id: string
+          created_at: string
+          paid: number
+          tenant_id: string
+          xp_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          paid: number
+          tenant_id: string
+          xp_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          paid?: number
+          tenant_id?: string
+          xp_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xp_purchases_xp_id_fkey"
+            columns: ["xp_id"]
+            isOneToOne: false
+            referencedRelation: "xps_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       xp_releases: {
         Row: {
           released_at: string
@@ -4430,6 +5438,9 @@ export type Database = {
           id: string
           name: string
           owner_id: string | null
+          price_once: number
+          price_remix: number
+          price_split: Json | null
           published_version: number | null
           space_policy: string
           state: string
@@ -4447,6 +5458,9 @@ export type Database = {
           id: string
           name: string
           owner_id?: string | null
+          price_once?: number
+          price_remix?: number
+          price_split?: Json | null
           published_version?: number | null
           space_policy?: string
           state?: string
@@ -4464,6 +5478,9 @@ export type Database = {
           id?: string
           name?: string
           owner_id?: string | null
+          price_once?: number
+          price_remix?: number
+          price_split?: Json | null
           published_version?: number | null
           space_policy?: string
           state?: string
@@ -4569,14 +5586,22 @@ export type Database = {
         Args: { p_world_id: string }
         Returns: boolean
       }
+      author_is_blocked: { Args: { p_author_id: string }; Returns: boolean }
       backoffice_section_level: { Args: { p_section: string }; Returns: string }
+      battle_payout_claim: {
+        Args: { p_battle_id: string; p_phase: string; p_tenant: string }
+        Returns: boolean
+      }
       battle_topic_id: { Args: { p_topic: string }; Returns: string }
       can_act_in_battle: {
         Args: { p_battle_id: string; p_user_id: string }
         Returns: boolean
       }
       can_enter_room: { Args: { p_room_id: string }; Returns: boolean }
+      channel_show_role: { Args: { p_show_id: string }; Returns: string }
       chat_message_hidden: { Args: { p_message_id: string }; Returns: boolean }
+      chat_room_topic_tenant: { Args: { p_topic: string }; Returns: string }
+      chat_room_topic_world: { Args: { p_topic: string }; Returns: string }
       chat_topic_tenant: { Args: { p_topic: string }; Returns: string }
       claim_event_machine: {
         Args: { p_agent: string; p_stale?: string; p_wanted?: string[] }
@@ -4886,6 +5911,7 @@ export type Database = {
         Args: { p_version: number; p_xp_id: string }
         Returns: boolean
       }
+      mint_buck_code: { Args: never; Returns: string }
       my_pending_invitations: {
         Args: never
         Returns: {
@@ -4908,8 +5934,6 @@ export type Database = {
           failed: number
           id: number
           ms: number
-          parked: number
-          parked_spaces: Json | null
           pending: number
           projections: number
           ran_at: string
@@ -4933,8 +5957,6 @@ export type Database = {
           p_errors?: Json
           p_failed: number
           p_ms: number
-          p_parked?: number
-          p_parked_spaces?: Json
           p_pending: number
           p_projections: number
           p_remaining: number
@@ -4986,9 +6008,13 @@ export type Database = {
         }
         Returns: {
           code_id: string
+          granted_bucks: number
+          granted_coins: number
           granted_tier: string
           granted_until: string
+          granted_vouchers: number
           outcome: string
+          voucher_codes: string[]
         }[]
       }
       redeem_skin_voucher: {
@@ -5012,6 +6038,15 @@ export type Database = {
       room_cap: {
         Args: { p_room_id: string; p_tenant_id: string }
         Returns: number
+      }
+      room_door_claim: {
+        Args: {
+          p_day: string
+          p_price: number
+          p_room: string
+          p_tenant: string
+        }
+        Returns: boolean
       }
       room_has_space: {
         Args: { p_room_id: string; p_tenant_id: string }
@@ -5055,6 +6090,10 @@ export type Database = {
       space_capability_on: {
         Args: { p_capability: string; p_tenant_id: string }
         Returns: boolean
+      }
+      space_extra_add: {
+        Args: { p_key: string; p_tenant: string }
+        Returns: number
       }
       spend_skin_vouchers: {
         Args: { p_skin_id: string; p_user_id: string }
@@ -5106,17 +6145,16 @@ export type Database = {
       tenant_is_entitled: { Args: { p_tenant_id: string }; Returns: boolean }
       tenant_is_event: { Args: { p_tenant_id: string }; Returns: boolean }
       tenant_is_unclaimed: { Args: { p_tenant_id: string }; Returns: boolean }
-      tenant_log_extent: {
-        Args: { p_tenant_ids: string[] }
-        Returns: {
-          issued: number
-          present: number
-          tenant_id: string
-        }[]
-      }
       tenant_role: { Args: { p_tenant_id: string }; Returns: string }
       tenant_seat_limit: { Args: { p_tenant_id?: string }; Returns: number }
       tenant_tier: { Args: { p_tenant_id: string }; Returns: string }
+      thing_kill_claim: {
+        Args: { p_paid: number; p_tenant: string; p_thing: string }
+        Returns: boolean
+      }
+      things_room_topic_tenant: { Args: { p_topic: string }; Returns: string }
+      things_room_topic_world: { Args: { p_topic: string }; Returns: string }
+      things_topic_tenant: { Args: { p_topic: string }; Returns: string }
       touch_occupancy: {
         Args: { p_tenant_id: string; p_world_id: string }
         Returns: undefined
@@ -5127,11 +6165,26 @@ export type Database = {
         Returns: Json
       }
       visitor_profiles: { Args: { days?: number }; Returns: Json }
+      wallet_move: {
+        Args: {
+          p_amount: number
+          p_tenant: string
+          p_transfer: string
+          p_user: string
+        }
+        Returns: {
+          balance: number
+          status: string
+        }[]
+      }
       world_occupancy_count: {
         Args: { p_tenant_id: string; p_world_id: string }
         Returns: number
       }
-      xp_arbiter_sweep: { Args: { p_keep?: string }; Returns: number }
+      world_topic_open: {
+        Args: { p_tenant: string; p_world: string }
+        Returns: boolean
+      }
       xp_arbiter_tally: { Args: { state: Json }; Returns: Json }
       xp_arbiter_view: { Args: { p_instance: string }; Returns: Json }
       xp_arbitrate: {

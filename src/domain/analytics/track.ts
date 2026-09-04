@@ -43,6 +43,15 @@ export interface EventRow {
   visitor_hash: string
   user_id: string | null
   props: Record<string, PropValue>
+  /**
+   * Two letters from the request address, or null.
+   *
+   * The same column, from the same resolver, as the one on `page_views` - see
+   * `countryOf`. It is here because traffic by country and *clicks* by country
+   * are different facts and the tables cannot be joined to recover the second:
+   * the visitor hash rotates at midnight and the country lives nowhere else.
+   */
+  country: string | null
 }
 
 /**
@@ -261,5 +270,8 @@ export function eventFrom(
     visitor_hash: visitorHash(clientIp(headers), userAgent, now),
     user_id: input.userId,
     props: sanitiseProps(input.props),
+    // Read from the headers here, like everything else that identifies the
+    // request, so a page cannot claim to be clicked from somewhere it is not.
+    country: countryOf(headers),
   }
 }

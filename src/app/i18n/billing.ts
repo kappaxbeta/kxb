@@ -38,6 +38,18 @@ export interface BillingDict {
     note: string
     acceptedLead: string
     acceptedTail: string
+    /**
+     * What else the code carried, said after the date.
+     *
+     * Three sentences rather than one template with holes, because a code
+     * carries any combination of the three and a single line assembled out of
+     * fragments reads as a list in English and as nonsense in German. `{n}` is
+     * the number.
+     */
+    acceptedBucks: string
+    acceptedCoins: string
+    /** Above the codes themselves. They are shown once and never again. */
+    acceptedVouchers: string
   }
 
   title: string
@@ -145,6 +157,10 @@ export const BILLING_EN: BillingDict = {
     note: 'A code gives a new account one month free. No card, no charge when it ends.',
     acceptedLead: 'Code accepted — your free month runs until',
     acceptedTail: '. No card needed, and nothing will be charged when it ends.',
+    acceptedBucks: '{n} bucks are in your pocket — spend them on skins.',
+    acceptedCoins: '{n} coins are in your wallet.',
+    acceptedVouchers:
+      'Voucher codes to give away. Copy them now — this is the only time they are shown.',
   },
 
   title: 'Billing',
@@ -266,6 +282,8 @@ export const BILLING_EN: BillingDict = {
       includes: [
         'The lounge, with emotes and chat',
         'Two of you, and one guest at a time',
+        'Five rooms of your own, and an unlimited magazine',
+        '4 XP places, and one XP you can edit',
         'Matches: all against all, teams, one against everyone, football, races',
         'One page',
         'It is yours, and it stays here',
@@ -307,6 +325,10 @@ export const BILLING_DE: BillingDict = {
     note: 'Ein Code schenkt einem neuen Konto einen Monat. Keine Karte, und am Ende wird nichts berechnet.',
     acceptedLead: 'Code angenommen — Ihr Gratismonat läuft bis',
     acceptedTail: '. Keine Karte nötig, und am Ende wird nichts berechnet.',
+    acceptedBucks: '{n} Bucks liegen in Ihrer Tasche — dafür gibt es Skins.',
+    acceptedCoins: '{n} Coins liegen in Ihrer Wallet.',
+    acceptedVouchers:
+      'Gutscheincodes zum Weitergeben. Jetzt kopieren — sie werden nur dieses eine Mal angezeigt.',
   },
 
   title: 'Abrechnung',
@@ -429,6 +451,8 @@ export const BILLING_DE: BillingDict = {
       includes: [
         'Die Lounge, mit Emotes und Chat',
         'Sie zu zweit, und ein Gast gleichzeitig',
+        'Fünf eigene Räume, und ein unbegrenztes Magazin',
+        '4 XP-Orte, und ein XP, das Sie bearbeiten können',
         'Matches: alle gegen alle, Teams, einer gegen alle, Fußball, Rennen',
         'Eine Seite',
         'Er gehört Ihnen und bleibt hier',
@@ -470,6 +494,10 @@ export const BILLING_BG: BillingDict = {
     note: 'Кодът дава на нов акаунт един безплатен месец. Без карта и без такса в края.',
     acceptedLead: 'Кодът е приет — безплатният ви месец тече до',
     acceptedTail: '. Не е нужна карта, и в края нищо няма да бъде таксувано.',
+    acceptedBucks: '{n} бъкса са в джоба ви — харчат се за скинове.',
+    acceptedCoins: '{n} монети са в портфейла ви.',
+    acceptedVouchers:
+      'Кодове за подарък. Копирайте ги сега — показват се само този път.',
   },
 
   title: 'Плащания',
@@ -592,6 +620,8 @@ export const BILLING_BG: BillingDict = {
       includes: [
         'Лоунджът, с емотикони и чат',
         'Двамата, и по един гост наведнъж',
+        'Пет собствени стаи, и неограничено списание',
+        '4 XP места, и едно XP, което може да редактирате',
         'Мачове: всеки срещу всеки, отбори, един срещу всички, футбол, състезания',
         'Една страница',
         'Ваш е и си остава тук',

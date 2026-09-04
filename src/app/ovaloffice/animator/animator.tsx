@@ -15,6 +15,7 @@ import {
   FolderOpen,
   Footprints,
   Grid3x3,
+  Image as ImageIcon,
   Hand,
   Keyboard,
   type LucideIcon,
@@ -42,7 +43,9 @@ import {
 } from 'lucide-react'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { CoinPrice } from '@/app/components/coin-price'
 import { exportGlb, fileStem, save, saveDoc } from '@/app/ovaloffice/animator/download'
+import { draftKey } from '@/app/ovaloffice/animator/draft'
 import {
   AnimatorStage,
   boneEuler,
@@ -53,6 +56,7 @@ import { Timeline } from '@/app/ovaloffice/animator/timeline'
 import { Num, Pick, Slide } from '@/app/ovaloffice/studio/parts'
 import { Button } from '@/components/ui/button'
 import { AXIS, BoneList, PosePad } from '@/app/ovaloffice/animator/bone-panel'
+import { FrameShot, saveDataUrl, type TakeFrame } from '@/app/ovaloffice/animator/frame-shot'
 import {
   type AnimationDoc,
   bake,
@@ -125,22 +129,6 @@ const MOVE_ICONS: Record<string, LucideIcon> = {
  * two meet at a `Pose`. See the note at the top of `stage.tsx`.
  */
 
-/** Where the working file lives between visits. Same bargain as the builder. */
-const STORE = 'ovaloffice:animator'
-
-/**
- * The draft, per body.
- *
- * One key was enough while there was one rig. It is not now: a document is a
- * list of whole *poses*, keyed by bone name, so a person's draft loaded onto a
- * fox is every bone missing and every key a rest pose. `parseDoc` fills the
- * gaps from the model rather than failing, which makes the failure silent -
- * you open the peep and find an animation of nothing.
- */
-function draftKey(rig: RigId): string {
-  return `${STORE}:${rig}`
-}
-
 const NO_REST: Pose = { root: [0, 0, 0], bones: {} }
 
 /**
@@ -184,6 +172,15 @@ interface History {
  * the caller's business. See `/t/[slug]/thingiverse/clips`.
  */
 export interface ClipShelf {
+  /**
+   * What saving this will cost, in coins. Zero draws nothing.
+   *
+   * The caller's, and only ever a *new* clip's price: saving over one already
+   * on the shelf costs nothing, so a studio holding an existing clip passes
+   * zero. `saveClip` charges from `nextPrice`, which is where the number comes
+   * from, so the button and the purse cannot disagree.
+   */
+  price?: number
   /** What the button says. The caller's, because it is the caller's shelf. */
   label: string
   /** True while the save is in flight; the button says so and goes dead. */
@@ -296,6 +293,16 @@ export function Animator({
   const [dragging, setDragging] = useState(false)
   const [autoKey, setAutoKey] = useState(true)
   const [showGrid, setShowGrid] = useState(true)
+
+  /**
+   * The viewport's own capture function, handed out from inside the Canvas.
+   *
+   * A ref rather than state because it is a *capability*, not a value: nothing
+   * on this page should re-render when the renderer becomes available, and a
+   * `useState` here would re-render the whole editor once on mount for no
+   * visible change.
+   */
+  const takeFrame = useRef<TakeFrame | null>(null)
   /**
    * Whether one finger belongs to the camera rather than to the handles.
    *
@@ -351,6 +358,34 @@ export function Animator({
     timeRef.current = next
     setTime(next)
   }, [])
+
+  /**
+   * Save the current frame.
+   *
+   * The floor is hidden for a cut-out and put back afterwards, and that is
+   * done here rather than inside the capture because `showGrid` is this
+   * component's state - the shot cannot reach across and change it. Two
+   * renders and a frame's delay, which nobody sees and which is honest about
+   * where the state actually lives.
+   */
+  const shoot = useCallback(
+    ({ transparent }: { transparent: boolean }) => {
+      const hideFloor = transparent && showGrid
+      if (hideFloor) setShowGrid(false)
+
+      // After the render that took the floor away, not before it.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const url = takeFrame.current?.({ transparent })
+          if (hideFloor) setShowGrid(true)
+          if (!url) return
+          const frame = String(Math.round(timeRef.current * doc.fps)).padStart(4, '0')
+          saveDataUrl(url, `${doc.name || 'clip'}-${frame}.png`)
+        })
+      })
+    },
+    [showGrid, doc.fps, doc.name],
+  )
 
   /**
    * The last thing an edit was tagged with, and when.
@@ -844,6 +879,12 @@ export function Animator({
           <Canvas
             shadows="percentage"
             dpr={[1, 2]}
+            /* `preserveDrawingBuffer` so a frame can be read back as a PNG -
+               see `frame-shot.tsx`. `alpha` so a transparent shot has
+               something to be transparent *to*: without it the canvas is
+               composited onto opaque black and every "transparent" export is
+               a black rectangle. */
+            gl={{ preserveDrawingBuffer: true, alpha: true }}
             camera={{ position: [1.9, 1.5, 2.4], fov: 40, near: 0.05, far: 100 }}
             onPointerMissed={() => setSelected(null)}
           >
@@ -903,6 +944,7 @@ export function Animator({
                 onDragging={setDragging}
               />
             </Suspense>
+            <FrameShot takeRef={takeFrame} />
           </Canvas>
 
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2">
@@ -952,6 +994,37 @@ export function Animator({
                 title="Toggle the floor grid"
               >
                 <Grid3x3 className="size-3.5" aria-hidden /> <span className="hidden sm:inline">Floor</span>
+              </Button>
+              {/*
+                The frame, as a picture.
+
+                Two buttons rather than one with a modifier, because they are
+                two different deliverables: the cut-out goes into the video
+                editor over whatever is behind it, and the flat one is what you
+                paste into a message to show somebody a pose. A single button
+                would have to guess which, and guessing wrong is a re-export.
+              */}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="pointer-events-auto"
+                onClick={() => shoot({ transparent: true })}
+                title="Save this frame as a PNG with no background"
+              >
+                <ImageIcon className="size-3.5" aria-hidden />{' '}
+                <span className="hidden sm:inline">Cut-out</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="pointer-events-auto"
+                onClick={() => shoot({ transparent: false })}
+                title="Save this frame as a PNG, background and all"
+              >
+                <ImageIcon className="size-3.5" aria-hidden />{' '}
+                <span className="hidden sm:inline">Frame</span>
               </Button>
               <Button
                 type="button"
@@ -1162,6 +1235,9 @@ export function Animator({
                 }}
               >
                 {shelf.saving ? 'Saving…' : shelf.label}
+                {/* Never beside "Saving…" - a price read after the press is a
+                    price read too late to be a decision. */}
+                {!shelf.saving && <CoinPrice coins={shelf.price ?? 0} />}
               </Button>
 
               {shelf.note && (

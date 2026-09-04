@@ -5,11 +5,17 @@ import { useRouter } from 'next/navigation'
 import { useState, useTransition, type ReactNode } from 'react'
 import { attempt } from '@/app/components/connection'
 import type { WorkspaceDict } from '@/app/i18n/workspace'
+import { CoinPrice } from '@/app/components/coin-price'
 import { drawBlueprint } from '@/domain/thingiverse/actions'
 import { type BlueprintSpec, freshSpec, freshUse } from '@/domain/thingiverse/blueprint'
+import type { DoorId } from '@/app/t/[slug]/thingiverse/doors'
 import { freshVehicle } from '@/domain/thingiverse/vehicle'
 
-export type DoorId = 'blueprints' | 'vehicles' | 'clips' | 'emotes' | 'models'
+/**
+ * Re-exported, not declared: the list itself lives in a plain module, because a
+ * server component cannot import a value out of this one. See `doors.ts`.
+ */
+export type { DoorId }
 
 /**
  * The thingiverse, as a place you arrive at.
@@ -45,20 +51,63 @@ export function Hub({
   slug,
   counts,
   panels,
+  initial,
+  prices = { blueprint: 0, vehicle: 0, clip: 0 },
   t,
 }: {
   slug: string
   counts: Record<DoorId, number>
   /** Rendered on the server, one per door. Only the open one is mounted. */
   panels: Record<DoorId, ReactNode>
+  /**
+   * Which door to start on, for somebody who was sent here.
+   *
+   * The initial value only - pressing another door afterwards is state in here,
+   * and the address bar is left alone. A link that had to stay in step with the
+   * open door would make every press a navigation, and this page is a rig and a
+   * mirror that would reload with each one.
+   *
+   * Undefined is the ordinary arrival, which opens on the shelf.
+   */
+  initial?: DoorId
+  /**
+   * What one more of each costs this space, in coins. Zero is free, and zero
+   * is what a space with the economy off gets for both.
+   *
+   * Worked out on the server by `nextPrice`, which is also what `drawBlueprint`
+   * and `saveClip` charge from - so the number on the button and the number out
+   * of the purse are one answer. Defaulted, because most of this component's
+   * callers have no reason to know an economy exists.
+   */
+  prices?: { blueprint: number; vehicle: number; clip: number }
   t: WorkspaceDict['thingiverse']
 }) {
   const h = t.hub
-  const [open, setOpen] = useState<DoorId>('blueprints')
+  const [open, setOpen] = useState<DoorId>(initial ?? 'blueprints')
 
   return (
     <div className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
-      <nav aria-label={h.doorsLabel} className="flex gap-2 lg:flex-col">
+      {/*
+        Two across on a phone, three from `sm`, a column from `lg`.
+
+        It was one flex row for all five, and on a phone that row was 496px wide
+        inside a 343px column - so the page itself scrolled sideways, the last
+        door sat off the right edge, and every label read "Blue…". Two failures,
+        one visible: `truncate` sets `white-space: nowrap`, whose *min-content*
+        is the whole word, and a `nav` is a grid item with `min-width: auto`, so
+        the strip's minimum became the sum of five untruncatable labels and
+        dragged the whole column out with it. `min-w-0` here is what stops a
+        door ever widening the page again; the columns are what make the labels
+        readable rather than merely contained.
+
+        Two rather than three, because three is 109px a cell and "Blaupausen"
+        does not fit in one - a strip that is only honest in English is the
+        thing the truncation was hiding.
+      */}
+      <nav
+        aria-label={h.doorsLabel}
+        className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:flex-col"
+      >
         <Door
           on={open === 'blueprints'}
           onClick={() => setOpen('blueprints')}
@@ -85,6 +134,24 @@ export function Hub({
           more than the shelf holds make somebody go looking for the difference,
           and the answer is a duplicate rather than a missing row.
         */}
+        {/*
+          The sets, directly under the shelf they land on.
+
+          Second rather than last, because it is the answer to the question the
+          first door raises on a space that has never used any of this: the
+          shelf is empty, the bench asks for a model, and "here are four
+          kitchens" is a better second step than the catalogue. The count is how
+          many sets there are rather than how many things they hold - a door's
+          number is what is behind it, and what is behind this one is four
+          cards.
+        */}
+        <Door
+          on={open === 'sets'}
+          onClick={() => setOpen('sets')}
+          label={h.sets}
+          note={h.setsNote}
+          count={counts.sets}
+        />
         <Door
           on={open === 'vehicles'}
           onClick={() => setOpen('vehicles')}
@@ -141,7 +208,7 @@ export function Hub({
           <h2 className="font-pixel text-lg uppercase leading-none text-ink">
             {h[open]}
           </h2>
-          <Making door={open} slug={slug} t={t} />
+          <Making door={open} slug={slug} prices={prices} t={t} />
         </div>
         {panels[open]}
       </section>
@@ -174,18 +241,26 @@ function Door({
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-left transition lg:flex-none ${
+      className={`min-w-0 rounded-xl border px-3 py-2.5 text-left transition ${
         on
           ? 'border-accent/60 bg-accent/10 text-ink'
           : 'border-line/60 text-ink-muted hover:border-accent/40 hover:bg-surface-raised hover:text-ink'
       }`}
     >
       <span className="flex items-baseline justify-between gap-2">
-        <span className="truncate text-sm font-medium">{label}</span>
+        {/*
+          Wrapping on a phone and clipped on the rail.
+
+          `truncate` is the right answer in a 13rem column, where a door is one
+          line by design; in a two-column grid it is the wrong one, because the
+          cells are equal height anyway and a second line costs nothing that an
+          ellipsis does not cost more.
+        */}
+        <span className="min-w-0 text-sm font-medium lg:truncate">{label}</span>
         <span className="shrink-0 font-mono text-[10px] tabular-nums text-ink-muted">{count}</span>
       </span>
-      {/* Hidden on the phone, where the doors are a row three across and the
-          line underneath would wrap each of them to four lines. */}
+      {/* Hidden below the rail, where a door is a grid cell two or three across
+          and the line underneath would wrap each of them to four lines. */}
       <span className="mt-0.5 hidden text-[11px] leading-snug text-ink-muted lg:block">{note}</span>
     </button>
   )
@@ -202,11 +277,13 @@ function Door({
  */
 function Making({
   door,
+  prices,
   slug,
   t,
 }: {
   door: DoorId
   slug: string
+  prices: { blueprint: number; vehicle: number; clip: number }
   t: WorkspaceDict['thingiverse']
 }) {
   const h = t.hub
@@ -218,6 +295,11 @@ function Making({
         className="inline-flex rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-ink transition hover:border-accent/70"
       >
         {h.newClip}
+        {/* What saving one will cost, on the control that starts the work
+            rather than at the end of it. `saveClip` charges the same number -
+            see `nextPrice` - and a price somebody meets after posing a
+            character for ten minutes is a price they meet too late. */}
+        <CoinPrice coins={prices.clip} />
       </Link>
     )
   }
@@ -227,13 +309,28 @@ function Making({
   }
 
   /*
+    A set makes nothing from here: the button that adds one is on the card,
+    because there are four of them and a single verb at the top of the panel
+    could only mean the first.
+  */
+  if (door === 'sets') return null
+
+  /*
     The menu makes nothing. It is one document that is always there - a space
     with no menu has an empty menu, not an absent one - so there is no "new" to
     press, and its own Save lives with the outline it saves.
   */
   if (door === 'emotes') return null
 
-  return <NewBlueprint slug={slug} t={t} vehicle={door === 'vehicles'} />
+  const vehicle = door === 'vehicles'
+  return (
+    <NewBlueprint
+      slug={slug}
+      price={vehicle ? prices.vehicle : prices.blueprint}
+      t={t}
+      vehicle={vehicle}
+    />
+  )
 }
 
 /**
@@ -257,6 +354,7 @@ function Making({
  */
 function NewBlueprint({
   slug,
+  price,
   t,
   /**
    * Whether to start a car rather than a bare thing.
@@ -268,6 +366,8 @@ function NewBlueprint({
   vehicle,
 }: {
   slug: string
+  /** What pressing this costs. Zero draws nothing - see `CoinPrice`. */
+  price: number
   t: WorkspaceDict['thingiverse']
   vehicle?: boolean
 }) {
@@ -309,6 +409,15 @@ function NewBlueprint({
         className="summon-cta cta-pixel rounded-full px-5 py-2.5 text-sm transition disabled:cursor-not-allowed"
       >
         {pending ? t.hub.starting : vehicle ? t.hub.newVehicle : t.hub.newBlueprint}
+        {/*
+          On the button that spends it, and never while it is spending: a price
+          beside "Starting…" is a number somebody is reading after the decision
+          is made. A vehicle is deliberately *not* priced separately here - it
+          is a blueprint with a `vehicle` block, drawn by the same action and
+          counted against the same allowance, and `EXTRA_PRICES.vehicles` is
+          charged where a blueprint actually becomes one.
+        */}
+        {!pending && <CoinPrice coins={price} />}
       </button>
       {error && (
         <p role="alert" className="mt-1.5 text-[11px] text-red-400">

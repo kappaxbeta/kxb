@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
+import { CoinPrice } from '@/app/components/coin-price'
 import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
 import { railDict } from '@/app/i18n/rail'
@@ -10,9 +11,15 @@ import {
   thingiverseActions,
   useThingiverse,
 } from '@/app/world/_stores/thing-store'
-import { MAX_THING_SCALE, MIN_THING_SCALE } from '@/domain/thingiverse/blueprint'
+import {
+  MAX_THING_SCALE,
+  MIN_THING_SCALE,
+  priceOfThing,
+  shouts,
+} from '@/domain/thingiverse/blueprint'
 import { thumbnailFor } from '@/domain/thingiverse/models'
 import type { BlueprintView, ThingView } from '@/domain/thingiverse/queries'
+import { MAX_WIRES, type ThingTuning } from '@/domain/thingiverse/thing-events'
 
 /**
  * The thingiverse, in the rail.
@@ -41,6 +48,10 @@ import type { BlueprintView, ThingView } from '@/domain/thingiverse/queries'
 const BUTTON =
   'rounded-lg border border-line/60 px-2 py-1 text-[11px] transition hover:bg-surface-raised disabled:opacity-40'
 
+/** The same button, once it is the one that is on. See `Wiring`. */
+const BUTTON_ON =
+  'rounded-lg border border-accent/60 bg-accent/15 px-2 py-1 text-[11px] text-ink transition disabled:opacity-40'
+
 /**
  * One cell, six ways.
  *
@@ -58,7 +69,7 @@ const MOVES: readonly [string, { x?: number; y?: number; z?: number }][] = [
   ['⤓', { z: 1 }],
 ]
 
-export function ThingsRail() {
+export function ThingsRail({ slug }: { slug: string }) {
   const t = railDict(useLocale()).tabs.thingiverse
   const state = useThingiverse()
   const here = useHere()
@@ -168,6 +179,19 @@ export function ThingsRail() {
             <span aria-hidden className="font-mono text-[10px] text-ink-muted">/xo</span>
           </button>
         )}
+
+        {/*
+          The purse is not drawn here any more. It is at the top of the rail,
+          above every panel, and `rail-tabs.tsx` carries the argument: a coin
+          used to buy exactly two things and now pays for battles, doors,
+          quotas and submissions, so it stopped being a Thingiverse number.
+
+          Not left as a second copy either. A balance drawn in two places is a
+          balance somebody checks twice and eventually finds disagreeing with
+          itself, because the two reads happen at different moments.
+        */}
+
+        <ClipsBand slug={slug} clips={state.clips} t={t} />
 
         {/*
           What happens to the next thing you summon.
@@ -297,7 +321,18 @@ export function ThingsRail() {
           */}
           {selected &&
             (state.canBuild ? (
-              <ThingControls thing={selected} t={t} busy={state.busy} />
+              <ThingControls
+                thing={selected}
+                /*
+                  Everything else standing in this room, so a wire has something
+                  to point at. Filtered here rather than inside, because the
+                  controls are about one thing and the list of what it could
+                  reach is a fact about the room.
+                */
+                others={state.things.filter((one) => one.id !== selected.id)}
+                t={t}
+                busy={state.busy}
+              />
             ) : (
               <p className="mt-2 rounded-lg border border-line/60 px-2 py-1.5 text-[11px] leading-relaxed text-ink-muted">
                 {t.needCreative}
@@ -313,6 +348,233 @@ export function ThingsRail() {
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * What this body can do, in the rail.
+ *
+ * ---------------------------------------------------------------------------
+ * A list here rather than a link to the page that lists them
+ * ---------------------------------------------------------------------------
+ * It was a link to the clips door on `/browse`, and that was the wrong verb.
+ * The page is where a clip is *made* and looked at on a mirror; this is where
+ * somebody standing in a room wants to *do* one, and sending them to another
+ * route to find out what a wave looks like takes the body they wanted to wave
+ * with off the screen.
+ *
+ * So: the names the scene published, and pressing one plays it. Local and
+ * unannounced, exactly as `/clip` is - everybody else sees it because presence
+ * is already broadcasting where every limb is. See `playClip`.
+ *
+ * ---------------------------------------------------------------------------
+ * Favourites first, then the search
+ * ---------------------------------------------------------------------------
+ * A body carries the pack's four *plus* everything this space has ever
+ * animated, which on a space that uses the animator is dozens - and the two or
+ * three anybody actually does are the same two or three every day. So the
+ * starred ones are at the top at full size, and the rest are behind a word.
+ *
+ * The stars are this browser's, in `localStorage`, and that is the right home
+ * for them rather than a table: it is a shortcut on a menu, not a fact about
+ * the space, and a round trip per star would be a write per fidget. Per space,
+ * because which clips exist is per space - a favourite naming a clip another
+ * space never made is a row that would never draw, and keying by slug means it
+ * never has to be cleaned up.
+ */
+function ClipsBand({
+  slug,
+  clips,
+  t,
+}: {
+  slug: string
+  clips: readonly string[]
+  t: ReturnType<typeof railDict>['tabs']['thingiverse']
+}) {
+  const [query, setQuery] = useState('')
+
+  /*
+    The same shape the rail's folds use, and for the same reason: `localStorage`
+    does not exist on the server, so anything that reads it during a render has
+    to have a server answer as well. `useSyncExternalStore` is the hook that
+    asks for both - empty on the server, the saved list in the browser - and
+    the cache behind `starsFor` is what makes the snapshot stable, which is the
+    part a plain read would get wrong and spin on.
+  */
+  const stars = useSyncExternalStore(subscribeToStars, () => starsFor(slug), () => NO_STARS)
+
+  const actions = thingiverseActions()
+
+  const wanted = query.trim().toLowerCase()
+  /*
+    The starred ones in the order they exist rather than the order they were
+    starred, so the row does not reshuffle itself when somebody unstars one and
+    puts it back.
+  */
+  const favourites = clips.filter((clip) => stars.includes(clip))
+  const rest = clips.filter(
+    (clip) => !stars.includes(clip) && (wanted === '' || clip.toLowerCase().includes(wanted)),
+  )
+
+  if (clips.length === 0) return null
+
+  return (
+    <div className="space-y-1.5">
+      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+        {t.clips}
+      </p>
+
+      {favourites.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {favourites.map((clip) => (
+            <Clip
+              key={clip}
+              clip={clip}
+              starred
+              label={t.favourite}
+              onPlay={() => actions?.playClip(clip)}
+              onStar={() => toggleStar(slug, clip)}
+            />
+          ))}
+        </div>
+      )}
+
+      <input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={t.clipSearch}
+        className="w-full rounded-lg border border-line/60 bg-surface px-2 py-1.5 text-xs text-ink placeholder:text-ink-muted"
+      />
+
+      {rest.length === 0 && wanted !== '' ? (
+        <p className="px-1 text-[11px] text-ink-muted">{fill(t.noClip, { q: query.trim() })}</p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {rest.map((clip) => (
+            <Clip
+              key={clip}
+              clip={clip}
+              starred={false}
+              label={t.favourite}
+              onPlay={() => actions?.playClip(clip)}
+              onStar={() => toggleStar(slug, clip)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The starred clips, as a store rather than a piece of state.
+ *
+ * Module-level and shared, so the two rails that can both be on screen at once
+ * - the drawer's copy and the right-hand panel's - agree the moment either one
+ * is pressed. A `useState` in the component would have starred a clip in one
+ * and left the other showing the old row until something else re-rendered it.
+ *
+ * Per space, because which clips exist is per space: a favourite naming a clip
+ * another space never made is a row that would never draw, and keying by slug
+ * means it never has to be cleaned up.
+ */
+const starKey = (slug: string) => `xo.clips.favourites.${slug}`
+
+const NO_STARS: readonly string[] = []
+
+let starCache: { slug: string; stars: readonly string[] } | null = null
+const starListeners = new Set<() => void>()
+
+function subscribeToStars(onChange: () => void): () => void {
+  starListeners.add(onChange)
+  return () => {
+    starListeners.delete(onChange)
+  }
+}
+
+function starsFor(slug: string): readonly string[] {
+  if (starCache?.slug === slug) return starCache.stars
+
+  let stars: readonly string[] = NO_STARS
+  try {
+    const raw = window.localStorage.getItem(starKey(slug))
+    const names: unknown = raw ? JSON.parse(raw) : null
+    // Filtered rather than cast: this is a string somebody else's code wrote,
+    // and a number in the list would reach `includes` and quietly match
+    // nothing rather than announcing itself.
+    if (Array.isArray(names)) stars = names.filter((one): one is string => typeof one === 'string')
+  } catch {
+    // Storage denied, or a value somebody else wrote. Nothing is starred, and
+    // the band is the plain list it is on a first visit. See `storage-denied`.
+  }
+
+  starCache = { slug, stars }
+  return stars
+}
+
+function toggleStar(slug: string, clip: string): void {
+  const stars = starsFor(slug)
+  const next = stars.includes(clip)
+    ? stars.filter((one) => one !== clip)
+    : [...stars, clip]
+
+  // The cache first, so the re-render this announces reads the new value even
+  // when the write below throws - the star then holds for the session and is
+  // forgotten on reload, which is the right half of the feature to keep.
+  starCache = { slug, stars: next }
+  try {
+    window.localStorage.setItem(starKey(slug), JSON.stringify(next))
+  } catch {
+    // Kept for this visit even when it cannot be written down.
+  }
+
+  for (const listener of starListeners) listener()
+}
+
+/**
+ * One clip, and the star that keeps it at the top.
+ *
+ * Two buttons rather than one with a modifier, because the whole point of the
+ * row is that it is one press away from playing: a star you have to shift-click
+ * is a star nobody finds, and a chip that sometimes plays and sometimes
+ * bookmarks is a chip you press carefully.
+ */
+function Clip({
+  clip,
+  starred,
+  label,
+  onPlay,
+  onStar,
+}: {
+  clip: string
+  starred: boolean
+  /** What the star does, for the people who cannot see that it is a star. */
+  label: string
+  onPlay: () => void
+  onStar: () => void
+}) {
+  return (
+    <span className="flex items-center overflow-hidden rounded-lg border border-line/60 transition hover:border-accent/60">
+      <button
+        type="button"
+        onClick={onPlay}
+        className="px-2 py-1 text-[11px] capitalize text-ink-muted transition hover:bg-surface-raised hover:text-ink"
+      >
+        {clip}
+      </button>
+      <button
+        type="button"
+        onClick={onStar}
+        aria-pressed={starred}
+        aria-label={label}
+        title={label}
+        className={`px-1.5 py-1 text-[10px] transition hover:bg-surface-raised ${
+          starred ? 'text-accent' : 'text-ink-muted/50 hover:text-ink'
+        }`}
+      >
+        ★
+      </button>
+    </span>
   )
 }
 
@@ -417,6 +679,19 @@ function ShelfRow({
           className={BUTTON}
         >
           {t.summon}
+          {/*
+            What it costs, on the button that spends it.
+
+            Beside the word rather than in the row, because the price is a
+            property of *pressing this* and not of the thing sitting on a shelf.
+            Somebody scanning the shelf is choosing what to summon; the moment
+            the number matters is the moment their finger is on the control.
+
+            Nothing at all when it is free. A `0` on every row is noise that
+            makes the one row with a real price harder to spot, and "free" is
+            what a blueprint with no price means.
+          */}
+          <CoinPrice coins={priceOfThing(entry.spec)} />
         </button>
         {entry.mine && (
           <button
@@ -503,10 +778,13 @@ function ShelfRow({
  */
 function ThingControls({
   thing,
+  others,
   t,
   busy,
 }: {
   thing: ThingView
+  /** The rest of the room, for the wires. See `ThingTuning.wires`. */
+  others: readonly ThingView[]
   t: ReturnType<typeof railDict>['tabs']['thingiverse']
   busy: boolean
 }) {
@@ -595,6 +873,16 @@ function ThingControls({
         />
       </div>
 
+      {/*
+        The wiring, for the things that have something to say.
+
+        Two controls and both are about *this* one: how far its shouts carry,
+        and which things they go to instead of the room. Drawn only when the
+        blueprint ever shouts a word - see `shouts` - because a reach on a bench
+        is a control about nothing.
+      */}
+      {spec && shouts(spec) && <Wiring thing={thing} others={others} t={t} busy={busy} />}
+
       <button
         type="button"
         disabled={busy}
@@ -606,6 +894,111 @@ function ThingControls({
     </div>
   )
 }
+
+/**
+ * Who hears this one, and how far away.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the reach is a short list rather than a number field
+ * ---------------------------------------------------------------------------
+ * Because the question is "does the room hear this or does the corridor", and
+ * nobody has an opinion about 7 against 8. Four rungs and "the whole room" put
+ * the decision in one press, in a fourteen-rem column, with no keyboard - which
+ * is the same reason the size controls next to it are two buttons rather than a
+ * slider.
+ *
+ * ---------------------------------------------------------------------------
+ * And why a wire is a checkbox per thing rather than a click in the world
+ * ---------------------------------------------------------------------------
+ * Pointing at the door you mean *is* the better gesture and it is not this
+ * panel's to offer: the rail is beside the canvas, not over it, and there is no
+ * crosshair here to aim with - the same constraint that made moving a thing six
+ * arrows instead of a drag. What this can do honestly is list what is in the
+ * room and let somebody tick two of them, and selecting a row up above lights
+ * the thing in the world, so the list is checkable by looking.
+ */
+function Wiring({
+  thing,
+  others,
+  t,
+  busy,
+}: {
+  thing: ThingView
+  others: readonly ThingView[]
+  t: ReturnType<typeof railDict>['tabs']['thingiverse']
+  busy: boolean
+}) {
+  const actions = thingiverseActions()
+  const wires = thing.tuning.wires ?? []
+
+  const setTuning = (patch: Partial<ThingTuning>) =>
+    actions?.tune(thing.id, { ...thing.tuning, ...patch })
+
+  return (
+    <div className="space-y-1.5 rounded-lg border border-line/60 p-2">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-[10px] uppercase tracking-wide text-ink-muted">
+          {t.shouts}
+        </span>
+        <button
+          type="button"
+          disabled={busy}
+          aria-pressed={thing.tuning.reach === undefined}
+          onClick={() => setTuning({ reach: undefined })}
+          className={thing.tuning.reach === undefined ? BUTTON_ON : BUTTON}
+        >
+          {t.wholeRoom}
+        </button>
+        {REACHES.map((cells) => (
+          <button
+            key={cells}
+            type="button"
+            disabled={busy}
+            aria-pressed={thing.tuning.reach === cells}
+            onClick={() => setTuning({ reach: cells })}
+            className={thing.tuning.reach === cells ? BUTTON_ON : BUTTON}
+          >
+            {fill(t.cells, { n: String(cells) })}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-[10px] uppercase tracking-wide text-ink-muted">{t.wiredTo}</p>
+      {others.length === 0 ? (
+        <p className="text-[11px] text-ink-muted">{t.nothingToWire}</p>
+      ) : (
+        <>
+          <ul className="max-h-32 space-y-0.5 overflow-y-auto">
+            {others.map((one) => (
+              <li key={one.id}>
+                <Switch
+                  label={one.blueprint?.name ?? '—'}
+                  on={wires.includes(one.id)}
+                  busy={busy}
+                  onChange={(next) =>
+                    setTuning({
+                      // Rebuilt rather than spliced, and capped where the
+                      // command is capped: a list that grew past `MAX_WIRES`
+                      // here would be refused on the way in, after the switch
+                      // had already drawn itself as on.
+                      wires: next
+                        ? [...wires, one.id].slice(0, MAX_WIRES)
+                        : wires.filter((id) => id !== one.id),
+                    })
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] leading-relaxed text-ink-muted">{t.wiresHint}</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** The rungs the reach control offers, in cells. See `Wiring`. */
+const REACHES = [3, 6, 12, 24] as const
 
 function Switch({
   label,

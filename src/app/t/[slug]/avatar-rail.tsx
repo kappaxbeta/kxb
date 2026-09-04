@@ -163,7 +163,9 @@ export function AvatarRail({
         terms rather than being hidden from the people it would refuse.
       */}
       {hasSkinShop && (
-        <p className="mt-2 px-1 font-mono text-[10px] leading-tight text-ink-muted">
+        // The shop is not a door in the installed app: it is where money is
+        // spent, and an App Store build spends none - see globals.css.
+        <p className="not-in-app mt-2 px-1 font-mono text-[10px] leading-tight text-ink-muted">
           <Link href="/skins" className="text-ink underline underline-offset-2">
             {t.skinsLink}
           </Link>{' '}

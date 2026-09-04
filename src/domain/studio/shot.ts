@@ -18,6 +18,7 @@ import {
   type GlowSpec,
   type GoalSpec,
   type GroundSpec,
+  hush,
   isStudioLook,
   type LightSpec,
   parseScene,
@@ -255,6 +256,9 @@ export interface Actor {
   glow: GlowTrack
   emoteHeight: number
   emoteSize: number
+  /** Where a `talk` beat's bubble sits, and how big it is. See `PeepSpec`. */
+  sayHeight: number
+  saySize: number
   /**
    * How far the animal covers in one second of clip, in blocks.
    *
@@ -386,6 +390,22 @@ export interface ShotSpec {
    * `@/domain/studio/voice` for what "on" sounds like.
    */
   voice: boolean
+  /**
+   * Whether the lines are drawn over the cast.
+   *
+   * Off is a *clean plate*: the same performance with no writing burned into
+   * it, for a video that is going to be subtitled, dubbed, or shown in a
+   * language the shot was not written in. The words are not lost - `dialogue`
+   * still lists them, the voice still speaks them, and
+   * `@/domain/studio/transcript` hands them over as a file with the timecodes
+   * on them, which is what a subtitle track is made from.
+   *
+   * On the document rather than on the player, so every renderer agrees: the
+   * studio's preview, a pinned scene on a board and the render worker all draw
+   * `sceneAt`, and a flag any of them could set for itself is a flag that would
+   * eventually mean three different things.
+   */
+  bubbles: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -414,13 +434,27 @@ export const DEFAULT_ACTOR: Actor = {
   x: 0,
   y: 0,
   z: 0,
-  rotation: 160,
+  /**
+   * Facing the default camera, which sits front-right at `[10.4, 5.2, 11.6]`.
+   *
+   * It was 160 for a long time, and 160 faces almost exactly away from that
+   * camera: zero faces +z and positive turns toward +x, so a new actor dropped
+   * onto the stage showed the studio its back until somebody turned it round
+   * by hand - every time, for every actor. 42 is `atan2(10.4, 11.6)` in
+   * degrees, the heading from the origin to where the camera starts. Somebody
+   * who moves the camera moves it; the point is that the first thing on the
+   * stage looks at the lens rather than the wall.
+   */
+  rotation: 42,
   scale: 1,
   actions: [],
   tracks: {},
   glow: DEFAULT_GLOW,
   emoteHeight: 2.9,
   emoteSize: 0.9,
+  // Where a sentence used to land: the emote's height, and half its size.
+  sayHeight: 2.9,
+  saySize: 0.45,
   stride: DEFAULT_STRIDE,
   pose: null,
 }
@@ -496,6 +530,7 @@ export const DEFAULT_SHOT: ShotSpec = {
   ],
   ease: true,
   voice: true,
+  bubbles: true,
 }
 
 // ---------------------------------------------------------------------------
@@ -857,6 +892,8 @@ export function actorAt(actor: Actor, t: number, live?: LiveMotion): PeepSpec {
     emote: emote ? emote.emote : null,
     emoteHeight: actor.emoteHeight,
     emoteSize: actor.emoteSize,
+    sayHeight: actor.sayHeight,
+    saySize: actor.saySize,
     glow: glowAt(actor.glow, t),
     say: talk ? talk.text : null,
     // Spread rather than set, so an actor who is never hidden carries no key
@@ -877,6 +914,10 @@ export function actorAt(actor: Actor, t: number, live?: LiveMotion): PeepSpec {
     scale: sampleTracks(actor.tracks, 'scale', t, base.scale),
     emoteHeight: sampleTracks(actor.tracks, 'emoteHeight', t, base.emoteHeight),
     emoteSize: sampleTracks(actor.tracks, 'emoteSize', t, base.emoteSize),
+    // Keyable for the same reason the emote's pair is: a bubble that has to
+    // clear a peep who climbs onto a crate mid-shot is a bubble that moves.
+    sayHeight: sampleTracks(actor.tracks, 'sayHeight', t, base.sayHeight),
+    saySize: sampleTracks(actor.tracks, 'saySize', t, base.saySize),
   }
 }
 
@@ -912,7 +953,7 @@ function resolve<T extends object>(node: Animated<T>, t: number): T {
  * gives a complete scene.
  */
 export function sceneAt(shot: ShotSpec, t: number): StudioScene {
-  return {
+  const scene: StudioScene = {
     width: shot.width,
     height: shot.height,
     camera: cameraAt(shot, t),
@@ -934,6 +975,10 @@ export function sceneAt(shot: ShotSpec, t: number): StudioScene {
     light: resolve(shot.light, t),
     peeps: shot.cast.map((actor) => actorAt(actor, t)),
   }
+
+  // The one place the flag is read. See `ShotSpec.bubbles` for why it is here
+  // and not in each of the three things that draw a scene.
+  return shot.bubbles ? scene : hush(scene)
 }
 
 /**
@@ -1084,6 +1129,16 @@ function actor(value: unknown): Actor {
     glow: glowTrack(raw.glow),
     emoteHeight: number(raw.emoteHeight, DEFAULT_ACTOR.emoteHeight, 0, 12),
     emoteSize: number(raw.emoteSize, DEFAULT_ACTOR.emoteSize, 0.2, 3),
+    // Off this actor's own emote pair when absent, not off the defaults - the
+    // same reasoning `parsePeep` gives, and the reason a shot saved before this
+    // existed re-renders frame for frame.
+    sayHeight: number(raw.sayHeight, number(raw.emoteHeight, DEFAULT_ACTOR.emoteHeight, 0, 12), 0, 12),
+    saySize: number(
+      raw.saySize,
+      number(raw.emoteSize, DEFAULT_ACTOR.emoteSize, 0.2, 3) * 0.5,
+      0.1,
+      3,
+    ),
     stride: number(raw.stride, DEFAULT_STRIDE, 0.2, 8),
     pose: parseAnyDoc(raw.pose),
   }
@@ -1261,6 +1316,7 @@ export function parseShot(value: unknown): ShotSpec {
     camera: camera.length > 0 ? camera : DEFAULT_SHOT.camera,
     ease: raw.ease !== false,
     voice: raw.voice !== false,
+    bubbles: raw.bubbles !== false,
   }
 }
 
@@ -1343,6 +1399,8 @@ export function shotFromScene(scene: StudioScene, duration = DEFAULT_SHOT.durati
       tracks: {},
       emoteHeight: peep.emoteHeight,
       emoteSize: peep.emoteSize,
+      sayHeight: peep.sayHeight,
+      saySize: peep.saySize,
       // A still's glow is a resolved colour; a shot's is a mode. A lifted peep
       // keeps the hue it was composed with rather than starting to cycle.
       glow: peep.glow
@@ -1358,5 +1416,9 @@ export function shotFromScene(scene: StudioScene, duration = DEFAULT_SHOT.durati
     camera: [{ t: 0, ...scene.camera }],
     ease: true,
     voice: true,
+    // A lifted still keeps its bubbles: the peep it came from was composed with
+    // the line showing, and an export that silently dropped it would read as a
+    // bug rather than as a setting.
+    bubbles: true,
   }
 }

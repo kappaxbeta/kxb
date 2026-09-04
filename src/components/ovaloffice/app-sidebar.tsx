@@ -30,8 +30,10 @@ import {
   PersonStanding,
   Shirt,
   Ticket,
+  Trophy,
   Euro,
   Joystick,
+  Frame,
 } from 'lucide-react'
 
 import {
@@ -125,6 +127,15 @@ const data = {
           icon: Images,
         },
         {
+          // Beside Pictures, and the difference is who the picture is for. Those
+          // are chosen for an announcement we write; these are the twelve App
+          // Store panels, which is the same art pointed at a stranger who has
+          // never heard of any of it.
+          title: 'Store banners',
+          url: '/ovaloffice/banners',
+          icon: Frame,
+        },
+        {
           title: 'World Builder',
           url: '/ovaloffice/builder',
           icon: Blocks,
@@ -168,6 +179,13 @@ const data = {
           title: 'Skins',
           url: '/ovaloffice/skins',
           icon: Shirt,
+        },
+        {
+          // And beside both, because it is made of both: a prize draw whose
+          // "free to enter" clause is a promise about one promo code.
+          title: 'Gewinnspiel',
+          url: '/ovaloffice/gewinnspiel',
+          icon: Trophy,
         },
         {
           // Operations rather than Analytics, even though it is all numbers.

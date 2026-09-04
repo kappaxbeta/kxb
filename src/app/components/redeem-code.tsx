@@ -40,6 +40,19 @@ export function RedeemCode({
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [granted, setGranted] = useState<string | null>(null)
+  /**
+   * What came with the month, kept beside the date.
+   *
+   * The bearer codes in particular have nowhere else to live: an unclaimed
+   * voucher belongs to nobody, so it is in no list this account can read
+   * afterwards. Losing them is losing them, which is why this state outlives
+   * the revalidation the action triggers.
+   */
+  const [extras, setExtras] = useState<{
+    bucks: number
+    coins: number
+    codes: readonly string[]
+  }>({ bucks: 0, coins: 0, codes: [] })
   const [isPending, startTransition] = useTransition()
 
   /**
@@ -68,8 +81,14 @@ export function RedeemCode({
         search: typeof window === 'undefined' ? null : window.location.search,
       })
 
-      if (result.ok) setGranted(result.grant.until)
-      else setError(refusal(result.error))
+      if (result.ok) {
+        setGranted(result.grant.until)
+        setExtras({
+          bucks: result.grant.bucks,
+          coins: result.grant.coins,
+          codes: result.grant.voucherCodes,
+        })
+      } else setError(refusal(result.error))
     })
   }
 
@@ -83,13 +102,43 @@ export function RedeemCode({
    */
   if (granted) {
     return (
-      <p className="rounded-lg border border-accent/50 bg-surface-raised px-4 py-3 text-sm">
-        {t.acceptedLead}{' '}
-        <span className="font-medium">
-          {new Date(granted).toLocaleDateString(locale)}
-        </span>
-        {t.acceptedTail}
-      </p>
+      <div className="space-y-2 rounded-lg border border-accent/50 bg-surface-raised px-4 py-3 text-sm">
+        <p>
+          {t.acceptedLead}{' '}
+          <span className="font-medium">
+            {new Date(granted).toLocaleDateString(locale)}
+          </span>
+          {t.acceptedTail}
+        </p>
+        {extras.bucks > 0 && (
+          <p className="font-medium text-accent">
+            {t.acceptedBucks.replace('{n}', String(extras.bucks))}
+          </p>
+        )}
+        {extras.coins > 0 && (
+          <p className="font-medium text-accent">
+            {t.acceptedCoins.replace('{n}', String(extras.coins))}
+          </p>
+        )}
+        {extras.codes.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-ink-muted">{t.acceptedVouchers}</p>
+            {/*
+              Selectable text rather than a copy button, and the same call the
+              backoffice mint makes for the same reason: these are bearer codes,
+              whoever types one owns it, and a button that silently fails on a
+              browser without clipboard permission would lose them for good.
+            */}
+            <ul className="font-mono text-sm">
+              {extras.codes.map((code) => (
+                <li key={code} className="select-all">
+                  {code}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     )
   }
 

@@ -48,9 +48,12 @@ export default async function StudioPage({
    * the name, the blurb and the id, so pressing save writes over the scene you
    * opened instead of making a second one every time.
    *
-   * The document still becomes a link the moment anything is edited - the
-   * editor rewrites the address on every change, exactly as before - so the two
-   * ways of arriving converge after the first keystroke.
+   * And it *stays* `?scene=<id>` from then on. It used to not: the editor
+   * rewrote the address to the encoded document on the first keystroke, so the
+   * two ways of arriving converged - which sounded tidy and meant that a save
+   * followed by a reload came back to a document with no row behind it, the
+   * panel forgetting it had ever saved and the next press keeping a second
+   * scene. Once a scene is what is being edited, the address says so.
    */
   /**
    * The worlds that can be pulled in as a set.
@@ -81,7 +84,7 @@ export default async function StudioPage({
           <header className="mb-4">
             <h2 className="text-lg font-medium">{saved.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {saved.blurb || 'A saved scene. Editing rewrites the address, saving writes the row.'}
+              {saved.blurb || 'A saved scene. Saving writes over this row; the address stays on it.'}
             </p>
           </header>
           <ShotEditor

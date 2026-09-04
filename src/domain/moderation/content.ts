@@ -55,6 +55,17 @@ export const REPORT_KINDS = [
   'xp',
   'script',
   'movie',
+  /**
+   * A member's show, and one episode of it.
+   *
+   * Both point into `channel_releases_read_model`, because that is the table
+   * with the published copy in it - a draft is not reportable, having never
+   * been shown to anybody. Two kinds rather than one for the reason the
+   * blueprint/vehicle pair gives: the reporter knew which of the two they were
+   * looking at, and an admin reading "episode" opens the episode.
+   */
+  'show',
+  'episode',
 ] as const
 export type ReportKind = (typeof REPORT_KINDS)[number]
 
@@ -66,6 +77,8 @@ export const REPORT_KIND_LABELS: Record<ReportKind, string> = {
   xp: 'XP',
   script: 'script',
   movie: 'movie',
+  show: 'show',
+  episode: 'episode',
 }
 
 /**
@@ -83,6 +96,7 @@ export type ReportTable =
   | 'thingiverse_clips_read_model'
   | 'xps_read_model'
   | 'published_scenes'
+  | 'channel_releases_read_model'
 
 export function tableFor(kind: ReportKind): ReportTable {
   switch (kind) {
@@ -96,6 +110,9 @@ export function tableFor(kind: ReportKind): ReportTable {
       return 'xps_read_model'
     case 'movie':
       return 'published_scenes'
+    case 'show':
+    case 'episode':
+      return 'channel_releases_read_model'
   }
 }
 

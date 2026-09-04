@@ -7,6 +7,7 @@ import {
   closeRoom,
   createRoom,
   setRoomCap,
+  setRoomDoorPrice,
   setRoomGuestBuild,
 } from '@/domain/rooms/actions'
 import type { RoomView } from '@/domain/rooms/queries'
@@ -238,6 +239,46 @@ export function RoomsPanel({
                     />
                     <span className="text-ink-muted">{t.guestsMayBuild}</span>
                   </label>
+                </div>
+              )}
+
+              {/*
+                A toll on the door.
+
+                Its own row rather than joining the two above, because those are
+                gated on `isEvent` and this is not: a price on a door is for any
+                space running an economy, and an event is only one kind. See
+                `docs/product/economy.md` §11.
+
+                Blank and `0` both mean free, so a price can always be taken
+                back off - a control that could set one and never clear it would
+                be a door somebody is stuck behind.
+              */}
+              {canManage && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3 text-xs">
+                  <label className="flex items-center gap-2">
+                    <span className="text-ink-muted">{t.doorPrice}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      defaultValue={room.doorPrice || ''}
+                      placeholder="0"
+                      disabled={pending}
+                      onBlur={(input) => {
+                        const raw = input.target.value.trim()
+                        const next = raw === '' ? 0 : Number(raw)
+                        if (next === room.doorPrice) return
+                        setError(null)
+                        startTransition(async () => {
+                          const result = await setRoomDoorPrice(slug, room.roomId, next)
+                          if (!result.ok) setError(refusal(result.error))
+                          else router.refresh()
+                        })
+                      }}
+                      className="w-16 rounded border border-line bg-surface px-2 py-1 tabular-nums"
+                    />
+                  </label>
+                  <span className="text-[10px] text-ink-muted">{t.doorPriceNote}</span>
                 </div>
               )}
             </li>

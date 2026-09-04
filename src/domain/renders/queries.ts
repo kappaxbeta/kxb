@@ -99,6 +99,30 @@ export async function listRenderJobs(
   return (data ?? []).map((row) => summarise(row as Row))
 }
 
+/**
+ * The most recent jobs *this space* asked for, newest first.
+ *
+ * `listRenderJobs` is deliberately an operations view of the whole queue, for
+ * the backoffice; a space's studio asks a narrower question - what did *we*
+ * ask for - and the narrowing has to happen in SQL rather than by filtering
+ * fifty strangers' rows on the way past.
+ */
+export async function listTenantRenderJobs(
+  supabase: Client,
+  tenantId: string,
+  { limit = 30 }: { limit?: number } = {},
+): Promise<RenderJob[]> {
+  const { data, error } = await supabase
+    .from('render_jobs')
+    .select(JOB_COLUMNS)
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw new Error(`Failed to list render jobs: ${error.message}`)
+  return (data ?? []).map((row) => summarise(row as Row))
+}
+
 /** One job, or null if there is none this reader may see. */
 export async function findRenderJob(
   supabase: Client,

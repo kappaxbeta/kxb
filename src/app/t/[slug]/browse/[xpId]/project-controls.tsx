@@ -1,8 +1,9 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState, useTransition } from 'react'
 import {
   copyXp,
+  priceXp,
   moveXp,
   removeXp,
   rollBackXp,
@@ -15,6 +16,8 @@ import {
   type XpActionResult,
 } from '@/domain/xps/actions'
 import type { XpRelease } from '@/domain/xps/queries'
+import { CoinPrice } from '@/app/components/coin-price'
+import { SUBMISSION_FEE } from '@/domain/bank/prices'
 import { browseDict } from '@/app/i18n/browse'
 import { useLocale } from '@/app/i18n/locale-context'
 import { useRefusal } from '@/app/i18n/use-refusal'
@@ -58,10 +61,18 @@ export function SubmitPanel({
   slug,
   xpId,
   submitted,
+  economy = false,
 }: {
   slug: string
   xpId: string
   submitted: boolean
+  /**
+   * Whether this space is running the economy.
+   *
+   * The fee is only shown when it will actually be taken. A price on a button
+   * in a space that charges nothing is a threat the product does not carry out.
+   */
+  economy?: boolean
 }) {
   const t = browseDict(useLocale()).controls
   const [state, submit, submitting] = useAction((formData) => submitXp(slug, formData))
@@ -105,6 +116,18 @@ export function SubmitPanel({
         className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-medium text-[oklch(0.16_0.04_300)] transition hover:opacity-90 disabled:opacity-60"
       >
         {submitting ? t.sending : t.submit}
+        {/*
+          What it costs, on the button that spends it.
+
+          The fee is the one thing about submitting somebody could reasonably
+          not expect, and a rejection does not refund it - so the number belongs
+          where the decision is made, not in a paragraph above it that a
+          returning author has stopped reading.
+
+          Draws nothing when the economy is off for this space, because the
+          charge does not happen then either. See `CoinPrice`.
+        */}
+        <CoinPrice coins={economy ? SUBMISSION_FEE : 0} />
       </button>
       <Refusal state={state} />
     </form>
@@ -259,6 +282,104 @@ export function CopyPanel({ slug, xpId }: { slug: string; xpId: string }) {
       </button>
       <Refusal state={state} />
     </form>
+  )
+}
+
+/**
+ * What it costs somebody else.
+ *
+ * `docs/product/economy.md` §9. Two prices, in one panel, because they are one
+ * decision - "what is this worth to somebody else" - and splitting them across
+ * two controls would make it look like two.
+ *
+ * ---------------------------------------------------------------------------
+ * They are not alternatives
+ * ---------------------------------------------------------------------------
+ * `once` is what it costs to **play**, paid a single time and then never again
+ * - including instead of the per-play stake every other level takes. `remix` is
+ * what it costs to **take a copy and change it**. An owner can charge for one
+ * and not the other in either direction, which is why they are two fields and
+ * not a mode.
+ *
+ * Both blank or zero is free, and that is what every level is until somebody
+ * says otherwise. Zero has to stay expressible or a price could be set and
+ * never taken off.
+ */
+export function PricePanel({
+  slug,
+  xpId,
+  once,
+  remix,
+}: {
+  slug: string
+  xpId: string
+  once: number
+  remix: number
+}) {
+  const [nextOnce, setOnce] = useState(String(once || ''))
+  const [nextRemix, setRemix] = useState(String(remix || ''))
+  const [note, setNote] = useState<string | null>(null)
+  const [pending, start] = useTransition()
+
+  const changed =
+    (Number(nextOnce) || 0) !== once || (Number(nextRemix) || 0) !== remix
+
+  return (
+    <div className="space-y-3">
+      <p className="max-w-[62ch] text-sm leading-relaxed text-ink-muted">
+        Coins somebody else pays. Playing is charged once and then never again;
+        remixing is charged each time a copy is taken. Both go to you. Leave
+        them empty for free.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          To play, once
+          <input
+            type="number"
+            min={0}
+            value={nextOnce}
+            placeholder="0"
+            onChange={(event) => setOnce(event.target.value)}
+            className="w-24 rounded border border-line bg-surface px-2 py-1 text-sm tabular-nums text-ink"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          To remix
+          <input
+            type="number"
+            min={0}
+            value={nextRemix}
+            placeholder="0"
+            onChange={(event) => setRemix(event.target.value)}
+            className="w-24 rounded border border-line bg-surface px-2 py-1 text-sm tabular-nums text-ink"
+          />
+        </label>
+
+        <button
+          type="button"
+          disabled={pending || !changed}
+          onClick={() =>
+            start(async () => {
+              setNote(null)
+              const result = await priceXp(slug, {
+                xpId,
+                // Empty is free, not a refusal. See the panel's note.
+                once: Number(nextOnce) || 0,
+                remix: Number(nextRemix) || 0,
+              })
+              setNote(result.ok ? 'Saved' : result.error)
+            })
+          }
+          className="rounded-full border border-line px-4 py-2 text-sm transition hover:border-accent hover:text-ink disabled:opacity-60"
+        >
+          {pending ? 'Saving…' : 'Save prices'}
+        </button>
+      </div>
+
+      {note && <p className="text-xs text-ink-muted">{note}</p>}
+    </div>
   )
 }
 

@@ -485,6 +485,20 @@ export interface RailDict {
     sendReport: string
     reportSending: string
     reported: string
+    /**
+     * Blocking, which is the other half of what a report is for.
+     *
+     * A report is a request to us and waits for a verdict; a block is
+     * immediate, private and undone from settings. The confirm line names the
+     * person on purpose - it is the one word that tells you whether you have
+     * the right line.
+     */
+    block: string
+    /** `{name}` is whoever said the line. */
+    blockConfirm: string
+    blockYes: string
+    /** Where the list of blocked people lives, so a block can be undone. */
+    blockUndo: string
     cancel: string
   }
 
@@ -609,6 +623,23 @@ export interface RailDict {
        */
       openInWorld: string
       /**
+       * The way out to the clips, on the browse page.
+       *
+       * A link rather than a panel: a clip is baked samples against a rig, and
+       * looking at one means running it on a body - which is a canvas, not a
+       * fourteen-rem column. The list on the other end has the mirror to play
+       * them in. See `ClipsPanel`.
+       */
+      clips: string
+      /** Above the starred ones, when there are any. */
+      favourites: string
+      /** In the box under them. */
+      clipSearch: string
+      /** On the star itself, which is the only unlabelled control in the band. */
+      favourite: string
+      /** A typed word that matches no clip this body carries. `{q}` is the word. */
+      noClip: string
+      /**
        * Why a selected thing has no controls.
        *
        * Furniture is moved in creative mode only - `canBuild` is `!readOnly &&
@@ -637,6 +668,23 @@ export interface RailDict {
       hand: string
       mine: string
       working: string
+      /**
+       * Wiring, for the things that shout a word.
+       *
+       * Drawn only for those - see `shouts` - because a reach and a list of
+       * wires on a bench are two controls about something that never says
+       * anything, which reads as a broken panel rather than an unused one.
+       */
+      shouts: string
+      /** How far it carries, when it carries as far as there is room. */
+      wholeRoom: string
+      /** A distance. `{n}` is the number of cells. */
+      cells: string
+      wiredTo: string
+      /** What running a wire does, in one line. */
+      wiresHint: string
+      /** There is nothing else in the room to wire it to. */
+      nothingToWire: string
     }
   }
 }
@@ -790,6 +838,11 @@ export const RAIL_EN: RailDict = {
       noneHere: 'Nothing has been summoned in here.',
       noMatch: 'Nothing here matches “{q}”.',
       openInWorld: 'Open the shelf in the room',
+      clips: 'Clips & poses',
+      favourites: 'Favourites',
+      clipSearch: 'Search clips',
+      favourite: 'Keep at the top',
+      noClip: 'This body has nothing like “{q}”.',
       needCreative: 'Switch the world to creative mode to move this about.',
       move: 'Move',
       turn: 'Turn',
@@ -808,6 +861,12 @@ export const RAIL_EN: RailDict = {
       hand: 'Hand over',
       mine: 'Yours',
       working: 'Working…',
+      shouts: 'Shouts reach',
+      wholeRoom: 'The whole room',
+      cells: '{n} cells',
+      wiredTo: 'Wired to',
+      wiresHint: 'Wired, it shouts to these and to nothing else — so this button opens that door, and leaves the others shut.',
+      nothingToWire: 'Summon something else in here to wire this to.',
     },
   },
 
@@ -830,6 +889,10 @@ export const RAIL_EN: RailDict = {
     sendReport: 'Send report',
     reportSending: 'Sending…',
     reported: 'Reported. An admin will look at it — the sender is not told who reported it.',
+    block: 'Block',
+    blockConfirm: 'Block {name}? You stop seeing what they say, here and everywhere else. They are not told.',
+    blockYes: 'Block them',
+    blockUndo: 'Undo it any time in Settings → Profile.',
     cancel: 'Cancel',
   },
 
@@ -1330,6 +1393,11 @@ export const RAIL_DE: RailDict = {
       noneHere: 'Hier wurde noch nichts gerufen.',
       noMatch: 'Nichts hier passt zu „{q}“.',
       openInWorld: 'Regal im Raum öffnen',
+      clips: 'Clips & Posen',
+      favourites: 'Favoriten',
+      clipSearch: 'Clips durchsuchen',
+      favourite: 'Oben behalten',
+      noClip: 'Dieser Körper hat nichts wie „{q}“.',
       needCreative: 'Schalten Sie die Welt in den Kreativmodus, um das hier zu bewegen.',
       move: 'Bewegen',
       turn: 'Drehen',
@@ -1348,6 +1416,12 @@ export const RAIL_DE: RailDict = {
       hand: 'Übergeben',
       mine: 'Ihres',
       working: 'Wird erledigt …',
+      shouts: 'Ruf reicht',
+      wholeRoom: 'Der ganze Raum',
+      cells: '{n} Zellen',
+      wiredTo: 'Verbunden mit',
+      wiresHint: 'Verbunden ruft es nur diesen zu — dieser Knopf öffnet jene Tür und lässt die anderen zu.',
+      nothingToWire: 'Beschwören Sie etwas anderes herein, womit sich das verbinden lässt.',
     },
   },
 
@@ -1371,6 +1445,11 @@ export const RAIL_DE: RailDict = {
     reportSending: 'Wird gesendet …',
     reported:
       'Gemeldet. Ein Admin sieht sich das an — der Absender erfährt nicht, wer gemeldet hat.',
+    block: 'Blockieren',
+    blockConfirm:
+      '{name} blockieren? Du siehst nicht mehr, was diese Person sagt — hier und überall sonst. Sie erfährt nichts davon.',
+    blockYes: 'Blockieren',
+    blockUndo: 'Jederzeit rückgängig unter Einstellungen → Profil.',
     cancel: 'Abbrechen',
   },
 
@@ -1896,6 +1975,11 @@ export const RAIL_BG: RailDict = {
       noneHere: 'Тук още нищо не е призовано.',
       noMatch: 'Тук нищо не съвпада с „{q}“.',
       openInWorld: 'Отвори рафта в стаята',
+      clips: 'Клипове и пози',
+      favourites: 'Любими',
+      clipSearch: 'Търсене в клиповете',
+      favourite: 'Задръж най-горе',
+      noClip: 'Това тяло няма нищо като „{q}“.',
       needCreative: 'Превключете света в режим „творчество“, за да местите това.',
       move: 'Премести',
       turn: 'Завърти',
@@ -1914,6 +1998,12 @@ export const RAIL_BG: RailDict = {
       hand: 'Предай',
       mine: 'Ваше',
       working: 'Изпълнява се…',
+      shouts: 'Викът стига до',
+      wholeRoom: 'Цялата стая',
+      cells: '{n} клетки',
+      wiredTo: 'Свързано с',
+      wiresHint: 'Свързано, вика само на тези — този бутон отваря онази врата и оставя другите затворени.',
+      nothingToWire: 'Призовете още нещо тук, с което да го свържете.',
     },
   },
 
@@ -1937,6 +2027,11 @@ export const RAIL_BG: RailDict = {
     reportSending: 'Изпраща се…',
     reported:
       'Докладвано. Админ ще го погледне — подателят не разбира кой е докладвал.',
+    block: 'Блокирай',
+    blockConfirm:
+      'Да блокираме ли {name}? Спираш да виждаш какво пише — тук и навсякъде другаде. Човекът не разбира.',
+    blockYes: 'Блокирай',
+    blockUndo: 'Може да го отмениш по всяко време в Настройки → Профил.',
     cancel: 'Отказ',
   },
 

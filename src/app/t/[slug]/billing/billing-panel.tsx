@@ -259,6 +259,12 @@ type Run = (action: () => Promise<{ ok: boolean; error?: string } | void>) => vo
  * between two prices should be able to see what the €5 difference buys without
  * leaving the page they are on, and Stripe's hosted picker cannot say
  * "the XP editor" in our words.
+ *
+ * The whole grid is `not-in-app`. An App Store build sells nothing - guideline
+ * 3.1.1 - so inside `packages/shell` there is no plan to pick, and the actions
+ * these buttons call refuse there anyway (`isAppShell`). What is deliberately
+ * absent is a line saying where it *can* be done: steering somebody out of the
+ * app to buy is its own guideline and its own rejection.
  */
 function PickTier({
   slug,
@@ -275,7 +281,7 @@ function PickTier({
   const locale = useLocale()
   const t = billingDict(locale)
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="not-in-app grid gap-3 sm:grid-cols-2">
       {PAID_TIERS.map((tier) => {
         /*
           xp before launch: shown, priced, and not buyable.
@@ -403,7 +409,7 @@ function ChangeTier({
             type="button"
             disabled={isPending}
             onClick={() => run(() => openBillingPortal(slug))}
-            className="rounded-lg border border-line px-3 py-1.5 text-sm transition hover:bg-surface-raised disabled:opacity-50"
+            className="not-in-app rounded-lg border border-line px-3 py-1.5 text-sm transition hover:bg-surface-raised disabled:opacity-50"
           >
             {t.plan.manage}
           </button>
@@ -424,7 +430,7 @@ function ChangeTier({
           type="button"
           disabled={isPending}
           onClick={() => run(() => resumeSubscription(slug))}
-          className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          className="not-in-app mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {isPending ? t.plan.resuming : t.plan.resume}
         </button>
@@ -463,7 +469,7 @@ function ChangeTier({
             type="button"
             disabled={isPending}
             onClick={() => run(() => scheduleTierChange(slug, other))}
-            className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            className="not-in-app mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
           >
             {isPending
               ? t.plan.working
@@ -477,7 +483,7 @@ function ChangeTier({
           type="button"
           disabled={isPending}
           onClick={() => run(() => openBillingPortal(slug))}
-          className="rounded-lg border border-line px-4 py-2 text-sm transition hover:bg-surface disabled:opacity-50"
+          className="not-in-app rounded-lg border border-line px-4 py-2 text-sm transition hover:bg-surface disabled:opacity-50"
         >
           {isPending ? t.plan.openingStripe : t.plan.manage}
         </button>

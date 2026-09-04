@@ -77,6 +77,10 @@ export function ChatRail() {
             // reference to the dock at all. `say` is stable in the sense that
             // matters: it is read at the moment of sending, never captured.
             onSend={(body) => chatActions()?.say(body)}
+            // Out of the feed rather than through the store, unlike `say`: the
+            // dock has to remove the lines as well as write the row, so this is
+            // the dock's own function and not a fire-and-forget command.
+            onBlock={feed.onBlock}
             blockedReason={feed.blockedReason}
           />
         )}

@@ -13,7 +13,9 @@ import {
   MAX_BLUEPRINT_TAGS,
   MAX_TAG_LENGTH,
   MAX_CLIP_NAME,
+  MAX_COLLIDER_SIZE,
   MAX_PART_OFFSET,
+  MIN_COLLIDER_SIZE,
   MAX_PARTS,
   MAX_SEAT_OFFSET,
   MAX_SEATS,
@@ -40,6 +42,19 @@ import {
   WEAPON_LIMITS,
 } from '@/domain/thingiverse/fight'
 import {
+  HANDS,
+  MAX_HOLD_CLIP,
+  MAX_HOLD_OFFSET,
+  MAX_HOLD_SCALE,
+  MIN_HOLD_SCALE,
+} from '@/domain/thingiverse/hold'
+import {
+  MAX_MOVE,
+  MAX_MOVE_SECONDS,
+  MAX_MOVE_WAIT,
+  MIN_MOVE_SECONDS,
+} from '@/domain/thingiverse/motion'
+import {
   CHANGE_WHENS,
   MAX_CHANGE_SECONDS,
   MAX_CHANGES_PER_STATE,
@@ -62,7 +77,7 @@ import {
   MIN_WHEEL_SCALE,
   VEHICLE_LIMITS,
 } from '@/domain/thingiverse/vehicle'
-import { BODY_LIMITS } from '@kxb/xp/blueprints'
+import { BODY_LIMITS, MAX_COLLIDER_BOXES } from '@kxb/xp/blueprints'
 
 /**
  * What a browser may ask of a blueprint.
@@ -130,6 +145,25 @@ const socketSchema = z
     name: z.string().min(1).max(MAX_SOCKET_NAME),
     at: offsetSchema,
     turn: z.number().int(),
+  })
+  .strict()
+
+/**
+ * One hand-drawn box of a thing's collision.
+ *
+ * The offsets are optional and the sizes are not, which is `PlacementBox`'s own
+ * shape rather than a choice made here: a missing corner is the model's origin,
+ * and a missing size is a box that is not a box. Bounded here and made sense of
+ * in `colliderProblems`, the same two-layer split the rest of this file keeps.
+ */
+const colliderBoxSchema = z
+  .object({
+    x: z.number().min(-MAX_PART_OFFSET).max(MAX_PART_OFFSET).optional(),
+    y: z.number().min(-MAX_PART_OFFSET).max(MAX_PART_OFFSET).optional(),
+    z: z.number().min(-MAX_PART_OFFSET).max(MAX_PART_OFFSET).optional(),
+    w: z.number().min(MIN_COLLIDER_SIZE).max(MAX_COLLIDER_SIZE),
+    h: z.number().min(MIN_COLLIDER_SIZE).max(MAX_COLLIDER_SIZE),
+    d: z.number().min(MIN_COLLIDER_SIZE).max(MAX_COLLIDER_SIZE),
   })
   .strict()
 
@@ -208,6 +242,11 @@ const useSchema = z
             // The socket it sits on, if any. Unchecked against the blueprint's
             // sockets, for the reason `usingProblems` gives at length.
             socket: z.string().min(1).max(MAX_SOCKET_NAME).optional(),
+            // What the body plays in this seat, if it is not the block's loop.
+            // Unchecked against any pack, exactly as the three above are: which
+            // clips a body has is the host's business, and a name that finds
+            // nothing leaves the body in its last pose rather than failing.
+            clip: z.string().min(1).max(MAX_CLIP_NAME).optional(),
           })
           .strict(),
       )
@@ -289,6 +328,7 @@ const fightSchema = z
         reach: z.number().min(WEAPON_LIMITS.reach.min).max(WEAPON_LIMITS.reach.max),
         every: z.number().min(WEAPON_LIMITS.every.min).max(WEAPON_LIMITS.every.max),
         at: z.enum(['people', 'things', 'all']),
+        push: z.number().min(WEAPON_LIMITS.push.min).max(WEAPON_LIMITS.push.max).optional(),
         shot: z
           .object({
             model: z.string().min(1).max(96),
@@ -335,6 +375,59 @@ const craftSchema = z
   })
   .strict()
 
+/**
+ * Where a thing sits in a hand. See `@/domain/thingiverse/hold`.
+ *
+ * Bounded here and made sense of there, which is the split every block on this
+ * schema keeps: the shape and the numbers are the schema's, and "is that a hand
+ * we have" is `holdProblems`', because it is the half that reads like a
+ * sentence when it comes back to a panel.
+ */
+const holdSchema = z
+  .object({
+    hand: z.enum(HANDS),
+    at: z
+      .object({
+        x: z.number().min(-MAX_HOLD_OFFSET).max(MAX_HOLD_OFFSET),
+        y: z.number().min(-MAX_HOLD_OFFSET).max(MAX_HOLD_OFFSET),
+        z: z.number().min(-MAX_HOLD_OFFSET).max(MAX_HOLD_OFFSET),
+      })
+      .strict(),
+    turn: z
+      .object({
+        x: z.number().min(-Math.PI * 2).max(Math.PI * 2),
+        y: z.number().min(-Math.PI * 2).max(Math.PI * 2),
+        z: z.number().min(-Math.PI * 2).max(Math.PI * 2),
+      })
+      .strict(),
+    scale: z.number().min(MIN_HOLD_SCALE).max(MAX_HOLD_SCALE),
+    clip: z.string().min(1).max(MAX_HOLD_CLIP).nullable().optional(),
+  })
+  .strict()
+
+/**
+ * Where a thing goes on its own. See `@/domain/thingiverse/motion`.
+ *
+ * Bounded here, made sense of there - the split every block on this schema
+ * keeps.
+ */
+const motionSchema = z
+  .object({
+    by: z
+      .object({
+        x: z.number().min(-MAX_MOVE).max(MAX_MOVE),
+        y: z.number().min(-MAX_MOVE).max(MAX_MOVE),
+        z: z.number().min(-MAX_MOVE).max(MAX_MOVE),
+      })
+      .strict(),
+    out: z.number().min(MIN_MOVE_SECONDS).max(MAX_MOVE_SECONDS),
+    back: z.number().min(MIN_MOVE_SECONDS).max(MAX_MOVE_SECONDS),
+    waitOut: z.number().min(0).max(MAX_MOVE_WAIT).optional(),
+    waitHome: z.number().min(0).max(MAX_MOVE_WAIT).optional(),
+    ease: z.boolean().optional(),
+  })
+  .strict()
+
 export const specSchema = z
   .object({
     // Bounded, not validated: `blueprintProblems` asks the catalogue whether it
@@ -354,11 +447,14 @@ export const specSchema = z
     // the composer had just learned to write.
     parts: z.array(partSchema).max(MAX_PARTS).optional(),
     sockets: z.array(socketSchema).max(MAX_SOCKETS_PER_PART).optional(),
+    collider: z.array(colliderBoxSchema).max(MAX_COLLIDER_BOXES).optional(),
     timeline: timelineSchema.optional(),
     vehicle: vehicleSchema.optional(),
     states: statesSchema.optional(),
     fight: fightSchema.optional(),
     craft: craftSchema.optional(),
+    hold: holdSchema.optional(),
+    motion: motionSchema.optional(),
     price: z.number().int().min(0).max(MAX_PRICE).optional(),
   })
   .strict()

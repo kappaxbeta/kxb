@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_PRICE } from '@/domain/bank/prices'
 import { FINISHES, HUES, type Finish } from '@kxb/xp'
 import {
   XP_BLURB_MAX,
@@ -140,6 +141,41 @@ export type SetXpAccess = {
   spacePolicy: XpSpacePolicy
 }
 
+/**
+ * What this level costs, set by its owner. See `XpPriced`.
+ *
+ * Both prices in one command, because they are one decision made in one panel -
+ * and because a command that could set `once` without saying anything about
+ * `remix` would need a way to mean "leave that alone", which is a third state
+ * per field for no benefit.
+ *
+ * The numbers are bounded in the decider rather than here. A price is the one
+ * thing on this level a purse is later charged, so the guard belongs where the
+ * invariant is - next to the shares, which have their own arithmetic.
+ */
+/**
+ * What a browser may say about a price.
+ *
+ * The two numbers and the shares. The bounds are here *and* in the decider, the
+ * overlap this file's header describes: the schema refuses a malformed shape
+ * with a readable message, and the decider refuses an implausible one next to
+ * the invariant it protects - shares that add past the whole would pay out more
+ * than came in, and that check belongs where the arithmetic is.
+ */
+export const priceXpSchema = z.object({
+  xpId: z.uuid(),
+  once: z.number().int('A price is a whole number of coins').min(0).max(MAX_PRICE),
+  remix: z.number().int('A price is a whole number of coins').min(0).max(MAX_PRICE),
+})
+
+export type PriceXp = {
+  type: 'PriceXp'
+  actorId: string
+  once: number
+  remix: number
+  split?: Record<string, number>
+}
+
 export type ShareXp = { type: 'ShareXp'; actorId: string; account: string; right: XpRight }
 export type UnshareXp = { type: 'UnshareXp'; actorId: string; account: string }
 export type TransferXp = { type: 'TransferXp'; actorId: string; to: string }
@@ -170,6 +206,7 @@ export type XpCommand =
   | RenameXp
   | SaveXpVersion
   | SetXpAccess
+  | PriceXp
   | ShareXp
   | UnshareXp
   | TransferXp

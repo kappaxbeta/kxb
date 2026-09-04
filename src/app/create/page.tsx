@@ -262,8 +262,13 @@ export default async function CreatePage({
   const { look, variant } = await resolveLook(rawLook)
 
   return (
-    <MarketingShell active="create">
-      <div className="bento doc" data-look={look} data-variant={variant ?? undefined}>
+    <MarketingShell>
+      {/* No `active` here any more. The nav lost these three pills upstream — the
+          pages they marked moved into a section this repository does not carry —
+          so the prop narrowed to the one value left. This page is still real and
+          still wears the shell; it simply has nothing in the header to light up,
+          which is the honest state rather than a marker pointing at nothing. */}
+            <div className="bento doc" data-look={look} data-variant={variant ?? undefined}>
         <PageHero
           eyebrow="Create"
           mark="pieces"

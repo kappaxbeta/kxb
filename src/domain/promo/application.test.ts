@@ -182,7 +182,20 @@ describe('refusals', () => {
 describe('the sign-up offers', () => {
   /** A code with only the fields the ordering cares about filled in. */
   function offer(code: string, tier: SignupOffer['tier'], freeDays: number | null): SignupOffer {
-    return { code, label: null, tier, freeDays, spaces: null, closesAt: null, remaining: null }
+    return {
+      code,
+      label: null,
+      tier,
+      freeDays,
+      spaces: null,
+      closesAt: null,
+      remaining: null,
+      // None of the three take part in the ordering, which is what these tests
+      // are about. Zero is also the common case on a real offer.
+      bucks: 0,
+      vouchers: 0,
+      coins: 0,
+    }
   }
 
   test('the prefix is what publishes a code', () => {

@@ -328,10 +328,13 @@ export function SceneStage({
                 />
               )}
               {peep.say !== null && (
+                /* Its own height and its own size, rather than the emote's
+                   height and half the emote's size. See `PeepSpec.sayHeight`
+                   for why a sentence stopped borrowing a face's numbers. */
                 <Say
                   text={peep.say}
-                  position={[peep.x, peep.y + peep.emoteHeight, peep.z]}
-                  size={peep.emoteSize * 0.5}
+                  position={[peep.x, peep.y + peep.sayHeight, peep.z]}
+                  size={peep.saySize}
                 />
               )}
               {peep.emote !== null && (
@@ -340,12 +343,18 @@ export function SceneStage({
                    stands both get it in the same place relative to themselves.
                    It steps up out of the way when they are also talking, because
                    the two share that spot and a face behind a sentence reads as a
-                   rendering bug. */
+                   rendering bug.
+
+                   Stepped by the *sentence's* size rather than by the emote's,
+                   which is the same distance it always was - the bubble used to
+                   be drawn at half the emote's size, so three of those is the
+                   `emoteSize * 1.5` this replaces - and is now the right one:
+                   what the face has to clear is the box under it. */
                 <Emote
                   id={peep.emote}
                   position={[
                     peep.x,
-                    peep.y + peep.emoteHeight + (peep.say === null ? 0 : peep.emoteSize * 1.5),
+                    peep.y + peep.emoteHeight + (peep.say === null ? 0 : peep.saySize * 3),
                     peep.z,
                   ]}
                   size={peep.emoteSize}

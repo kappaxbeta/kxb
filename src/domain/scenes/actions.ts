@@ -271,7 +271,20 @@ export async function updateScene(input: {
     .maybeSingle()
 
   if (error) return { ok: false, error: `Could not save that scene: ${error.message}` }
-  if (!data) return { ok: false, error: 'No such scene' }
+  /*
+    Nothing was updated, and the two reasons for that are indistinguishable from
+    here on purpose - the update policy is a row filter, so "somebody deleted it"
+    and "you may not write it" both arrive as no rows. What is *not* acceptable
+    is answering "No such scene" to somebody who is looking at it: that reads as
+    the studio having lost the document, which is the one thing that has not
+    happened. Both readings, and the way out of either, in one sentence.
+  */
+  if (!data) {
+    return {
+      ok: false,
+      error: 'That scene is gone, or it is not yours to change. Save as a copy to keep this.',
+    }
+  }
 
   if (actor.origin === 'platform') {
     await recordBackofficeAction({

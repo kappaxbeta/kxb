@@ -76,7 +76,54 @@ export interface ThingTuning {
   blocking?: boolean
   /** Overrides `BlueprintSpec.body`. Null is scenery; `{}` is "it falls". */
   body?: BodySpec | null
+  /**
+   * How far this one's shouts carry, in cells. Absent is the whole room.
+   *
+   * ---------------------------------------------------------------------------
+   * Why the wiring is here and not on the blueprint
+   * ---------------------------------------------------------------------------
+   * This block used to be exactly two switches and the note above it said it
+   * was about physics. It is really about the same thing those two are: *this
+   * one's disagreements with its kind*. A blueprint says what a button is - it
+   * shouts `open` when you press it - and it cannot say which door, because the
+   * door is another object in a particular room and the blueprint is a fact
+   * about every button anybody ever summons.
+   *
+   * So a wire is an instance's, like being solid and like falling. The
+   * alternative was a fourth field on `BlueprintSpec`, and it would have made a
+   * button that can only ever be used once: the second one summoned would open
+   * the first one's door.
+   */
+  reach?: number
+  /**
+   * The things this one's shouts go to, by id, and nobody else hears them.
+   *
+   * Empty or absent is the room, which is what a signal has always been and
+   * what every thing summoned before wires existed still means. Ids rather than
+   * words because a wire is two objects somebody pointed at - a room with four
+   * doors on it has four things called "Door", all waiting for `open`, and the
+   * whole reason to run a wire is to say which.
+   *
+   * A wire to something that has since been dismissed is a wire to nothing: it
+   * is left in the list rather than swept up, because the sweeping would be a
+   * write to every wired thing in the room every time anything is cleared away,
+   * and a stale id costs one comparison. See `earshot` in `_sim/thing-life`.
+   */
+  wires?: readonly string[]
 }
+
+/** How far a shout may be told to carry, in cells. */
+export const MIN_THING_REACH = 1
+export const MAX_THING_REACH = 64
+
+/**
+ * How many things one thing may be wired to.
+ *
+ * Eight, which is the room cap a match runs at and is also where a diagram
+ * stops being one somebody can hold in their head. Past this the honest answer
+ * is a word the whole room hears, which is what the default already is.
+ */
+export const MAX_WIRES = 8
 
 export type ThingSummoned = DomainEvent<
   'ThingSummoned',

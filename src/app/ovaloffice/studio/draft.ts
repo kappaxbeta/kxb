@@ -23,10 +23,17 @@
  * Why it is keyed by the URL it continues from
  * ---------------------------------------------------------------------------
  * A parked draft is only ever restored over the *same* document it was parked
- * against: `url` is the encoded doc the address bar carried when the draft was
- * written, and a draft is offered back only when the page opens on that exact
- * address. So a rebuild - which re-renders the same URL - gets the newer draft,
- * and opening a different link gets the link, because you asked for it.
+ * against: `url` is what the address bar identified the document by when the
+ * draft was written, and a draft is offered back only when the page opens on
+ * that exact address. So a rebuild - which re-renders the same URL - gets the
+ * newer draft, and opening a different link gets the link, because you asked
+ * for it.
+ *
+ * "What the address identified it by" rather than "the encoded document",
+ * because the motion studio has two of those: an unsaved shot is its own
+ * encoding, and a saved one is `scene:<id>`, which is what its address says
+ * once there is a row. Either is fine here - this compares strings and has no
+ * opinion about which kind it was handed.
  *
  * `sessionStorage`, not `localStorage`. This is a scratch copy of one tab's
  * unsaved minute, not a document: two tabs on two shots must not share it, and

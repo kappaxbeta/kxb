@@ -12,6 +12,7 @@ import {
   type Alive,
   type Body,
   type Life,
+  type Signal,
 } from '@/app/world/lounge/_sim/thing-life'
 
 const here = { x: 0, y: 0, z: 0 }
@@ -21,7 +22,7 @@ const far = { x: 40, y: 0, z: 0 }
 function room(things: Alive[], lives = new Map<string, Life>()) {
   return {
     lives,
-    frame(dt: number, claims: Claim[] = [], bodies: Body[] = [], said: string[] = []) {
+    frame(dt: number, claims: Claim[] = [], bodies: Body[] = [], said: Signal[] = []) {
       return stepRoom(things, lives, bodies, claims, dt, said)
     },
   }
@@ -50,7 +51,7 @@ describe('a crate you can break', () => {
     expect(barOver(crate, world.lives.get('crate'))).toEqual({ kind: 'health', at: 0.7 })
 
     const broke = world.frame(0.016, [{ i: 'crate', hit: 70 }])
-    expect(broke.broke).toEqual(['crate'])
+    expect(broke.broke.map((one) => one.id)).toEqual(['crate'])
     expect(world.lives.get('crate')?.standing?.state).toBe('gone')
     expect(stateOf(crate, world.lives.get('crate'))?.hidden).toBe(true)
   })
@@ -79,7 +80,7 @@ describe('a crate you can break', () => {
     ])
     // One break. Three would shout the signal three times, and in a kitchen
     // would cook three burgers.
-    expect(broke.broke).toEqual(['crate'])
+    expect(broke.broke.map((one) => one.id)).toEqual(['crate'])
     expect(world.frame(0.016, [{ i: 'crate', hit: 20 }]).broke).toEqual([])
   })
 })
@@ -138,7 +139,7 @@ describe('a cutting board that makes a burger', () => {
     ])
     const put = world.frame(0.016, [{ i: 'board', put: ['a', 'bun'] }])
     expect(world.lives.get('board')?.slots.get('a')).toBe('bun')
-    expect(put.said).toContain('clunk')
+    expect(put.said.map((one) => one.word)).toContain('clunk')
   })
 
   test('refuses what a picky slot will not take', () => {
@@ -172,7 +173,7 @@ describe('a cutting board that makes a burger', () => {
 
     const done = world.frame(1.1)
     expect(done.made).toEqual([{ id: 'board', socket: 'a', item: 'burger' }])
-    expect(done.said).toContain('made')
+    expect(done.said.map((one) => one.word)).toContain('made')
     // The output replaces the inputs.
     expect(world.lives.get('board')?.slots.size).toBe(0)
   })
@@ -263,7 +264,7 @@ describe('a pan on a pedestal that cooks what is on it', () => {
     expect(barOver(pan, world.lives.get('pan'))).toEqual({ kind: 'fill', at: 0.5 })
 
     const done = world.frame(2.6)
-    expect(done.said).toContain('ding')
+    expect(done.said.map((one) => one.word)).toContain('ding')
     expect(world.lives.get('pan')?.standing?.state).toBe('done')
     expect(barOver(pan, world.lives.get('pan'))).toBeNull()
   })
@@ -304,13 +305,90 @@ describe('a word travels across the room', () => {
 
     const world = room([cooker, bell])
     const shouted = world.frame(0.016, [{ i: 'cooker', used: true }])
-    expect(shouted.said).toContain('ding')
+    expect(shouted.said.map((one) => one.word)).toContain('ding')
     // Heard on the *next* frame, which is the one-frame delay the room pays so
     // that nothing ever reacts to a word before its speaker has changed.
     expect(world.lives.get('bell')?.standing?.state).toBe('quiet')
 
     world.frame(0.016, [], [], shouted.said)
     expect(world.lives.get('bell')?.standing?.state).toBe('ringing')
+  })
+
+  /**
+   * The two narrowings, and the case they exist for.
+   *
+   * A room with four doors in it has four things waiting for `open`, and until
+   * a shout could be limited the only honest button was one that opened all of
+   * them. `reach` is the answer for a room laid out in space - the doorbell you
+   * have to be standing at - and a wire is the answer for one that is not: the
+   * switch by the stairs and the light on the landing are nowhere near each
+   * other and are still the pair somebody means.
+   */
+  describe('and how far it goes', () => {
+    const shout = (from: string, word = 'open'): Signal[] => [{ word, from }]
+
+    /** A thing that waits for `open` and stands wherever it is put. */
+    const listener = (id: string, at: { x: number; y: number; z: number }): Alive => ({
+      id,
+      at,
+      states: {
+        start: 'shut',
+        states: [
+          { name: 'shut', changes: [{ when: 'signal', to: 'open', value: 'open' }] },
+          { name: 'open', changes: [] },
+        ],
+      },
+    })
+
+    test('the whole room, when nobody said otherwise', () => {
+      const button: Alive = { id: 'button', at: here }
+      const world = room([button, listener('near', { x: 2, y: 0, z: 0 }), listener('far', far)])
+
+      world.frame(0.016, [], [], shout('button'))
+      expect(world.lives.get('near')?.standing?.state).toBe('open')
+      expect(world.lives.get('far')?.standing?.state).toBe('open')
+    })
+
+    test('only as far as its reach', () => {
+      const button: Alive = { id: 'button', at: here, reach: 5 }
+      const world = room([button, listener('near', { x: 2, y: 0, z: 0 }), listener('far', far)])
+
+      world.frame(0.016, [], [], shout('button'))
+      expect(world.lives.get('near')?.standing?.state).toBe('open')
+      expect(world.lives.get('far')?.standing?.state).toBe('shut')
+    })
+
+    test('measured in three dimensions, so a balcony is out of earshot', () => {
+      const button: Alive = { id: 'button', at: here, reach: 3 }
+      const world = room([button, listener('upstairs', { x: 0, y: 4, z: 0 })])
+
+      world.frame(0.016, [], [], shout('button'))
+      expect(world.lives.get('upstairs')?.standing?.state).toBe('shut')
+    })
+
+    test('down a wire, and nowhere else, however close the rest are standing', () => {
+      const button: Alive = { id: 'button', at: here, wires: ['far'] }
+      const world = room([button, listener('near', { x: 1, y: 0, z: 0 }), listener('far', far)])
+
+      world.frame(0.016, [], [], shout('button'))
+      expect(world.lives.get('far')?.standing?.state).toBe('open')
+      expect(world.lives.get('near')?.standing?.state).toBe('shut')
+    })
+
+    test('a wire beats a reach, rather than being cut short by one', () => {
+      const button: Alive = { id: 'button', at: here, reach: 2, wires: ['far'] }
+      const world = room([button, listener('far', far)])
+
+      world.frame(0.016, [], [], shout('button'))
+      expect(world.lives.get('far')?.standing?.state).toBe('open')
+    })
+
+    test('a word from something that is no longer there still lands', () => {
+      const world = room([listener('door', far)])
+
+      world.frame(0.016, [], [], shout('a button somebody dismissed'))
+      expect(world.lives.get('door')?.standing?.state).toBe('open')
+    })
   })
 })
 
@@ -352,7 +430,7 @@ describe('a turret', () => {
     expect(world.frame(0.016, [], [{ id: 'p', at: far }]).shots).toEqual([])
   })
 
-  test('one that swings rather than shoots plays its clip instead', () => {
+  test('one that swings rather than shoots plays its clip and still lands', () => {
     const spikes: Alive = {
       id: 'spikes',
       at: here,
@@ -360,7 +438,11 @@ describe('a turret', () => {
     }
     const world = room([spikes])
     const hit = world.frame(0.016, [], [{ id: 'p', at: { x: 1, y: 0, z: 0 } }])
-    expect(hit.shots).toEqual([])
+    // On the same list a bullet goes on, and addressed to the same person: a
+    // spike plate catches whoever is standing on it, and what tells the two
+    // apart is whether the weapon has anything to fire. See the note in
+    // `stepRoom`.
+    expect(hit.shots).toEqual([{ from: 'spikes', at: here, toward: 'p' }])
     expect(hit.play).toEqual([{ id: 'spikes', clip: 'attack' }])
   })
 
@@ -400,6 +482,51 @@ describe('the burger starter, end to end', () => {
 
     const made = world.frame(0.016, [{ i: 'board', put: ['low', 'salad'] }])
     expect(made.made).toEqual([{ id: 'board', socket: 'top', item: 'burger' }])
-    expect(made.said).toContain('made')
+    expect(made.said.map((one) => one.word)).toContain('made')
+  })
+})
+
+describe('a thing that moves', () => {
+  /** Straight up four cells over a second, straight back down over a second. */
+  const lift = { by: { x: 0, y: 4, z: 0 }, out: 1, back: 1 }
+
+  test('carries its own clock, and wraps', () => {
+    const platform: Alive = { id: 'lift', at: here, motion: lift }
+    const world = room([platform])
+
+    world.frame(0.5)
+    expect(world.lives.get('lift')?.phase).toBeCloseTo(0.5, 5)
+
+    // Two seconds is the whole trip, so the phase comes back round rather than
+    // growing forever - see `Life.phase`.
+    world.frame(1.6)
+    expect(world.lives.get('lift')?.phase).toBeCloseTo(0.1, 5)
+  })
+
+  test('and its weapon reaches from where it has got to, not from where it was put', () => {
+    /*
+      A crusher three cells up, dropping onto somebody standing at the bottom.
+      Its reach is two cells, so at the top it cannot touch them and at the
+      bottom it can - which is the whole of what "it fell on you" means here.
+    */
+    const crusher: Alive = {
+      id: 'crusher',
+      at: here,
+      motion: { by: { x: 0, y: 3, z: 0 }, out: 1, back: 1 },
+      fight: { weapon: { damage: 20, reach: 2, every: 5, at: 'people' } },
+    }
+    const standing = [{ id: 'p', at: { x: 0, y: 0, z: 0 } }]
+
+    // Most of the way up: out of reach, and nothing is aimed at anybody.
+    const up = room([crusher])
+    up.frame(0.9, [], standing)
+    expect(up.frame(0.05, [], standing).shots).toEqual([])
+
+    // Back at the bottom: caught. One step rather than two, because the
+    // weapon's own cooldown means the frame that fires is the first one that
+    // finds somebody in reach - a second call would be judged against five
+    // seconds of reloading.
+    const down = room([crusher])
+    expect(down.frame(1.9, [], standing).shots).toHaveLength(1)
   })
 })

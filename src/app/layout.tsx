@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { AnalyticsBeacon } from './components/analytics-beacon'
 import { CtaTracker } from './components/cta-tracker'
-import { CornerMusic } from './components/audio/corner-music'
 import pixelMillennium from './components/fonts/pixel'
 import { ContactWidget } from './components/contact-widget'
 import { ConnectionFavicon } from './components/connection-favicon'
@@ -14,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
-const TITLE = 'kxb.team - Game jam, hackathon, conference, class, community night, team space'
+const TITLE = 'Kappa - KXB.TEAM VIRTUAL ARCADE SPACE'
 const DESCRIPTION =
   'Invite your friends or colleagues to play or hangout together in a virtual team space.'
 
@@ -23,21 +22,34 @@ const DESCRIPTION =
  *
  * Every route inherits this, and the ones with something better to say override
  * their own half of it - see `/g/[token]`, which names the space it is an
- * invitation to. What no route should have to restate is the picture, which is
- * why it lives up here: a shared link with no `og:image` renders as a grey box
- * in X, Slack, WhatsApp, Discord and iMessage alike, and that box is the first
- * thing most people will ever see of this.
+ * invitation to.
  *
- * `metadataBase` is what makes `/og.png` legal. Open Graph requires an absolute
- * URL, and without a base Next resolves the relative one against `localhost` in
+ * The picture is *not* here any more, and its absence is the point. It used to
+ * be one flat `/og.png` for the whole site, which meant a story chapter, the
+ * front page and somebody's invitation into a match all arrived in a chat
+ * looking identical and saying nothing. It is now `app/opengraph-image.tsx`
+ * and four overrides beside it - see `src/app/og/` - and a picture stated
+ * here would silently beat every one of them, because an explicit
+ * `openGraph.images` wins over the file convention. So there is no `images`
+ * key in this file, deliberately, and adding one back turns all five cards off
+ * at once.
+ *
+ * The title is not the headline either. `/` and `/de` set their own, and this
+ * is what everything else wears: the product, said the way somebody would say
+ * it out loud.
+ *
+ * `metadataBase` is what makes a relative image URL legal. Open Graph requires
+ * an absolute one, and without a base Next resolves it against `localhost` in
  * development and drops it in production - so the tag is either wrong or
- * missing, and neither fails a build. The origin comes from the same variable
- * Stripe's return URLs are built from, so there is one answer to "where does
- * this site live" rather than two that can disagree.
+ * missing, and neither fails a build. The generated cards need it as much as a
+ * file in `public` did. The origin comes from the same variable Stripe's
+ * return URLs are built from, so there is one answer to "where does this site
+ * live" rather than two that can disagree.
  *
  * The card is `summary_large_image`: the default `summary` crops the picture to
- * a small square beside the text, and the entire argument this product makes in
- * a feed is a wide shot of three animals looking at you.
+ * a small square beside the text, and these cards are a wide composition with
+ * a sentence down the left of them. X has no `twitter:image` to read here, on
+ * purpose - it falls back to `og:image`, which is the generated one.
  */
 export const metadata: Metadata = {
   metadataBase: new URL(env.appUrl()),
@@ -50,29 +62,18 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     url: '/',
     locale: 'en',
-    images: [
-      {
-        url: '/og.png',
-        width: 1200,
-        height: 630,
-        // Read aloud by screen readers and by the people whose images are off,
-        // so it describes the picture rather than repeating the title.
-        alt: 'Three voxel animals standing together in a small green room, each with a smiling emote over their head.',
-      },
-    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
-    images: ['/og.png'],
   },
   /**
    * What happens when somebody keeps the site.
    *
    * `title` is the label under the home screen tile. Without it Safari falls
-   * back to the `<title>` above, which is a comma-separated list of six event
-   * types and arrives on the home screen as "kxb.team - Game...".
+   * back to the `<title>` above, which names the product and what it is and
+   * arrives on the home screen truncated to "Kappa - KXB...".
    *
    * `capable` drops the browser chrome on launch, the same thing
    * `display: standalone` in `manifest.ts` asks Android for. It is a real
@@ -138,18 +139,22 @@ export default function RootLayout({
         */}
         <TelegramShell />
         {/*
-          Every page in the app, which is the point of them living here.
+          Every page in the app, which is the point of it living here.
 
-          The music toggle is beside the contact launcher rather than in the
-          lounge HUD where it started: the loop plays everywhere inside a
-          workspace, so the way to stop it has to be everywhere too. Turning it
-          off should never require walking back to a particular room first.
+          The music toggle used to sit beside the contact launcher, on the
+          argument that the loop plays everywhere inside a workspace so the way
+          to stop it has to be everywhere too. That argument was answered rather
+          than abandoned: the switch is in the rail now, beside the radio and
+          the party lights, which is in every room - and a room is where anybody
+          listening to the loop actually is. What the corner copy was left doing
+          was standing on the bottom-right of every page in the product,
+          including pages whose own last row is a link, to offer a control for a
+          loop that had not started.
 
-          Ordered so the wider, wordier launcher sits outermost against the
-          screen edge and the icon tucks inside it.
+          `MusicButton` itself is untouched and is the same one control; only
+          the second place it was mounted is gone. See `rail-tabs.tsx`.
         */}
         <div className="corner-dock">
-          <CornerMusic />
           <ContactWidget />
         </div>
         <CookieBanner />

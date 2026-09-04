@@ -107,6 +107,10 @@ export interface PromoCodeView extends PromoCodeRecord {
   spaces: number | null
   /** Which plan the free month is of. */
   tier: Tier
+  /** Bucks into the pocket, bearer codes to pass on, coins into the wallet. */
+  bucks: number
+  vouchers: number
+  coins: number
   createdAt: string
   /** Live under the same rules `redeem_promo_code` applies. */
   live: boolean
@@ -128,7 +132,7 @@ export async function listPromoCodes(admin: Client): Promise<PromoCodeView[]> {
   const { data: codes, error } = await admin
     .from('promo_codes')
     .select(
-      'id, code, label, campaign, free_days, spaces, tier, max_uses, uses, starts_at, expires_at, revoked_at, created_at',
+      'id, code, label, campaign, free_days, spaces, tier, bucks, vouchers, coins, max_uses, uses, starts_at, expires_at, revoked_at, created_at',
     )
     .order('created_at', { ascending: false })
 
@@ -174,6 +178,9 @@ export async function listPromoCodes(admin: Client): Promise<PromoCodeView[]> {
       freeDays: row.free_days,
       spaces: row.spaces,
       tier: asTier(row.tier) ?? DEFAULT_TIER,
+      bucks: row.bucks ?? 0,
+      vouchers: row.vouchers ?? 0,
+      coins: row.coins ?? 0,
       createdAt: row.created_at,
       live: codeIsLive(record),
       bySource: tally?.bySource ?? { signup: 0, link: 0, picker: 0, space: 0, grant: 0 },

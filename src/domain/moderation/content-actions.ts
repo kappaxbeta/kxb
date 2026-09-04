@@ -9,6 +9,7 @@ import {
   MAX_REPORT_TITLE,
   MIN_REPORT_REASON,
   REPORT_KINDS,
+  type ReportKind,
   tableFor,
 } from '@/domain/moderation/content'
 import { requireBackofficeSection } from '@/lib/backoffice'
@@ -71,13 +72,9 @@ export async function reportContent(
 
   // Readable means reportable. See the note above about why this runs as the
   // caller rather than as the service role.
-  const { data: found } = await supabase
-    .from(tableFor(kind))
-    .select('id')
-    .eq('id', targetId)
-    .maybeSingle()
-
-  if (!found) return { ok: false, error: 'That is not something you can report' }
+  if (!(await exists(supabase, kind, targetId))) {
+    return { ok: false, error: 'That is not something you can report' }
+  }
 
   const { error } = await supabase.from('content_reports').insert({
     kind,
@@ -211,4 +208,36 @@ export async function dismissContentReport(reportId: string): Promise<ContentRes
 
   revalidatePath('/ovaloffice/reports')
   return { ok: true }
+}
+
+/**
+ * Is there such a thing, and may this reader see it?
+ *
+ * Readable means reportable - see the note above about why this runs as the
+ * caller rather than as the service role.
+ *
+ * The branch is here because four of the five tables key on `id` and
+ * `channel_releases_read_model` keys on `episode_id`: a release is one row per
+ * episode, and giving it a second identity purely so this lookup could stay
+ * one line would be inventing a column to serve a query. The query takes the
+ * extra line instead.
+ */
+async function exists(
+  supabase: Awaited<ReturnType<typeof requireTenant>>['supabase'],
+  kind: ReportKind,
+  targetId: string,
+): Promise<boolean> {
+  const table = tableFor(kind)
+
+  if (table === 'channel_releases_read_model') {
+    const { data } = await supabase
+      .from(table)
+      .select('episode_id')
+      .eq('episode_id', targetId)
+      .maybeSingle()
+    return Boolean(data)
+  }
+
+  const { data } = await supabase.from(table).select('id').eq('id', targetId).maybeSingle()
+  return Boolean(data)
 }

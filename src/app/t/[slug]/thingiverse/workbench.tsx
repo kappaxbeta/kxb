@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { PackPreviewGrid } from '@/app/components/pack-preview'
 import { ModelBrowser } from '@/app/t/[slug]/thingiverse/model-browser'
 import { fill } from '@/app/i18n/fill'
 import type { WorkspaceDict } from '@/app/i18n/workspace'
@@ -8,6 +9,7 @@ import {
   searchModels,
   type ModelPack,
 } from '@/domain/thingiverse/models'
+import { packPreviews, splitPreviews } from '@/domain/thingiverse/pack-preview'
 import type { BlueprintView } from '@/domain/thingiverse/queries'
 
 /**
@@ -30,6 +32,19 @@ import type { BlueprintView } from '@/domain/thingiverse/queries'
  * room have in it? So the packs come with their sizes, their authors and their
  * licence, and every tile has one button on it - make a blueprint of this -
  * because the honest next step from "what is there" is "have that one".
+ *
+ * ---------------------------------------------------------------------------
+ * And why it opens on the packs rather than on a slice of everything
+ * ---------------------------------------------------------------------------
+ * "What is in the bakery pack" was the question this tab was written to answer
+ * and the one thing it could not: arriving here drew fifty-one chips reading
+ * "Bakerygoods 46" and then the first hundred and twenty models of the *first*
+ * pack, so the answer to a question about any of the other fifty was a click
+ * away and unguessable.
+ *
+ * So an untouched arrival is the packs, with four of each one's own models on
+ * the card - see `@/domain/thingiverse/pack-preview`. Press one, or type
+ * anything, and it is the chips and the grid it has always been.
  *
  * ---------------------------------------------------------------------------
  * How many models it will draw
@@ -69,7 +84,15 @@ export function PacksPanel({
   // to nothing rather than throwing, which is what every other filter on a
   // workspace page does with a stray query string.
   const packId = MODEL_PACKS.some((entry) => entry.id === pack) ? pack : undefined
-  const models = searchModels(q ?? '', packId)
+  /**
+   * Nothing chosen and nothing typed: the arrival the covers are the answer to.
+   *
+   * Read before the search rather than after it, because on this branch there
+   * is no search to run - `searchModels('')` builds every one of the 5,863 hits
+   * to feed a grid that is not drawn.
+   */
+  const landing = packId === undefined && (q ?? '').trim() === ''
+  const models = landing ? [] : searchModels(q ?? '', packId)
   const shown = models.slice(0, PAGE)
 
   const query = (next: Record<string, string | undefined>) => {
@@ -113,6 +136,8 @@ export function PacksPanel({
   const rooms = MODEL_PACKS.filter((entry) => !isXpModel(entry.id))
   const levels = MODEL_PACKS.filter((entry) => isXpModel(entry.id))
 
+  const covers = landing ? splitPreviews(packPreviews()) : null
+
   return (
     <section className="space-y-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -145,83 +170,102 @@ export function PacksPanel({
 
         <p className="text-xs text-ink-muted">{t.searchHint}</p>
 
-        <PackRow label={t.roomPacks} packs={rooms} packId={packId} q={q} t={t} query={query} all />
-        {/*
-          The forty level packs, folded away.
-
-          Eleven rows of chips - more vertical space than the models under them -
-          for a catalogue most people opening this are not after: the world packs
-          are what a *room* is furnished with, and this half is characters,
-          weapons and dungeon walls. Unfolded it is the same list it was.
-
-          `<details>` rather than a `useState`, which would make this file a
-          client component to hold one boolean. The element already does open,
-          shut, keyboard and the disclosure semantics, and this page is
-          server-rendered with no other reason to ship JavaScript.
-
-          Open when the chosen pack is one of these, so a filter that is on is
-          never hidden behind a fold - otherwise narrowing to Dungeon and
-          reloading gives you a grid of dungeon walls over a shut box, with
-          nothing on screen saying why.
-        */}
-        <details open={packId !== undefined && isXpModel(packId)} className="group">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted/70 transition hover:text-ink">
-            <span className="font-mono transition group-open:rotate-90">›</span>
-            {t.levelPacks}
-            <span className="font-mono normal-case tracking-normal">
-              {fill(t.packCount, { n: String(levels.length) })}
-            </span>
-          </summary>
-          <div className="pt-2">
-            <PackRow
-              label={t.levelPacks}
-              packs={levels}
-              packId={packId}
-              q={q}
-              t={t}
-              query={query}
-              headed={false}
+        {covers ? (
+          <>
+            <PackPreviewGrid
+              label={t.roomPacks}
+              previews={covers.rooms}
+              hrefOf={(id) => query({ pack: id })}
+              sizeLabelOf={(size) => fill(t.packSize, { n: String(size) })}
             />
-          </div>
-        </details>
-
-        {/*
-          What you are actually looking at, said in numbers.
-
-          The grid is capped at `PAGE` and used to end in a bare "4342 models …"
-          built out of the *pack size* string - so the one line telling you the
-          list was cut described the cut as if it were the whole catalogue. Said
-          properly it is two facts: how many are drawn, and how many were found.
-        */}
-        {shown.length > 0 && (
-          <p className="text-xs text-ink-muted">
-            {fill(t.showing, { shown: String(shown.length), total: String(models.length) })}
-          </p>
-        )}
-
-        {shown.length === 0 ? (
-          /*
-            A word that matches nothing.
-
-            Worth its own line: without it a search with no hits drew a heading,
-            a row of chips and then whitespace, which looks like a grid that
-            failed to load rather than a search that found nothing.
-          */
-          <p className="rounded-xl border border-line/60 bg-surface px-4 py-6 text-sm text-ink-muted">
-            {fill(t.noModels, { q: (q ?? '').trim() })}
-          </p>
+            <PackPreviewGrid
+              label={t.levelPacks}
+              previews={covers.levels}
+              hrefOf={(id) => query({ pack: id })}
+              sizeLabelOf={(size) => fill(t.packSize, { n: String(size) })}
+            />
+          </>
         ) : (
-          /*
-            The grid and its podium, handed over to the client.
+          <>
+            <PackRow label={t.roomPacks} packs={rooms} packId={packId} q={q} t={t} query={query} all />
+            {/*
+              The forty level packs, folded away.
 
-            Only the hits cross the boundary - an id, a label and a pack - and
-            the pack *labels* go with them as a small map rather than the client
-            resolving each one, because resolving means importing `MODEL_PACKS`
-            and that is fifty-one entries nobody needs in a bundle to print
-            eleven words. See `ModelBrowser` for why there is one canvas rather
-            than one per tile.
-          */
-          <ModelBrowser hits={shown} packOf={packOf} cut={[...cut]} t={t.browser} />
+              Eleven rows of chips - more vertical space than the models under them -
+              for a catalogue most people opening this are not after: the world packs
+              are what a *room* is furnished with, and this half is characters,
+              weapons and dungeon walls. Unfolded it is the same list it was.
+
+              `<details>` rather than a `useState`, which would make this file a
+              client component to hold one boolean. The element already does open,
+              shut, keyboard and the disclosure semantics, and this page is
+              server-rendered with no other reason to ship JavaScript.
+
+              Open when the chosen pack is one of these, so a filter that is on is
+              never hidden behind a fold - otherwise narrowing to Dungeon and
+              reloading gives you a grid of dungeon walls over a shut box, with
+              nothing on screen saying why.
+            */}
+            <details open={packId !== undefined && isXpModel(packId)} className="group">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted/70 transition hover:text-ink">
+                <span className="font-mono transition group-open:rotate-90">›</span>
+                {t.levelPacks}
+                <span className="font-mono normal-case tracking-normal">
+                  {fill(t.packCount, { n: String(levels.length) })}
+                </span>
+              </summary>
+              <div className="pt-2">
+                <PackRow
+                  label={t.levelPacks}
+                  packs={levels}
+                  packId={packId}
+                  q={q}
+                  t={t}
+                  query={query}
+                  headed={false}
+                />
+              </div>
+            </details>
+
+            {/*
+              What you are actually looking at, said in numbers.
+
+              The grid is capped at `PAGE` and used to end in a bare "4342 models …"
+              built out of the *pack size* string - so the one line telling you the
+              list was cut described the cut as if it were the whole catalogue. Said
+              properly it is two facts: how many are drawn, and how many were found.
+            */}
+            {shown.length > 0 && (
+              <p className="text-xs text-ink-muted">
+                {fill(t.showing, { shown: String(shown.length), total: String(models.length) })}
+              </p>
+            )}
+
+            {shown.length === 0 ? (
+              /*
+                A word that matches nothing.
+
+                Worth its own line: without it a search with no hits drew a heading,
+                a row of chips and then whitespace, which looks like a grid that
+                failed to load rather than a search that found nothing.
+              */
+              <p className="rounded-xl border border-line/60 bg-surface px-4 py-6 text-sm text-ink-muted">
+                {fill(t.noModels, { q: (q ?? '').trim() })}
+              </p>
+            ) : (
+              /*
+                The grid and its podium, handed over to the client.
+
+                Only the hits cross the boundary - an id, a label and a pack - and
+                the pack *labels* go with them as a small map rather than the client
+                resolving each one, because resolving means importing `MODEL_PACKS`
+                and that is fifty-one entries nobody needs in a bundle to print
+                eleven words. See `ModelBrowser` for why there is one canvas rather
+                than one per tile.
+              */
+              <ModelBrowser hits={shown} packOf={packOf} cut={[...cut]} t={t.browser} />
+            )}
+          </>
         )}
 
         {/*

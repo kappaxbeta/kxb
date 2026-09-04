@@ -179,8 +179,14 @@ export const ANIMATABLE: Record<NodeKind, readonly Animatable[]> = {
     { property: 'rotation', label: 'Facing', min: -360, max: 360, step: 1, unit: '°' },
     { property: 'tilt', label: 'Lean', min: -80, max: 80, step: 1, unit: '°' },
     { property: 'scale', label: 'Size', min: 0.2, max: 4, step: 0.05 },
-    { property: 'emoteHeight', label: 'Bubble up', min: 0, max: 12, step: 0.05 },
-    { property: 'emoteSize', label: 'Bubble size', min: 0.2, max: 3, step: 0.05 },
+    // Two bubbles, four properties. The labels say which one each pair moves,
+    // because "Bubble" meant the face and, at half its size and with no numbers
+    // of its own, the sentence as well - see `PeepSpec.sayHeight`. The bounds
+    // are the still parser's, as everywhere else in this table.
+    { property: 'emoteHeight', label: 'Face up', min: 0, max: 12, step: 0.05 },
+    { property: 'emoteSize', label: 'Face size', min: 0.2, max: 3, step: 0.05 },
+    { property: 'sayHeight', label: 'Speech up', min: 0, max: 12, step: 0.05 },
+    { property: 'saySize', label: 'Speech size', min: 0.1, max: 3, step: 0.05 },
   ],
   block: [
     { property: 'x', label: 'X', min: -40, max: 40, step: 0.1 },

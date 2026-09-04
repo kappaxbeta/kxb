@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { RANGES, type Range, rangeLabel } from '@/domain/analytics/queries'
 
 /**
- * The header both analytics surfaces share: which view, and how far back.
+ * The header the analytics surfaces share: which view, and how far back.
  *
  * The window is a URL parameter rather than client state, for the reason the
  * traffic page already gave - "last 90 days" should be a link you can send
@@ -16,7 +16,7 @@ export function AnalyticsNav({
   blurb,
   showRange = true,
 }: {
-  view: 'traffic' | 'pages' | 'people'
+  view: 'traffic' | 'pages' | 'ctas' | 'people'
   range: Range
   title: string
   /** Omitted where the range does not apply - the frequency table is fixed. */
@@ -26,6 +26,7 @@ export function AnalyticsNav({
   const views = [
     { key: 'traffic', href: '/ovaloffice/analytics', label: 'Traffic' },
     { key: 'pages', href: '/ovaloffice/analytics/pages', label: 'Pages' },
+    { key: 'ctas', href: '/ovaloffice/analytics/ctas', label: 'CTAs' },
     { key: 'people', href: '/ovaloffice/analytics/people', label: 'People' },
   ] as const
 

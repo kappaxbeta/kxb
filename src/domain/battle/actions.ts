@@ -12,6 +12,7 @@ import {
   setReadySchema,
 } from '@/domain/battle/commands'
 import type {
+  BattleEvent,
   BattleMode,
   FootballSettings,
   RaceSettings,
@@ -22,6 +23,7 @@ import type {
 import { fightable, matchRulesProblems } from '@/domain/battle/xp-rules'
 import { readShelf } from '@/domain/magazine/shelf'
 import { battlesProjection } from '@/domain/battle/projection'
+import { settleBattle } from '@/domain/battle/wages'
 import {
   countRunningBattles,
   findBattle,
@@ -36,6 +38,7 @@ import { executeCommand } from '@/es/command'
 import { ConcurrencyError, DomainError } from '@/es/errors'
 import { runProjection } from '@/es/projection'
 import type { Client } from '@/es/store'
+import type { StoredEvent } from '@/es/types'
 import {
   battleOpen,
   hasRole,
@@ -119,8 +122,24 @@ async function run(
   command: BattleCommand,
   slug: string,
 ): Promise<BattleResult> {
+  /**
+   * The events this command actually produced, kept rather than discarded.
+   *
+   * `settleBattle` needs them. Most of what it pays can be worked out from the
+   * projection - a match that has kicked off, a match that has ended - but a
+   * *defeat* cannot: `battle_participants.defeated` is true after the first one
+   * and stays true, so a settlement reading it would fine the same player again
+   * on the next command.
+   *
+   * The append is the exact signal. The decider emits `PlayerDefeated` only for
+   * somebody who was not already down, and optimistic concurrency means exactly
+   * one caller wins the append - so the run that sees the event is the only run
+   * that will ever see it.
+   */
+  let appended: StoredEvent<BattleEvent>[]
+
   try {
-    await executeCommand({
+    appended = await executeCommand({
       supabase,
       decider: battleDecider,
       tenantId: hostTenantId,
@@ -134,6 +153,11 @@ async function run(
 
   await runProjection(supabase, battlesProjection, hostTenantId)
   await creditWorld(supabase, battleId)
+  // The coins this command made due - a defeat from what was just written, the
+  // door and the purse from what the projection now says. Here for exactly
+  // `creditWorld`'s reason: "did that end it" is a question about the match,
+  // not about which button was pressed.
+  await settleBattle(supabase, hostTenantId, battleId, appended)
   revalidatePath(`/t/${slug}/battle`)
   return { ok: true, battleId }
 }
@@ -454,46 +478,33 @@ export async function joinBattle(
   const { supabase, tenant, user } = context
 
   /**
-   * How many matches this space may have running at once.
+   * The match cap is deliberately **not** asked here, and that is a fix.
    *
-   * Swept first, and that ordering is the whole of why this is not two lines.
-   * A match nobody is in still counts as running until something closes it, so
-   * a space that hit its cap on Friday would be unable to start anything on
-   * Monday - refused by matches with no players, with nothing on the screen
-   * explaining it. `closeStaleBattles` is what the rail already runs for the
-   * same reason; running it here means the cap counts matches rather than
-   * ghosts.
+   * It used to be: this counted the running matches in the *joiner's* space and
+   * refused above the plan's ceiling, the same check `createBattle` makes. The
+   * check is right there and wrong here, for two reasons that both end with
+   * somebody unable to get into a room their friends are standing in.
    *
-   * The sweep's own failure is not this action's problem: it is a tidy-up, and
-   * a space that cannot start a match because the sweep was slow is a worse
-   * outcome than one that counts a stale match for another minute. So it is
-   * allowed to fail and the count goes ahead regardless.
+   *   * Joining costs nothing. The cap is how many matches a space may *have*
+   *     running; walking into one that already exists does not make a second.
+   *   * Worse, the match you are joining is counted against you. A battle row
+   *     belongs to the space that hosts it, so on a space sitting at its cap -
+   *     five on free, and five open matches is an ordinary afternoon on an
+   *     alpha space where people summon one and wander off - `running` already
+   *     included every match on the page, and *nobody could join any of them*.
+   *     The sentence they got was "this space already has 5 matches running.
+   *     Finish one, or upgrade for more", offered to somebody who was trying to
+   *     do exactly that.
+   *
+   * Cross-space is the same mistake in the other direction: joining a match
+   * hosted somewhere else was refused by a count of matches in your own space,
+   * which has nothing to do with the room you were being let into.
+   *
+   * The ceiling still holds where it means something - `createBattle` and
+   * `startRematch`, which are the two calls that bring a match into existence.
+   * The sweep goes with the count: `closeStaleBattles` was run here only so the
+   * number was not counting ghosts, and the rail runs it anyway.
    */
-  try {
-    await closeStaleBattles(supabase, tenant.id)
-  } catch {
-    // Deliberately ignored - see above.
-  }
-
-  const running = await countRunningBattles(supabase, tenant.id)
-  const { allowed, limit } = await hasRoomFor(
-    supabase,
-    tenant.id,
-    tenant.tier,
-    'matches',
-    running,
-  )
-
-  if (!allowed) {
-    return {
-      ok: false,
-      error:
-        limit === 0
-          ? 'This plan does not include matches.'
-          : `This space already has ${limit} matches running. Finish one, or upgrade for more.`,
-    }
-  }
-
   const host = await battleTenant(supabase, parsed.data.battleId)
   if (!host) return { ok: false, error: 'Battle not found' }
 

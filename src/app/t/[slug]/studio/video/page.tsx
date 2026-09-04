@@ -31,8 +31,10 @@ export const dynamic = 'force-dynamic'
  * own.
  *
  * `?scene=` opens a saved row as itself, so saving writes over it; `?v=` opens
- * a document straight out of a link. Both still end up as a link the moment
- * anything is edited, because the editor rewrites the address on every change.
+ * a document straight out of a link. A `?v=` document that gets saved becomes a
+ * `?scene=` one at that moment and stays there - the editor only carries the
+ * document in the address while there is no row to name instead. See the note
+ * on `onSaved` in the shot editor for what that was costing.
  */
 export default async function SpaceVideoStudioPage({
   params,

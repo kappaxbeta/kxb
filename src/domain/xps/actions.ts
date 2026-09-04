@@ -14,6 +14,7 @@ import {
   rollBackXpSchema,
   setXpAccessSchema,
   shareXpSchema,
+  priceXpSchema,
   submitXpSchema,
   type XpCommand,
 } from '@/domain/xps/commands'
@@ -21,6 +22,9 @@ import { readGrant } from '@/domain/xps/grants'
 import { listMembers } from '@/domain/tenants/queries'
 import { coverFor } from '@/domain/xps/manifest'
 import { moveProject } from '@/domain/xps/move'
+import type { XpSpacePolicy } from '@/domain/xps/events'
+import { chargeSubmission } from '@/domain/xps/dues'
+import { payForRemix, remixPriceOf } from '@/domain/xps/royalties'
 import { xpsProjection } from '@/domain/xps/projection'
 import { loadPlayableXp } from '@/domain/xps/playable'
 import { findXpProject, listSpaceXps, readXpVersion, type XpProjectRow } from '@/domain/xps/queries'
@@ -30,6 +34,8 @@ import { ConcurrencyError, DomainError } from '@/es/errors'
 import { runProjection } from '@/es/projection'
 import { canWrite, requireTenant, type TenantContext } from '@/lib/tenant'
 import { hasRoomFor } from '@/domain/billing/quota'
+import type { FlaggedLimitKey } from '@/domain/billing/limits'
+import { tierLimit } from '@/domain/billing/tiers'
 
 /**
  * A project's lifecycle, from a form.
@@ -49,7 +55,16 @@ import { hasRoomFor } from '@/domain/billing/quota'
  * others do not - `commands.ts` says which is which.
  */
 
-export type XpActionResult = { ok: true } | { ok: false; error: string }
+export type XpActionResult =
+  /**
+   * `events` is what the command actually appended, by type.
+   *
+   * Empty is a real and ordinary answer: several arms of this decider no-op on
+   * a legitimate repeat, and `ok` alone cannot tell that from a change. Only
+   * callers that must act exactly once - the ones that move coins - read it.
+   */
+  | { ok: true; events?: readonly string[] }
+  | { ok: false; error: string }
 
 function toResult(error: unknown): XpActionResult {
   if (error instanceof DomainError) return { ok: false, error: error.message }
@@ -118,7 +133,7 @@ async function run(
   command: XpCommand,
 ): Promise<XpActionResult> {
   try {
-    await executeCommand({
+    const appended = await executeCommand({
       supabase: context.supabase,
       decider: xpDecider,
       tenantId: context.tenant.id,
@@ -126,7 +141,15 @@ async function run(
       command,
     })
     await runProjection(context.supabase, xpsProjection, context.tenant.id)
-    return { ok: true }
+    /*
+      The events are handed back because "the command succeeded" and "the
+      command did anything" are not the same answer here, and one caller needs
+      the difference. Several arms of this decider return `[]` for a legitimate
+      repeat - submitting something already submitted, sharing with somebody who
+      already has the grant - and a caller that charged money on `ok` alone
+      would charge for the repeat too. See `submitXp`.
+    */
+    return { ok: true, events: appended.map((event) => event.type) }
   } catch (error) {
     return toResult(error)
   }
@@ -162,11 +185,61 @@ async function run(
  *
  * Fails open on a broken count, like everything else that guards a cap.
  */
-async function projectsFull(context: TenantContext): Promise<string | null> {
+/**
+ * What a new project is visible to on this tier, and which cap it counts
+ * against.
+ *
+ * ---------------------------------------------------------------------------
+ * The conflict this resolves
+ * ---------------------------------------------------------------------------
+ * A project is private until its owner says otherwise - `XpCreated` sets no
+ * policy and `none` is the default, which is the safe direction and has been
+ * since the aggregate was written. Free holds **zero** private projects.
+ * Together those two facts say a free space may never create anything at all,
+ * which is not a plan, it is a broken one.
+ *
+ * It is not a mistake in either half. Free holding no private projects is the
+ * tier's whole story - *free is public by default, and paying is what buys
+ * privacy* - and defaulting to private is right everywhere that privacy is on
+ * offer. What was missing is the sentence connecting them, which is this:
+ *
+ *   **On a tier that holds no private projects, a new one is team-visible.**
+ *
+ * So a free space keeps working exactly as it did, its wall stays where it
+ * always was (one project), and "zero private" means what it says - you cannot
+ * *hide* one here - rather than "you cannot make one".
+ */
+function openingVisibility(tier: TenantContext['tenant']['tier']): {
+  policy: XpSpacePolicy
+  key: FlaggedLimitKey
+  /** The `space_policy` values a row must have to count against `key`. */
+  counts: readonly string[]
+} {
+  return tierLimit(tier, 'privateXps') === 0
+    ? { policy: 'view', key: 'projects', counts: ['view', 'edit'] }
+    : { policy: 'none', key: 'privateXps', counts: ['none'] }
+}
+
+/**
+ * Is there room for one more project of this visibility?
+ *
+ * Counts only rows of the *same* kind, which is the whole point of the split:
+ * a space that has published ten levels has not used up its private drafts, and
+ * a plan that said otherwise would be selling three numbers and enforcing one.
+ *
+ * `null` on a failed count, which lifts the cap - the direction `quota.ts`
+ * argues for at length. A lookup that broke must not be the thing that stops
+ * somebody making a level.
+ */
+async function visibilityFull(
+  context: TenantContext,
+  kind: { key: FlaggedLimitKey; counts: readonly string[] },
+): Promise<string | null> {
   const { count, error } = await context.supabase
     .from('xps_read_model')
     .select('id', { count: 'exact', head: true })
     .eq('tenant_id', context.tenant.id)
+    .in('space_policy', [...kind.counts])
     .not('state', 'in', '("archived","removed")')
 
   if (error) return null
@@ -175,7 +248,7 @@ async function projectsFull(context: TenantContext): Promise<string | null> {
     context.supabase,
     context.tenant.id,
     context.tenant.tier,
-    'projects',
+    kind.key,
     count ?? 0,
   )
 
@@ -183,7 +256,12 @@ async function projectsFull(context: TenantContext): Promise<string | null> {
 
   return limit === 0
     ? `${context.tenant.name} is on a plan without projects. Upgrade to make one.`
-    : `${context.tenant.name} is using all ${limit} of its projects. Archive one, or upgrade for more.`
+    : `${context.tenant.name} is using all ${limit} of its projects. Archive one, buy one more, or upgrade.`
+}
+
+/** The create paths' question: room for one more, at whatever this tier opens them as. */
+async function projectsFull(context: TenantContext): Promise<string | null> {
+  return visibilityFull(context, openingVisibility(context.tenant.tier))
 }
 
 export async function createXp(slug: string, formData: FormData): Promise<XpActionResult> {
@@ -244,6 +322,34 @@ export async function createXp(slug: string, formData: FormData): Promise<XpActi
   })
   if (!result.ok) return result
 
+  /*
+    Open it to the space, on a tier that holds no private projects.
+
+    `XpCreated` records no policy and `none` is the default, which is right
+    wherever privacy is on offer. On free it is not: that tier holds zero
+    private projects, so a project left at the default would be one the space
+    is not allowed to have - and the check above would have refused the create
+    that just succeeded.
+
+    A second command rather than a field on `CreateXp`, because this is not a
+    property of *creating* a project - it is what this space's plan permits, and
+    the decider has no idea what tier anything is on. `openingVisibility` is the
+    one place that decision is made; this is it being carried out.
+
+    A failure here leaves a private project on a tier that should not hold one.
+    Reported rather than swallowed: it is the owner's own project either way,
+    and the honest answer is that it was made but not shared.
+  */
+  const opening = openingVisibility(context.tenant.tier)
+  if (opening.policy !== 'none') {
+    const shared = await run(context, xpId, {
+      type: 'SetXpAccess',
+      actorId: context.user.id,
+      spacePolicy: opening.policy,
+    })
+    if (!shared.ok) return shared
+  }
+
   revalidatePath(`/t/${slug}/browse`)
   /**
    * Into the editor, not onto the project page.
@@ -259,6 +365,43 @@ export async function createXp(slug: string, formData: FormData): Promise<XpActi
    * of minting a project before there is anything in it.
    */
   redirect(`/t/${slug}/studio/xp/${xpId}`)
+}
+
+/**
+ * What this level costs: to play once, and to fork.
+ *
+ * `docs/product/economy.md` §9. The owner's, like sharing - what a thing is
+ * worth is not a decision the space it happens to live in gets to make, and
+ * `guard(…, 'own')` is what says so.
+ *
+ * The split is not settable from here yet, and that is deliberate rather than
+ * forgotten: `XpPriced` carries one and the decider validates it, but naming
+ * collaborators needs a person-picker and a story about what happens when one
+ * of them leaves the space. Setting a price is the useful half and it ships
+ * without them; the remainder is the owner's, which is what an absent split
+ * already means.
+ */
+export async function priceXp(
+  slug: string,
+  input: { xpId: string; once: number; remix: number },
+): Promise<XpActionResult> {
+  const parsed = priceXpSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Check those prices' }
+  }
+
+  const guarded = await guard(slug, parsed.data.xpId, 'own')
+  if (!guarded.ok) return guarded
+
+  const result = await run(guarded.context, parsed.data.xpId, {
+    type: 'PriceXp',
+    actorId: guarded.context.user.id,
+    once: parsed.data.once,
+    remix: parsed.data.remix,
+  })
+
+  if (result.ok) revalidatePath(`/t/${slug}/browse/${parsed.data.xpId}`)
+  return result
 }
 
 /** Put it forward for review. */
@@ -279,7 +422,41 @@ export async function submitXp(slug: string, formData: FormData): Promise<XpActi
     actorId: guarded.context.user.id,
     ...(parsed.data.note ? { note: parsed.data.note } : {}),
   })
-  if (result.ok) revalidatePath(`/t/${slug}/browse/${parsed.data.xpId}`)
+  if (!result.ok) return result
+
+  /*
+    The fee, charged only when a submission was actually written.
+
+    `ok` is not enough on its own: the decider returns `[]` for somebody
+    submitting a project that is already in the queue, and charging on `ok`
+    would take 300 coins for a second click that did nothing. Withdrawing and
+    submitting again *does* charge again, and should - each trip through the
+    queue is a trip a person has to read.
+
+    Charged *after* the append rather than before it, which is the opposite of
+    the order this economy usually uses. The reason is that the queue is the
+    thing being protected: a submission that landed and a fee that did not is a
+    reviewer's time somebody got for free, which is recoverable and visible. A
+    fee taken for a submission that then failed to append is money for nothing,
+    and the submitter would have no way to tell.
+
+    A refusal here is reported, and the submission stands. It is not a reason to
+    unpick a decision the log has already recorded - see `chargeSubmission`.
+  */
+  if (result.events?.includes('XpSubmitted')) {
+    const paid = await chargeSubmission(
+      guarded.context.supabase,
+      guarded.context.tenant.id,
+      guarded.context.user.id,
+      guarded.project.name,
+    )
+    if (!paid.ok) {
+      revalidatePath(`/t/${slug}/browse/${parsed.data.xpId}`)
+      return { ok: false, error: `Submitted, but the fee could not be taken: ${paid.error}` }
+    }
+  }
+
+  revalidatePath(`/t/${slug}/browse/${parsed.data.xpId}`)
   return result
 }
 
@@ -618,6 +795,32 @@ export async function remixXp(slug: string, reference: string): Promise<RemixRes
    */
   const document = await loadPlayableXp(context.supabase, context.tenant.id, reference)
   if (!document) return { ok: false, error: 'That is not a level this space can take' }
+
+  /*
+    Pay whoever made it, if they asked to be paid.
+
+    Before the copy is made rather than after: a level handed over and a charge
+    that did not land is a level somebody got for free out of a network error,
+    and it is unrecoverable - there is nothing left to charge them for. Failing
+    the other way costs the price of a level, which is in the log with a name on
+    it. The same ordering `xp_purchases` keeps for the one-time play price.
+
+    Only a project can be priced. A builtin is one of ours and there is nobody
+    to pay, which `remixPriceOf` answers with `null` - so the whole thing is a
+    no-op for the case that is by far the most common.
+  */
+  if (parsed.kind === 'project') {
+    const price = await remixPriceOf(context.supabase, parsed.xpId)
+    if (price) {
+      const paid = await payForRemix(
+        context.supabase,
+        context.tenant.id,
+        context.user.id,
+        price,
+      )
+      if (!paid.ok) return { ok: false, error: paid.error }
+    }
+  }
 
   /**
    * A cartridge cannot be remixed, because there is nothing in it to change.

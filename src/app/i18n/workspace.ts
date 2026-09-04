@@ -111,6 +111,8 @@ export interface WorkspaceDict {
     enterClip: string
     loopClip: string
     leaveClip: string
+    /** The empty option in a clip picker: it plays nothing. */
+    noClip: string
     seats: string
     seatHint: string
     addSeat: string
@@ -151,7 +153,7 @@ export interface WorkspaceDict {
      * Who you are, at the top of the page.
      *
      * An account has two bodies and keeps both - a peep and an XP skin - and
-     * `in_lounge` is the mode that decides which a world draws. The words have
+     * `show_xp` is the mode that decides which a world draws. The words have
      * to keep those two ideas apart, because conflating them is what put a
      * Knight in the lounge. See `readXpBody`.
      */
@@ -161,8 +163,10 @@ export interface WorkspaceDict {
       /** Which body is on screen, said underneath it. */
       peepBody: string
       xpBody: string
-      /** And for an account that owns no skin, so has only the one. */
-      onlyBody: string
+      /** What the mirror is playing. `{name}` is the clip. */
+      rehearsing: string
+      /** Hand the body back to the chips. */
+      stop: string
       changePeep: string
       /** `{n}` animals to choose from. */
       pickPeep: string
@@ -195,6 +199,35 @@ export interface WorkspaceDict {
       newBlueprint: string
       starting: string
       newClip: string
+      sets: string
+      setsNote: string
+    }
+
+    /**
+     * Sets of things we already made, added to a shelf whole.
+     *
+     * The chrome only. What the sets are *called* - "The kitchen", "Bun" - lives
+     * in `@/domain/thingiverse/starters` in English and stays there, because a
+     * starter's name is not a label: it is written onto the space's shelf as the
+     * blueprint's name, and it is the word a recipe resolves against. A German
+     * space whose board asks for `Brötchen` while the crate hands out `Bun` is a
+     * kitchen that cannot cook, and the fix for a space that wants its own words
+     * is the one it already has - rename both, on the shelf.
+     */
+    sets: {
+      intro: string
+      /** How many things are in one. `{n}`. */
+      count: string
+      add: string
+      adding: string
+      /** What landed. `{n}`. */
+      added: string
+      /** And what was already there under the same name. `{n}`. */
+      already: string
+      /** Every one of them was already on the shelf. */
+      allThere: string
+      /** The tag they all carry. `{tag}`. */
+      tagged: string
     }
 
     /**
@@ -267,10 +300,36 @@ export interface WorkspaceDict {
       /** Which socket a seat sits on, and the option for none. */
       onSocket: string
       looseSeat: string
-      /** The viewport's own two switches, and what it says nothing is picked. */
+      /** The viewport's own switches, and what it says nothing is picked. */
       showSockets: string
       showSeats: string
+      showCollide: string
       nothingPicked: string
+      /**
+       * Blocking a thing out by hand: the panel, its boxes and the two handles.
+       *
+       * `collideHint` is the whole argument in one line - the measured box is
+       * the model's bounds, and a model is rarely a box.
+       */
+      collide: string
+      collideHint: string
+      /**
+       * The seat pickers: what a body plays there, and the two empty options.
+       *
+       * `noClip` is "play nothing" and `inheritClip` is "whatever the thing
+       * says" - two different empties, which is why they are two words.
+       */
+      seatClip: string
+      noClip: string
+      inheritClip: string
+      blocks: string
+      blocksHint: string
+      addBox: string
+      fitBox: string
+      boxMoved: string
+      boxSized: string
+      pickBox: string
+      measuredAs: string
       /** The vehicle block: the switch, its tuning, and the wheels. */
       vehicle: string
       vehicleLabel: string
@@ -282,6 +341,16 @@ export interface WorkspaceDict {
       /** `hideDriver`: the vehicle swallows whoever is aboard. */
       hideDriver: string
       hideDriverHint: string
+      /**
+       * Standing the reader's own body up in the first seat.
+       *
+       * The runtime has no seated pose - the four clips are idle, walk, run,
+       * dance - so this shows where a body *stands*, at the seat's own
+       * numbers, rather than pretending to sit one down. Answers the question
+       * that matters at build time: is the seat roughly where a rider's feet
+       * would be.
+       */
+      previewDriver: string
 
       /**
        * The machine: what a thing can be, and what makes it something else.
@@ -301,6 +370,11 @@ export interface WorkspaceDict {
         sameAsThing: string
         plays: string
         nothing: string
+        /** The play button beside the clip field, and the two things it says. */
+        preview: string
+        stopPreview: string
+        /** The clip is typed and this model's glTF has no track by that name. */
+        notOnModel: string
         hidden: string
         hiddenHint: string
         solid: string
@@ -381,6 +455,41 @@ export interface WorkspaceDict {
       saving: string
       /** `{n}` things are wrong, said beside a Save that will not go. */
       problems: string
+      /**
+       * Where a thing sits when somebody is holding it.
+       *
+       * Its own group of words rather than reusing the seat's, because the two
+       * mean opposite things: a seat is where a *body* goes on the thing, and a
+       * grip is where the *thing* goes on the body.
+       */
+      grip: string
+      gripOn: string
+      gripHint: string
+      rightHand: string
+      leftHand: string
+      /** Nudges, prefixed onto an axis: "Hand X", "Tilt Y". */
+      gripAt: string
+      gripTurn: string
+      gripScale: string
+      /**
+       * Where a thing goes on its own - the lift, the crusher, the platform.
+       *
+       * Separate words from the timeline's, because the two are different
+       * promises: a timeline is a performance every client draws for itself,
+       * and this is a position the whole room agrees on.
+       */
+      moves: string
+      movesOn: string
+      movesHint: string
+      aLift: string
+      aCrusher: string
+      /** Prefixed onto an axis: "Goes X". */
+      movesBy: string
+      movesOut: string
+      movesBack: string
+      waitsThere: string
+      waitsHome: string
+      eases: string
     }
 
     /**
@@ -399,7 +508,11 @@ export interface WorkspaceDict {
       shared: string
       none: string
       save: string
+      /** The same button once the editor is writing to a clip that exists. */
+      saveOver: string
       saved: string
+      /** Said the once, when a save first turns a blank editor into a clip. */
+      kept: string
       rename: string
       retire: string
       share: string
@@ -413,6 +526,22 @@ export interface WorkspaceDict {
       parts: string
       partsHint: string
       groups: { torso: string; arms: string; legs: string }
+      /** The play button's label. `{name}` is the clip. */
+      playing: string
+      /** And its label once it is the thing that stops. `{name}` is the clip. */
+      stopping: string
+      /**
+       * The camera recorder, folded away under the shelf.
+       *
+       * Four strings and no more, because the recorder itself is the
+       * backoffice's component embedded whole - exactly as the editor above it
+       * is - and its own dials stay in English. What is translated is the part
+       * this page owns: whether the camera is open, and what happens to a take.
+       */
+      capture: string
+      captureIntro: string
+      captureUse: string
+      captureClose: string
     }
   }
 
@@ -433,6 +562,32 @@ export interface WorkspaceDict {
     daysInARowMany: string
     bestStreak: string
     seeTheBoard: string
+
+    /**
+     * The two balances, and moving coins between them.
+     *
+     * `docs/product/economy.md` §3. A *purse* is what you have in this space; a
+     * *wallet* is what you have as a person, everywhere. The words have to keep
+     * that distinction visible - "your coins" for both would make the card
+     * unreadable, which is the whole reason it draws two numbers.
+     */
+    money: string
+    /** The balance that belongs to this space. */
+    hereLabel: string
+    /** The balance that follows you between spaces. */
+    walletLabel: string
+    /** Take coins out of this space and into the wallet. */
+    toWallet: string
+    /** Bring coins from the wallet into this space. */
+    toSpace: string
+    howMuch: string
+    move: string
+    /** `{n}` coins moved. */
+    moved: string
+    /** Why the buttons are not there: this space is not running the economy. */
+    noMoving: string
+    /** The way to go and earn some: a shift in the café. */
+    goEarn: string
 
     news: string
     hideAnnouncement: string
@@ -486,6 +641,10 @@ export interface WorkspaceDict {
     confirmClose: string
     cap: string
     guestsMayBuild: string
+    /** A toll on this room's door. `docs/product/economy.md` §11. */
+    doorPrice: string
+    /** Said under it, so nobody has to guess where the coins go. */
+    doorPriceNote: string
 
     /** Walking into a room that has no space left. */
     otherRoomsNote: string
@@ -750,8 +909,157 @@ export interface WorkspaceDict {
     moveDown: string
     addSubpage: string
     deletePage: string
+    /** The row's overflow, which holds the copies, the moves and the delete. */
+    more: string
     /** Browser `confirm`, so no markup. */
     confirmDelete: string
+
+    /**
+     * Starting a page, and copying one.
+     *
+     * `blankPage` only appears once there is something to choose it *against* -
+     * a space with no templates keeps the plain `+`, so this string is unused
+     * there rather than drawn in a menu of one.
+     *
+     * `templates` is keyed by template id and is the one place a template's
+     * name is translated; what a template writes into the episode is a draft,
+     * and a draft arrives in English because it is rewritten immediately. See
+     * `src/domain/channels/templates/kind.ts`.
+     *
+     * `startFrom` introduces that row under the name field, and is drawn only
+     * where there is a template to introduce - a lead-in over nothing is worse
+     * than no lead-in.
+     */
+    blankPage: string
+    duplicate: string
+    nextEpisode: string
+    templates: Record<string, string>
+    startFrom: string
+
+    /** Shown instead of `body` on a space that has written nothing yet. */
+    bodyEmpty: string
+
+    /** The editor itself. */
+    titleLabel: string
+    writePlaceholder: string
+    archivedNote: string
+    saved: string
+    saving: string
+    notSaved: string
+
+    /**
+     * The margin.
+     *
+     * `notesSettled` carries `{n}`: how many notes are folded away under it.
+     * No plural form, because the string is a count and a word rather than a
+     * sentence - see the fold in `comments.tsx`.
+     */
+    notes: string
+    notesShow: string
+    notesHide: string
+    notesEmpty: string
+    notesEmptyHint: string
+    notesEmptyRead: string
+    notesPlaceholder: string
+    notesPost: string
+    notesPosting: string
+    notesResolve: string
+    notesReopen: string
+    notesSettled: string
+
+    /**
+     * The storyboard: this episode's scenes, in running order.
+     *
+     * `boardBeats` carries `{n}` - how many things are said or done in a
+     * scene. No plural form, for the reason `notesSettled` gives: it is a
+     * count and a word, not a sentence.
+     */
+    board: string
+    boardShow: string
+    boardHide: string
+    boardEmpty: string
+    boardEmptyHint: string
+    boardUnheaded: string
+    boardOpenScene: string
+    boardBeats: string
+    /** On the running total, which is an estimate and must say so somewhere. */
+    boardEstimate: string
+
+    /**
+     * The four steps from an idea to a room somebody is standing in.
+     *
+     * Each step has a label, a line of body, and a line for when the surface
+     * behind it is switched off - and the third is not optional. A step drawn
+     * with no explanation is a hole in a numbered sequence; a step drawn as a
+     * live link to a flag that is off is a 404.
+     */
+    flowHeading: string
+    flowBody: string
+    flowWrite: string
+    flowWriteBody: string
+    flowCast: string
+    flowCastBody: string
+    flowWorld: string
+    flowWorldBody: string
+    flowPlay: string
+    flowPlayBody: string
+    flowOffPages: string
+    flowOffChannels: string
+    flowOffWorlds: string
+    flowOffLounge: string
+
+    /**
+     * Projects, seasons and episodes - the tree, and the strip over an episode.
+     * `projectLive` and `airDrafts` carry `{n}`.
+     */
+    projectName: string
+    projectStart: string
+    projectStarting: string
+    cancel: string
+    projectLive: string
+    addSeason: string
+    addEpisode: string
+    untitledEpisode: string
+    seasonEmpty: string
+    projectNoSeasons: string
+    statusDraft: string
+    statusInReview: string
+    statusOnAir: string
+    statusChanged: string
+    statusRejected: string
+    costs: string
+    coins: string
+    inChannels: string
+    sendToAir: string
+    changedNote: string
+    /** Followed by the language code: "Write the version in" de. */
+    writeVersion: string
+
+    /** The channel, which is the air queue. */
+    airHeading: string
+    airBody: string
+    airToPages: string
+    airEmpty: string
+    airRejected: string
+    airChanged: string
+    airWaiting: string
+    airOnAir: string
+    airWatch: string
+    airEdit: string
+    airDrafts: string
+
+    /**
+     * The home screen: start one, carry on with one, find one.
+     * `projectEpisodes` carries `{n}`; `filterNothing` carries `{q}`.
+     */
+    startHeading: string
+    startBody: string
+    allHeading: string
+    filterPlaceholder: string
+    filterNothing: string
+    projectEpisodes: string
+    /** Offered when the month's free season is used up. `{n}` is the price. */
+    buySeason: string
   }
 
   /** Days running, per space. */
@@ -760,6 +1068,8 @@ export interface WorkspaceDict {
     /** `{space}` is the space's own name. */
     body: string
     empty: string
+    /** The coins board, above the streaks. `docs/product/economy.md` §13. */
+    coins: string
   }
 
   /** The task list, which is the app's oldest surface. */
@@ -843,6 +1153,7 @@ export const WORKSPACE_EN: WorkspaceDict = {
     enterClip: 'Getting in',
     loopClip: 'While in it',
     leaveClip: 'Getting out',
+    noClip: 'Nothing',
     seats: 'Where the bodies stand',
     addSeat: 'Add a seat',
     seatHint: 'Cells from the thing itself, one row per person. They turn with the thing, so a bench turned round still seats people on the bench.',
@@ -880,7 +1191,8 @@ export const WORKSPACE_EN: WorkspaceDict = {
       otherBody: 'Your other body',
       peepBody: 'Your peep. This is what a room draws you as.',
       xpBody: 'Your XP body. Rooms draw this one until you switch back.',
-      onlyBody: 'Your peep. Buy a skin and you get a second body to switch to.',
+      rehearsing: 'Playing {name}',
+      stop: 'Stop',
       changePeep: 'Change',
       pickPeep: 'Pick one of {n}',
       shop: 'Shop',
@@ -905,6 +1217,18 @@ export const WORKSPACE_EN: WorkspaceDict = {
       newBlueprint: 'Start a blueprint',
       starting: 'Starting…',
       newClip: 'Open the pose editor',
+      sets: 'Sets',
+      setsNote: 'Things we already made, by theme.',
+    },
+    sets: {
+      intro: 'Things that are already something. A set lands on your shelf as ordinary blueprints — open any of them at the bench and change what you like.',
+      count: '{n} things',
+      add: 'Add to my shelf',
+      adding: 'Adding…',
+      added: '{n} added',
+      already: '{n} already there',
+      allThere: 'All of them are already on your shelf',
+      tagged: 'Tagged {tag}',
     },
     emotes: {
       intro: 'Put the clips into branches and give each one a key. In a world, the keys reach them — D then R plays the robot dance.',
@@ -956,6 +1280,21 @@ export const WORKSPACE_EN: WorkspaceDict = {
       looseSeat: 'nowhere in particular',
       showSockets: 'Sockets',
       showSeats: 'Seats',
+      showCollide: 'Collide',
+      collide: 'What you bump into',
+      collideHint:
+        'Left alone, a thing stops you wherever its model measures - which is a box, and a model is rarely a box. Draw the boxes yourself for an arch you should be able to walk through, or a table you should be able to walk under.',
+      seatClip: 'In this seat',
+      noClip: 'Nothing',
+      inheritClip: 'Same as the thing',
+      blocks: 'Solid',
+      blocksHint: 'Off, and people walk straight through it.',
+      addBox: 'Add a box',
+      fitBox: 'Start from the model',
+      boxMoved: 'Move',
+      boxSized: 'Resize',
+      pickBox: 'Box {n}',
+      measuredAs: 'The model measures {w} x {h} x {d} cells.',
       nothingPicked: 'click a piece',
       vehicle: 'Vehicle',
       vehicleLabel: 'You can drive it',
@@ -968,6 +1307,7 @@ export const WORKSPACE_EN: WorkspaceDict = {
       hideDriver: 'It swallows whoever is aboard',
       hideDriverHint:
         'No body is drawn while somebody is in it — the room sees only the vehicle move. For cars with roofs, or things you drive as.',
+      previewDriver: 'Preview a driver in the seat',
       machine: {
         heading: 'What it can be',
         label: 'It changes',
@@ -979,6 +1319,9 @@ export const WORKSPACE_EN: WorkspaceDict = {
         sameAsThing: 'The thing itself',
         plays: 'Plays',
         nothing: 'Nothing',
+        preview: 'Preview',
+        stopPreview: 'Stop',
+        notOnModel: 'This model has no clip by that name',
         hidden: 'Not there',
         hiddenHint: 'Still standing and still counting down — just invisible, and not solid.',
         solid: 'Solid',
@@ -1053,6 +1396,25 @@ export const WORKSPACE_EN: WorkspaceDict = {
       },
       saving: 'Saving…',
       problems: '{n} to fix',
+      grip: 'Held',
+      gripOn: 'Somebody can hold this',
+      gripHint: 'Where it sits in a hand once it is in a pocket — and, if it has a weapon, what gets swung.',
+      rightHand: 'Right hand',
+      leftHand: 'Left hand',
+      gripAt: 'Hand',
+      gripTurn: 'Tilt',
+      gripScale: 'Size in hand',
+      moves: 'Moves',
+      movesOn: 'It goes somewhere and comes back',
+      movesHint: 'A lift, a crusher, a sliding platform. Everybody in the room sees it in the same place — unlike a bob, which each screen draws for itself.',
+      aLift: 'Make it a lift',
+      aCrusher: 'Make it a crusher',
+      movesBy: 'Goes',
+      movesOut: 'Seconds out',
+      movesBack: 'Seconds back',
+      waitsThere: 'Waits there',
+      waitsHome: 'Waits home',
+      eases: 'Eases in and out',
     },
     clips: {
       heading: 'Poses',
@@ -1063,7 +1425,9 @@ export const WORKSPACE_EN: WorkspaceDict = {
       shared: 'Shared with the space',
       none: 'No clips yet. Pose something and save it.',
       save: 'Save to the space',
+      saveOver: 'Save over it',
       saved: 'Saved',
+      kept: 'Kept. This editor writes over that clip now.',
       rename: 'Rename',
       retire: 'Retire',
       share: 'Share with the space',
@@ -1075,6 +1439,12 @@ export const WORKSPACE_EN: WorkspaceDict = {
       parts: 'Drives',
       partsHint: 'A clip that leaves part of the body alone plays over the walk instead of stopping it — so a wave is a wave while you cross the room.',
       groups: { torso: 'Body', arms: 'Arms', legs: 'Legs' },
+      playing: 'Play {name} on the body above',
+      stopping: 'Stop {name}',
+      capture: 'Record from a camera',
+      captureIntro: 'Stand where the camera can see all of you and do the movement. What comes back lands in the editor above, to fix by hand and save like any other clip. Nothing is uploaded — the video never leaves this machine.',
+      captureUse: 'Use this take',
+      captureClose: 'Close the camera',
     },
   },
 
@@ -1090,6 +1460,17 @@ export const WORKSPACE_EN: WorkspaceDict = {
     daysInARowMany: 'days in a row',
     bestStreak: '· best {n}',
     seeTheBoard: '— see the board',
+
+    money: 'Money',
+    hereLabel: 'Here',
+    walletLabel: 'Wallet',
+    toWallet: 'To wallet',
+    toSpace: 'To this space',
+    howMuch: 'How much',
+    move: 'Move',
+    moved: '{n} moved',
+    noMoving: 'This space keeps its coins - they do not travel',
+    goEarn: 'Go and earn',
 
     news: 'From kxb.team',
     hideAnnouncement: 'Hide this announcement',
@@ -1165,6 +1546,7 @@ export const WORKSPACE_EN: WorkspaceDict = {
     heading: 'Streaks',
     body: 'Days in a row you have shown up in {space}. Open the space any day to keep yours going — miss a day and it starts again at one.',
     empty: 'Nobody is on the board yet. Showing up today is day one.',
+    coins: 'Coins',
   },
 
   tasks: {
@@ -1204,6 +1586,8 @@ export const WORKSPACE_EN: WorkspaceDict = {
     confirmClose: 'Close "{name}"?',
     cap: 'Cap',
     guestsMayBuild: 'Visitors may build here',
+    doorPrice: 'Coins to enter',
+    doorPriceNote: 'Paid once a day by everyone who walks in, into the space bank.',
 
     otherRoomsNote:
       'This list refreshes on its own. The moment somebody leaves, their room lights up.',
@@ -1275,25 +1659,123 @@ export const WORKSPACE_EN: WorkspaceDict = {
   },
 
   pages: {
+    blankPage: 'Blank page',
+    duplicate: 'Duplicate',
+    nextEpisode: 'Next episode',
+    templates: { news: 'News broadcast' },
+    startFrom: 'or start from',
     heading: 'Pages',
     welcome: 'Welcome to {space}’s pages',
-    body: 'Create nested pages, organize docs, and write rich text using TipTap. All state changes are recorded as events.',
-    recent: 'Recent Pages',
-    untitled: 'Untitled Page',
-    pick: 'Select or create a page in the sidebar on the left to start writing.',
+    body: 'Every project this space is making. Pick one on the left, or start one below.',
+    recent: 'Recently worked on',
+    untitled: 'Untitled project',
+    pick: 'Pick a project on the left, or start one, to begin writing.',
     sidebar: 'Pages',
     collapse: 'Collapse sidebar',
     expand: 'Expand Sidebar',
-    newTopLevel: 'Create new top-level page',
-    page: 'Page',
-    empty: 'No pages in space.',
-    createFirst: 'Create your first page',
+    newTopLevel: 'Start a project',
+    page: 'Project',
+    empty: 'No projects here yet.',
+    createFirst: 'Start your first project',
     moveUp: 'Move Up',
     moveDown: 'Move Down',
-    addSubpage: 'Add subpage',
-    deletePage: 'Delete page',
+    addSubpage: 'Add a part',
+    deletePage: 'Delete project',
+    more: 'More',
     confirmDelete:
-      'Are you sure you want to delete this page and remove it from your space?',
+      'Delete this project and remove it from your space?',
+
+    bodyEmpty:
+      'Nothing started yet. A project is a series: its cast, its seasons, and the episodes inside them.',
+
+    titleLabel: 'Project title',
+    writePlaceholder: 'Write, or press / for blocks',
+    archivedNote: 'This space is archived. The project can be read, not changed.',
+    saved: 'Saved',
+    saving: 'Saving…',
+    notSaved: 'Not saved',
+
+    notes: 'Notes',
+    notesShow: 'Show notes',
+    notesHide: 'Hide notes',
+    notesEmpty: 'Nothing in the margin',
+    notesEmptyHint:
+      'Leave a note for whoever reads this next. Notes are about the project, and everybody in the space can see them.',
+    notesEmptyRead: 'Nobody has left a note on this project.',
+    notesPlaceholder: 'Leave a note…',
+    notesPost: 'Post',
+    notesPosting: 'Posting…',
+    notesResolve: 'Mark settled',
+    notesReopen: 'Put it back',
+    notesSettled: '{n} settled',
+
+    board: 'Board',
+    boardShow: 'Show the storyboard',
+    boardHide: 'Hide the storyboard',
+    boardEmpty: 'No scenes yet',
+    boardEmptyHint:
+      'Press / and pick Scene. Every scene you write shows up here, in the order it runs.',
+    boardUnheaded: 'Untitled scene',
+    boardOpenScene: 'Show this scene in the page',
+    boardBeats: '{n} beats',
+    boardEstimate: 'An estimate from the words, not a running time.',
+
+    flowHeading: 'From a page to a room',
+    flowBody:
+      'Four steps, in this order. This is where a series starts; the other three are where it gets built and walked into.',
+    flowWrite: 'Start the project',
+    flowWriteBody:
+      'Notes, an outline, a script. A project nests, so a season can hold its episodes.',
+    flowCast: 'Cast it',
+    flowCastBody:
+      'Who is in it, where it happens, what they carry. The bible your scenes pick their names from.',
+    flowWorld: 'Build the world',
+    flowWorldBody: 'Lay the place out block by block, then save it to the space.',
+    flowPlay: 'Walk into it',
+    flowPlayBody: 'Load the world into a room and stand in it with everybody else.',
+    flowOffPages: 'Projects are off for this space.',
+    flowOffChannels: 'Channels are off for this space. An admin can turn them on.',
+    flowOffWorlds: 'The world catalogue is off for this space. An admin can turn it on.',
+    flowOffLounge: 'The lounge is off for this space.',
+    projectName: 'What is it called?',
+    projectStart: 'Start it',
+    projectStarting: 'Starting…',
+    cancel: 'Cancel',
+    projectLive: '{n} on air or on the way',
+    addSeason: 'Add a season',
+    addEpisode: 'Add an episode',
+    untitledEpisode: 'Untitled episode',
+    seasonEmpty: 'Nothing in this season yet',
+    projectNoSeasons: 'No seasons yet',
+    statusDraft: 'draft',
+    statusInReview: 'in review',
+    statusOnAir: 'on air',
+    statusChanged: 'edited since it aired',
+    statusRejected: 'sent back',
+    costs: 'Costs',
+    coins: 'coins',
+    inChannels: 'In review · Channels',
+    sendToAir: 'Send to air',
+    changedNote: 'Readers are still seeing the last approved version. Send it to air again to update them.',
+    writeVersion: 'Write the version in',
+    airHeading: 'Channel',
+    airBody: 'What is going out, and what is already out. Everything is made under',
+    airToPages: 'Pages →',
+    airEmpty: 'Nothing on the air yet. Send an episode from its page when it is ready.',
+    airRejected: 'Sent back',
+    airChanged: 'Edited since it aired',
+    airWaiting: 'In review',
+    airOnAir: 'On air',
+    airWatch: 'Watch',
+    airEdit: 'Edit',
+    airDrafts: '{n} drafts are still being written in',
+    startHeading: 'Start something',
+    startBody: 'A project is a production: its cast, its seasons, and the episodes inside them. Name it and you are writing the first one.',
+    allHeading: 'Everything',
+    filterPlaceholder: 'Filter projects and episodes',
+    filterNothing: 'Nothing matches “{q}”.',
+    projectEpisodes: '{n} episodes',
+    buySeason: 'Start it now · {n} coins',
   },
 
   paused: {
@@ -1530,6 +2012,7 @@ export const WORKSPACE_DE: WorkspaceDict = {
     enterClip: 'Einsteigen',
     loopClip: 'Währenddessen',
     leaveClip: 'Aussteigen',
+    noClip: 'Nichts',
     seats: 'Wo die Körper stehen',
     addSeat: 'Platz hinzufügen',
     seatHint: 'Zellen vom Ding aus, eine Zeile pro Person. Dreht sich mit: eine gedrehte Bank setzt trotzdem alle auf die Bank.',
@@ -1567,7 +2050,8 @@ export const WORKSPACE_DE: WorkspaceDict = {
       otherBody: 'Ihr anderer Körper',
       peepBody: 'Ihr Peep. So zeichnet ein Raum Sie.',
       xpBody: 'Ihr XP-Körper. Räume zeichnen diesen, bis Sie zurückschalten.',
-      onlyBody: 'Ihr Peep. Mit einem Skin bekommen Sie einen zweiten Körper zum Umschalten.',
+      rehearsing: '{name} läuft',
+      stop: 'Anhalten',
       changePeep: 'Ändern',
       pickPeep: 'Eines von {n} wählen',
       shop: 'Laden',
@@ -1592,6 +2076,18 @@ export const WORKSPACE_DE: WorkspaceDict = {
       newBlueprint: 'Blaupause beginnen',
       starting: 'Wird begonnen …',
       newClip: 'Pose-Editor öffnen',
+      sets: 'Sets',
+      setsNote: 'Fertige Dinge, nach Thema.',
+    },
+    sets: {
+      intro: 'Dinge, die schon etwas sind. Ein Set landet als gewöhnliche Blaupausen in Ihrem Regal — öffnen Sie jede davon an der Werkbank und ändern Sie, was Sie möchten.',
+      count: '{n} Dinge',
+      add: 'Ins Regal legen',
+      adding: 'Wird hinzugefügt …',
+      added: '{n} hinzugefügt',
+      already: '{n} schon vorhanden',
+      allThere: 'Alle liegen schon in Ihrem Regal',
+      tagged: 'Getaggt mit {tag}',
     },
     emotes: {
       intro: 'Ordnen Sie die Clips in Äste und geben Sie jedem eine Taste. In einer Welt erreichen die Tasten sie — D, dann R spielt den Robotertanz.',
@@ -1643,6 +2139,21 @@ export const WORKSPACE_DE: WorkspaceDict = {
       looseSeat: 'nirgends besonders',
       showSockets: 'Andockpunkte',
       showSeats: 'Sitze',
+      showCollide: 'Kollision',
+      collide: 'Woran du hängen bleibst',
+      collideHint:
+        'Ohne Zutun stoppt dich ein Ding dort, wo sein Modell misst - und das ist ein Quader, ein Modell aber selten. Zeichne die Quader selbst: für einen Torbogen, durch den man gehen soll, oder einen Tisch, unter den man passt.',
+      seatClip: 'Auf diesem Platz',
+      noClip: 'Nichts',
+      inheritClip: 'Wie das Ding',
+      blocks: 'Fest',
+      blocksHint: 'Aus, und man läuft einfach hindurch.',
+      addBox: 'Quader hinzufügen',
+      fitBox: 'Vom Modell übernehmen',
+      boxMoved: 'Verschieben',
+      boxSized: 'Größe',
+      pickBox: 'Quader {n}',
+      measuredAs: 'Das Modell misst {w} x {h} x {d} Zellen.',
       nothingPicked: 'Teil anklicken',
       vehicle: 'Fahrzeug',
       vehicleLabel: 'Du kannst es fahren',
@@ -1655,6 +2166,7 @@ export const WORKSPACE_DE: WorkspaceDict = {
       hideDriver: 'Es verschluckt, wer an Bord ist',
       hideDriverHint:
         'Solange jemand drin sitzt, wird kein Körper gezeichnet — der Raum sieht nur das Fahrzeug fahren. Für Autos mit Dach, oder Dinge, als die man fährt.',
+      previewDriver: 'Fahrer auf dem Sitz zeigen',
       machine: {
         heading: 'Was es sein kann',
         label: 'Es verändert sich',
@@ -1666,6 +2178,9 @@ export const WORKSPACE_DE: WorkspaceDict = {
         sameAsThing: 'Das Ding selbst',
         plays: 'Spielt',
         nothing: 'Nichts',
+        preview: 'Vorschau',
+        stopPreview: 'Stopp',
+        notOnModel: 'Dieses Modell hat keinen Clip mit diesem Namen',
         hidden: 'Nicht da',
         hiddenHint: 'Steht weiter da und zählt weiter — nur unsichtbar und nicht fest.',
         solid: 'Fest',
@@ -1740,6 +2255,25 @@ export const WORKSPACE_DE: WorkspaceDict = {
       },
       saving: 'Wird gespeichert …',
       problems: '{n} zu beheben',
+      grip: 'In der Hand',
+      gripOn: 'Man kann es tragen',
+      gripHint: 'Wie es in der Hand liegt, sobald es in der Tasche ist — und, wenn es eine Waffe hat, was geschwungen wird.',
+      rightHand: 'Rechte Hand',
+      leftHand: 'Linke Hand',
+      gripAt: 'Hand',
+      gripTurn: 'Neigung',
+      gripScale: 'Größe in der Hand',
+      moves: 'Bewegt sich',
+      movesOn: 'Es fährt hin und kommt zurück',
+      movesHint: 'Ein Aufzug, eine Presse, eine fahrende Plattform. Alle im Raum sehen es an derselben Stelle — anders als beim Wippen, das jeder Bildschirm selbst zeichnet.',
+      aLift: 'Als Aufzug',
+      aCrusher: 'Als Presse',
+      movesBy: 'Fährt',
+      movesOut: 'Sekunden hin',
+      movesBack: 'Sekunden zurück',
+      waitsThere: 'Wartet dort',
+      waitsHome: 'Wartet daheim',
+      eases: 'Sanft anfahren und anhalten',
     },
     clips: {
       heading: 'Posen',
@@ -1750,7 +2284,9 @@ export const WORKSPACE_DE: WorkspaceDict = {
       shared: 'Mit dem Space geteilt',
       none: 'Noch keine Clips. Posieren Sie etwas und speichern Sie es.',
       save: 'Im Space speichern',
+      saveOver: 'Überschreiben',
       saved: 'Gespeichert',
+      kept: 'Gemerkt. Dieser Editor überschreibt jetzt diesen Clip.',
       rename: 'Umbenennen',
       retire: 'Aus dem Regal',
       share: 'Mit dem Space teilen',
@@ -1762,6 +2298,12 @@ export const WORKSPACE_DE: WorkspaceDict = {
       parts: 'Bewegt',
       partsHint: 'Ein Clip, der einen Teil des Körpers auslässt, läuft über dem Gehen statt es zu stoppen — winken bleibt winken, auch unterwegs.',
       groups: { torso: 'Körper', arms: 'Arme', legs: 'Beine' },
+      playing: '{name} am Körper oben abspielen',
+      stopping: '{name} anhalten',
+      capture: 'Mit der Kamera aufnehmen',
+      captureIntro: 'Stellen Sie sich so hin, dass die Kamera Sie ganz sieht, und machen Sie die Bewegung. Was zurückkommt, landet im Editor oben — dort können Sie es von Hand nachbessern und wie jeden anderen Clip speichern. Es wird nichts hochgeladen: Das Video verlässt diesen Rechner nicht.',
+      captureUse: 'Aufnahme übernehmen',
+      captureClose: 'Kamera schließen',
     },
   },
 
@@ -1777,6 +2319,17 @@ export const WORKSPACE_DE: WorkspaceDict = {
     daysInARowMany: 'Tage in Folge',
     bestStreak: '· Bestwert {n}',
     seeTheBoard: '— zur Tafel',
+
+    money: 'Geld',
+    hereLabel: 'Hier',
+    walletLabel: 'Geldbeutel',
+    toWallet: 'In den Geldbeutel',
+    toSpace: 'In diesen Raum',
+    howMuch: 'Wie viel',
+    move: 'Verschieben',
+    moved: '{n} verschoben',
+    noMoving: 'Dieser Raum behält seine Münzen - sie reisen nicht mit',
+    goEarn: 'Geld verdienen',
 
     news: 'Von kxb.team',
     hideAnnouncement: 'Diese Ankündigung ausblenden',
@@ -1852,6 +2405,7 @@ export const WORKSPACE_DE: WorkspaceDict = {
     heading: 'Serien',
     body: 'Tage in Folge, an denen Sie in {space} da waren. Öffnen Sie den Space an jedem Tag, um Ihre Serie zu halten — ein Tag Pause, und sie fängt wieder bei eins an.',
     empty: 'Noch niemand auf der Tafel. Heute vorbeizuschauen ist Tag eins.',
+    coins: 'Münzen',
   },
 
   tasks: {
@@ -1893,6 +2447,8 @@ export const WORKSPACE_DE: WorkspaceDict = {
     confirmClose: '„{name}“ schließen?',
     cap: 'Grenze',
     guestsMayBuild: 'Gäste dürfen hier bauen',
+    doorPrice: 'Münzen zum Eintreten',
+    doorPriceNote: 'Einmal am Tag von allen bezahlt, die hereinkommen - in die Raumkasse.',
 
     otherRoomsNote:
       'Diese Liste aktualisiert sich von selbst. Sobald jemand geht, leuchtet der Raum auf.',
@@ -1977,25 +2533,126 @@ export const WORKSPACE_DE: WorkspaceDict = {
   },
 
   pages: {
+    blankPage: 'Leere Seite',
+    duplicate: 'Duplizieren',
+    nextEpisode: 'Nächste Folge',
+    templates: { news: 'Nachrichtensendung' },
+    startFrom: 'oder anfangen mit',
     heading: 'Seiten',
     welcome: 'Willkommen bei den Seiten von {space}',
-    body: 'Verschachtelte Seiten anlegen, Dokumente ordnen und mit TipTap formatiert schreiben. Jede Änderung wird als Ereignis festgehalten.',
+    body: 'Alle Projekte dieses Space. Links eines wählen — oder unten eines anlegen.',
     recent: 'Zuletzt bearbeitet',
-    untitled: 'Unbenannte Seite',
-    pick: 'Wählen Sie links in der Leiste eine Seite oder legen Sie eine an, um zu schreiben.',
+    untitled: 'Unbenanntes Projekt',
+    pick: 'Wählen Sie links ein Projekt oder legen Sie eines an, um zu schreiben.',
     sidebar: 'Seiten',
     collapse: 'Leiste einklappen',
     expand: 'Leiste ausklappen',
-    newTopLevel: 'Neue oberste Seite anlegen',
-    page: 'Seite',
-    empty: 'Keine Seiten in diesem Space.',
-    createFirst: 'Legen Sie Ihre erste Seite an',
+    newTopLevel: 'Projekt anlegen',
+    page: 'Projekt',
+    empty: 'Noch keine Projekte hier.',
+    createFirst: 'Legen Sie Ihr erstes Projekt an',
     moveUp: 'Nach oben',
     moveDown: 'Nach unten',
-    addSubpage: 'Unterseite hinzufügen',
-    deletePage: 'Seite löschen',
+    addSubpage: 'Teil hinzufügen',
+    deletePage: 'Projekt löschen',
+    more: 'Mehr',
     confirmDelete:
-      'Möchten Sie diese Seite wirklich löschen und aus Ihrem Space entfernen?',
+      'Dieses Projekt löschen und aus Ihrem Space entfernen?',
+
+    bodyEmpty:
+      'Noch nichts angefangen. Ein Projekt ist eine Serie: ihre Besetzung, ihre Staffeln und die Folgen darin.',
+
+    titleLabel: 'Projekttitel',
+    writePlaceholder: 'Schreiben, oder / für Blöcke',
+    archivedNote:
+      'Dieser Space ist archiviert. Das Projekt lässt sich lesen, nicht ändern.',
+    saved: 'Gespeichert',
+    saving: 'Speichert…',
+    notSaved: 'Nicht gespeichert',
+
+    notes: 'Notizen',
+    notesShow: 'Notizen zeigen',
+    notesHide: 'Notizen ausblenden',
+    notesEmpty: 'Nichts am Rand',
+    notesEmptyHint:
+      'Hinterlassen Sie eine Notiz für die nächste Person. Notizen gehören zum Projekt und sind für alle im Space sichtbar.',
+    notesEmptyRead: 'Niemand hat eine Notiz an diesem Projekt hinterlassen.',
+    notesPlaceholder: 'Notiz hinterlassen…',
+    notesPost: 'Senden',
+    notesPosting: 'Sendet…',
+    notesResolve: 'Als erledigt markieren',
+    notesReopen: 'Zurückholen',
+    notesSettled: '{n} erledigt',
+
+    board: 'Board',
+    boardShow: 'Storyboard zeigen',
+    boardHide: 'Storyboard ausblenden',
+    boardEmpty: 'Noch keine Szenen',
+    boardEmptyHint:
+      '/ drücken und Szene wählen. Jede Szene erscheint hier, in der Reihenfolge, in der sie läuft.',
+    boardUnheaded: 'Szene ohne Titel',
+    boardOpenScene: 'Diese Szene auf der Seite zeigen',
+    boardBeats: '{n} Beats',
+    boardEstimate: 'Aus den Wörtern geschätzt, keine Laufzeit.',
+
+    flowHeading: 'Von einer Seite in einen Raum',
+    flowBody:
+      'Vier Schritte, in dieser Reihenfolge. Hier fängt eine Serie an; die anderen drei bauen sie und stellen euch hinein.',
+    flowWrite: 'Projekt anlegen',
+    flowWriteBody:
+      'Notizen, Gliederung, Drehbuch. Ein Projekt verschachtelt sich, eine Staffel hält ihre Folgen.',
+    flowCast: 'Besetzen',
+    flowCastBody:
+      'Wer mitspielt, wo es passiert, was sie tragen. Die Bibel, aus der die Szenen ihre Namen ziehen.',
+    flowWorld: 'Welt bauen',
+    flowWorldBody: 'Den Ort Block für Block auslegen und im Space speichern.',
+    flowPlay: 'Hineingehen',
+    flowPlayBody: 'Die Welt in einen Raum laden und mit allen darin stehen.',
+    flowOffPages: 'Projekte sind für diesen Space aus.',
+    flowOffChannels:
+      'Kanäle sind für diesen Space aus. Ein Admin kann sie einschalten.',
+    flowOffWorlds:
+      'Der Weltkatalog ist für diesen Space aus. Ein Admin kann ihn einschalten.',
+    flowOffLounge: 'Die Lounge ist für diesen Space aus.',
+    projectName: 'Wie heißt es?',
+    projectStart: 'Anlegen',
+    projectStarting: 'Legt an…',
+    cancel: 'Abbrechen',
+    projectLive: '{n} auf Sendung oder unterwegs',
+    addSeason: 'Staffel hinzufügen',
+    addEpisode: 'Folge hinzufügen',
+    untitledEpisode: 'Folge ohne Titel',
+    seasonEmpty: 'Noch nichts in dieser Staffel',
+    projectNoSeasons: 'Noch keine Staffeln',
+    statusDraft: 'Entwurf',
+    statusInReview: 'in Prüfung',
+    statusOnAir: 'auf Sendung',
+    statusChanged: 'seit Ausstrahlung geändert',
+    statusRejected: 'zurückgeschickt',
+    costs: 'Kostet',
+    coins: 'Coins',
+    inChannels: 'In Prüfung · Kanal',
+    sendToAir: 'Auf Sendung schicken',
+    changedNote: 'Leser sehen noch die zuletzt freigegebene Fassung. Erneut auf Sendung schicken, um sie zu aktualisieren.',
+    writeVersion: 'Fassung schreiben in',
+    airHeading: 'Kanal',
+    airBody: 'Was rausgeht, und was schon draußen ist. Gemacht wird alles unter',
+    airToPages: 'Seiten →',
+    airEmpty: 'Noch nichts auf Sendung. Schicken Sie eine Folge von ihrer Seite aus, wenn sie fertig ist.',
+    airRejected: 'Zurückgeschickt',
+    airChanged: 'Seit Ausstrahlung geändert',
+    airWaiting: 'In Prüfung',
+    airOnAir: 'Auf Sendung',
+    airWatch: 'Ansehen',
+    airEdit: 'Bearbeiten',
+    airDrafts: '{n} Entwürfe werden noch geschrieben unter',
+    startHeading: 'Etwas anfangen',
+    startBody: 'Ein Projekt ist eine Produktion: die Besetzung, die Staffeln und die Folgen darin. Benennen Sie es, und Sie schreiben schon die erste.',
+    allHeading: 'Alles',
+    filterPlaceholder: 'Projekte und Folgen filtern',
+    filterNothing: 'Nichts passt zu „{q}“.',
+    projectEpisodes: '{n} Folgen',
+    buySeason: 'Jetzt anlegen · {n} Coins',
   },
 
   paused: {
@@ -2238,6 +2895,7 @@ export const WORKSPACE_BG: WorkspaceDict = {
     enterClip: 'Влизане',
     loopClip: 'Докато си вътре',
     leaveClip: 'Излизане',
+    noClip: 'Нищо',
     seats: 'Къде застават телата',
     addSeat: 'Добави място',
     seatHint: 'Клетки спрямо самото нещо, по един ред на човек. Въртят се с него, така че обърната пейка пак слага хората на пейката.',
@@ -2275,7 +2933,8 @@ export const WORKSPACE_BG: WorkspaceDict = {
       otherBody: 'Другото ви тяло',
       peepBody: 'Вашият пийп. Така ви рисува стаята.',
       xpBody: 'Вашето XP тяло. Стаите рисуват него, докато не превключите обратно.',
-      onlyBody: 'Вашият пийп. Със скин получавате второ тяло, между които да превключвате.',
+      rehearsing: 'Възпроизвежда {name}',
+      stop: 'Спри',
       changePeep: 'Смени',
       pickPeep: 'Изберете едно от {n}',
       shop: 'Магазин',
@@ -2300,6 +2959,18 @@ export const WORKSPACE_BG: WorkspaceDict = {
       newBlueprint: 'Започни чертеж',
       starting: 'Започва се…',
       newClip: 'Отвори редактора на пози',
+      sets: 'Комплекти',
+      setsNote: 'Готови неща, по теми.',
+    },
+    sets: {
+      intro: 'Неща, които вече са нещо. Комплектът влиза в рафта ви като обикновени чертежи — отворете който и да е на работната маса и променете каквото искате.',
+      count: '{n} неща',
+      add: 'Сложи в рафта ми',
+      adding: 'Добавя се…',
+      added: '{n} добавени',
+      already: '{n} вече ги има',
+      allThere: 'Всички вече са в рафта ви',
+      tagged: 'С етикет {tag}',
     },
     emotes: {
       intro: 'Подредете клиповете в клони и дайте на всеки клавиш. В света клавишите ги достигат — D, после R пуска робота.',
@@ -2351,6 +3022,21 @@ export const WORKSPACE_BG: WorkspaceDict = {
       looseSeat: 'никъде конкретно',
       showSockets: 'Гнезда',
       showSeats: 'Седалки',
+      showCollide: 'Сблъсък',
+      collide: 'В какво се удряш',
+      collideHint:
+        'Само по себе си нещото те спира там, където моделът му се измерва - а това е кутия, докато моделът рядко е кутия. Начертай кутиите сам: за арка, през която трябва да се минава, или маса, под която трябва да се провираш.',
+      seatClip: 'На това място',
+      noClip: 'Нищо',
+      inheritClip: 'Като нещото',
+      blocks: 'Плътно',
+      blocksHint: 'Изключено - и хората минават право през него.',
+      addBox: 'Добави кутия',
+      fitBox: 'Вземи от модела',
+      boxMoved: 'Местене',
+      boxSized: 'Размер',
+      pickBox: 'Кутия {n}',
+      measuredAs: 'Моделът е {w} x {h} x {d} клетки.',
       nothingPicked: 'щракнете върху част',
       vehicle: 'Превозно средство',
       vehicleLabel: 'Можеш да го караш',
@@ -2363,6 +3049,7 @@ export const WORKSPACE_BG: WorkspaceDict = {
       hideDriver: 'Поглъща този, който е вътре',
       hideDriverHint:
         'Докато някой е вътре, тяло не се рисува — стаята вижда само превозното средство. За коли с покрив или неща, като които караш.',
+      previewDriver: 'Покажи шофьор на седалката',
       machine: {
         heading: 'Какво може да бъде',
         label: 'То се променя',
@@ -2374,6 +3061,9 @@ export const WORKSPACE_BG: WorkspaceDict = {
         sameAsThing: 'Самото нещо',
         plays: 'Пуска',
         nothing: 'Нищо',
+        preview: 'Преглед',
+        stopPreview: 'Спри',
+        notOnModel: 'Този модел няма клип с това име',
         hidden: 'Няма го',
         hiddenHint: 'Още стои и още брои — само че невидимо и не е плътно.',
         solid: 'Плътно',
@@ -2448,6 +3138,25 @@ export const WORKSPACE_BG: WorkspaceDict = {
       },
       saving: 'Запазва се…',
       problems: '{n} за поправка',
+      grip: 'В ръката',
+      gripOn: 'Може да се държи',
+      gripHint: 'Как стои в ръката, щом е в джоба — и ако има оръжие, какво се замахва.',
+      rightHand: 'Дясна ръка',
+      leftHand: 'Лява ръка',
+      gripAt: 'Ръка',
+      gripTurn: 'Наклон',
+      gripScale: 'Размер в ръката',
+      moves: 'Движи се',
+      movesOn: 'Отива някъде и се връща',
+      movesHint: 'Асансьор, преса, движеща се платформа. Всички в стаята го виждат на едно и също място — за разлика от подскачането, което всеки екран рисува сам.',
+      aLift: 'Като асансьор',
+      aCrusher: 'Като преса',
+      movesBy: 'Отива',
+      movesOut: 'Секунди натам',
+      movesBack: 'Секунди обратно',
+      waitsThere: 'Чака там',
+      waitsHome: 'Чака у дома',
+      eases: 'Плавно тръгва и спира',
     },
     clips: {
       heading: 'Пози',
@@ -2458,7 +3167,9 @@ export const WORKSPACE_BG: WorkspaceDict = {
       shared: 'Споделени със спейса',
       none: 'Още няма клипове. Позирайте нещо и го запазете.',
       save: 'Запази в спейса',
+      saveOver: 'Презапиши',
       saved: 'Запазено',
+      kept: 'Запазен. Оттук нататък редакторът презаписва този клип.',
       rename: 'Преименувай',
       retire: 'Свали от рафта',
       share: 'Сподели със спейса',
@@ -2470,6 +3181,12 @@ export const WORKSPACE_BG: WorkspaceDict = {
       parts: 'Движи',
       partsHint: 'Клип, който не докосва част от тялото, върви върху ходенето, вместо да го спира — махането си остава махане в движение.',
       groups: { torso: 'Тяло', arms: 'Ръце', legs: 'Крака' },
+      playing: 'Възпроизведи {name} върху тялото горе',
+      stopping: 'Спри {name}',
+      capture: 'Запис с камера',
+      captureIntro: 'Застанете така, че камерата да ви вижда целите, и направете движението. Записът се появява в редактора горе — там можете да го поправите на ръка и да го запазите като всеки друг клип. Нищо не се качва: видеото не напуска този компютър.',
+      captureUse: 'Вземи този запис',
+      captureClose: 'Затвори камерата',
     },
   },
 
@@ -2485,6 +3202,17 @@ export const WORKSPACE_BG: WorkspaceDict = {
     daysInARowMany: 'дни поред',
     bestStreak: '· най-добро {n}',
     seeTheBoard: '— към дъската',
+
+    money: 'Пари',
+    hereLabel: 'Тук',
+    walletLabel: 'Портфейл',
+    toWallet: 'Към портфейла',
+    toSpace: 'Към това пространство',
+    howMuch: 'Колко',
+    move: 'Премести',
+    moved: '{n} преместени',
+    noMoving: 'Това пространство запазва монетите си - те не пътуват',
+    goEarn: 'Иди изкарай',
 
     news: 'От kxb.team',
     hideAnnouncement: 'Скрий това съобщение',
@@ -2560,6 +3288,7 @@ export const WORKSPACE_BG: WorkspaceDict = {
     heading: 'Серии',
     body: 'Дни поред, в които сте се появявали в {space}. Отваряйте спейса всеки ден, за да продължи вашата — пропуснете ден и започва пак от едно.',
     empty: 'Още никой не е на таблото. Да се появите днес е ден първи.',
+    coins: 'Монети',
   },
 
   tasks: {
@@ -2599,6 +3328,8 @@ export const WORKSPACE_BG: WorkspaceDict = {
     confirmClose: 'Да затворя ли „{name}“?',
     cap: 'Таван',
     guestsMayBuild: 'Посетителите може да строят тук',
+    doorPrice: 'Монети за вход',
+    doorPriceNote: 'Плаща се веднъж дневно от всеки, който влиза - в касата на пространството.',
 
     otherRoomsNote:
       'Този списък се обновява сам. В момента, в който някой излезе, стаята му светва.',
@@ -2670,25 +3401,128 @@ export const WORKSPACE_BG: WorkspaceDict = {
   },
 
   pages: {
+    blankPage: 'Празна страница',
+    duplicate: 'Дублиране',
+    nextEpisode: 'Следващ епизод',
+    templates: { news: 'Новинарска емисия' },
+    startFrom: 'или започнете от',
     heading: 'Страници',
     welcome: 'Добре дошли в страниците на {space}',
-    body: 'Създавайте вложени страници, подреждайте документи и пишете форматиран текст с TipTap. Всяка промяна на състоянието се записва като събитие.',
-    recent: 'Скорошни страници',
-    untitled: 'Страница без заглавие',
-    pick: 'Изберете или създайте страница в лентата вляво, за да започнете да пишете.',
+    body: 'Всички проекти на този спейс. Изберете един вляво — или започнете отдолу.',
+    recent: 'Наскоро работено',
+    untitled: 'Проект без заглавие',
+    pick: 'Изберете проект вляво или създайте нов, за да започнете да пишете.',
     sidebar: 'Страници',
     collapse: 'Свий лентата',
     expand: 'Разгъни лентата',
-    newTopLevel: 'Създай нова страница от най-горно ниво',
-    page: 'Страница',
-    empty: 'Няма страници в спейса.',
-    createFirst: 'Създайте първата си страница',
+    newTopLevel: 'Създай проект',
+    page: 'Проект',
+    empty: 'Още няма проекти тук.',
+    createFirst: 'Създайте първия си проект',
     moveUp: 'Нагоре',
     moveDown: 'Надолу',
-    addSubpage: 'Добави подстраница',
-    deletePage: 'Изтрий страницата',
+    addSubpage: 'Добави част',
+    deletePage: 'Изтрий проекта',
+    more: 'Още',
     confirmDelete:
-      'Сигурни ли сте, че искате да изтриете тази страница и да я премахнете от спейса си?',
+      'Да изтрием ли този проект и да го премахнем от спейса ви?',
+
+    bodyEmpty:
+      'Още нищо не е започнато. Проектът е поредица: нейният състав, сезоните и епизодите в тях.',
+
+    titleLabel: 'Заглавие на проекта',
+    writePlaceholder: 'Пишете или натиснете / за блокове',
+    archivedNote:
+      'Този спейс е архивиран. Проектът може да се чете, но не и да се променя.',
+    saved: 'Запазено',
+    saving: 'Запазва…',
+    notSaved: 'Незапазено',
+
+    notes: 'Бележки',
+    notesShow: 'Покажи бележките',
+    notesHide: 'Скрий бележките',
+    notesEmpty: 'Нищо в полето',
+    notesEmptyHint:
+      'Оставете бележка за следващия, който ще чете. Бележките са за проекта и се виждат от всички в спейса.',
+    notesEmptyRead: 'Никой не е оставял бележка по този проект.',
+    notesPlaceholder: 'Оставете бележка…',
+    notesPost: 'Изпрати',
+    notesPosting: 'Изпраща…',
+    notesResolve: 'Отбележи като решена',
+    notesReopen: 'Върни я',
+    notesSettled: '{n} решени',
+
+    board: 'Борд',
+    boardShow: 'Покажи сторибордa',
+    boardHide: 'Скрий сториборда',
+    boardEmpty: 'Още няма сцени',
+    boardEmptyHint:
+      'Натиснете / и изберете Сцена. Всяка сцена се появява тук, в реда, в който върви.',
+    boardUnheaded: 'Сцена без заглавие',
+    boardOpenScene: 'Покажи тази сцена на страницата',
+    boardBeats: '{n} такта',
+    boardEstimate: 'Оценка по думите, не реално времетраене.',
+
+    flowHeading: 'От страница до стая',
+    flowBody:
+      'Четири стъпки, в този ред. Тук започва поредицата; останалите три я построяват и ви вкарват вътре.',
+    flowWrite: 'Създайте проекта',
+    flowWriteBody:
+      'Бележки, план, сценарий. Проектът се влага — сезонът пази епизодите си.',
+    flowCast: 'Разпределете ролите',
+    flowCastBody:
+      'Кой участва, къде се случва, какво носят. Библията, от която сцените взимат имената.',
+    flowWorld: 'Постройте света',
+    flowWorldBody:
+      'Подредете мястото блок по блок и го запазете в спейса.',
+    flowPlay: 'Влезте вътре',
+    flowPlayBody:
+      'Заредете света в стая и застанете в него заедно с всички.',
+    flowOffPages: 'Проектите са изключени за този спейс.',
+    flowOffChannels:
+      'Каналите са изключени за този спейс. Админ може да ги включи.',
+    flowOffWorlds:
+      'Каталогът на световете е изключен за този спейс. Админ може да го включи.',
+    flowOffLounge: 'Лаунджът е изключен за този спейс.',
+    projectName: 'Как се казва?',
+    projectStart: 'Създай',
+    projectStarting: 'Създава…',
+    cancel: 'Отказ',
+    projectLive: '{n} в ефир или на път',
+    addSeason: 'Добави сезон',
+    addEpisode: 'Добави епизод',
+    untitledEpisode: 'Епизод без заглавие',
+    seasonEmpty: 'Още нищо в този сезон',
+    projectNoSeasons: 'Още няма сезони',
+    statusDraft: 'чернова',
+    statusInReview: 'на преглед',
+    statusOnAir: 'в ефир',
+    statusChanged: 'променен след излъчване',
+    statusRejected: 'върнат',
+    costs: 'Струва',
+    coins: 'монети',
+    inChannels: 'На преглед · Канал',
+    sendToAir: 'Изпрати в ефир',
+    changedNote: 'Читателите още виждат последната одобрена версия. Изпратете отново в ефир, за да я обновите.',
+    writeVersion: 'Напишете версията на',
+    airHeading: 'Канал',
+    airBody: 'Какво излиза и какво вече е излязло. Всичко се прави в',
+    airToPages: 'Страници →',
+    airEmpty: 'Още нищо в ефир. Изпратете епизод от страницата му, когато е готов.',
+    airRejected: 'Върнати',
+    airChanged: 'Променени след излъчване',
+    airWaiting: 'На преглед',
+    airOnAir: 'В ефир',
+    airWatch: 'Гледай',
+    airEdit: 'Редактирай',
+    airDrafts: '{n} чернови още се пишат в',
+    startHeading: 'Започнете нещо',
+    startBody: 'Проектът е продукция: съставът, сезоните и епизодите в тях. Дайте му име и вече пишете първия.',
+    allHeading: 'Всичко',
+    filterPlaceholder: 'Филтрирай проекти и епизоди',
+    filterNothing: 'Нищо не съвпада с „{q}“.',
+    projectEpisodes: '{n} епизода',
+    buySeason: 'Създай сега · {n} монети',
   },
 
   paused: {

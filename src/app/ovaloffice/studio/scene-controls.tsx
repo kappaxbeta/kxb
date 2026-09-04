@@ -441,10 +441,27 @@ function PeepRow({
           </div>
         )}
 
-        {(peep.emote !== null || peep.say !== null) && (
+        {/*
+          Two pairs, shown only for the bubble that is actually up.
+
+          They were one pair driving both, and the sliders said "Bubble" - a
+          word that meant the face and, silently, the sentence at half its size.
+          So a peep with only a line of dialogue had a "Bubble size" slider that
+          moved something else's size, and a peep with both could not arrange
+          them at all. Now the face's pair appears when there is a face and the
+          sentence's when there is a sentence, and each one says which.
+        */}
+        {peep.emote !== null && (
           <>
-            <Slide label="Bubble up" value={peep.emoteHeight} min={0} max={8} step={0.05} onChange={(emoteHeight) => onChange({ emoteHeight })} />
-            <Slide label="Bubble size" value={peep.emoteSize} min={0.3} max={2.5} step={0.05} onChange={(emoteSize) => onChange({ emoteSize })} />
+            <Slide label="Face up" value={peep.emoteHeight} min={0} max={8} step={0.05} onChange={(emoteHeight) => onChange({ emoteHeight })} />
+            <Slide label="Face size" value={peep.emoteSize} min={0.3} max={2.5} step={0.05} onChange={(emoteSize) => onChange({ emoteSize })} />
+          </>
+        )}
+
+        {peep.say !== null && (
+          <>
+            <Slide label="Speech up" value={peep.sayHeight} min={0} max={8} step={0.05} onChange={(sayHeight) => onChange({ sayHeight })} />
+            <Slide label="Speech size" value={peep.saySize} min={0.1} max={2} step={0.05} onChange={(saySize) => onChange({ saySize })} />
           </>
         )}
 

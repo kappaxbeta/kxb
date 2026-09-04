@@ -3,10 +3,12 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { SVGProps } from 'react'
+import { GithubMark } from '@/app/components/github-mark'
 import { BlockDrift } from '@/app/components/block-drift'
 import { FeaturedEvents } from '@/app/components/featured-events'
 import { LoungePanel, PalettePanel } from '@/app/components/holo-panels'
 import { IntroVideo } from '@/app/components/intro-video'
+import { LanguageMenu } from '@/app/components/language-menu'
 import Logo from '@/app/components/logo'
 import { type MarkName, Mark } from '@/app/components/marketing-icons'
 import { Rack } from '@/app/components/marketing-shell'
@@ -14,6 +16,9 @@ import { PeepStage } from '@/app/components/peep-stage'
 import { ShootingStars } from '@/app/components/shooting-stars'
 import { SummonScene } from '@/app/components/summon-scene'
 import { World } from '@/app/components/world'
+import { XoMenu } from '@/app/components/xo-menu'
+import { XMark, X_HANDLE, X_HREF } from '@/app/components/x-mark'
+import { XoUniverseMark } from '@/app/components/universe-mark'
 import {
   type ChipId,
   type DoorId,
@@ -28,9 +33,7 @@ import {
 import {
   DEFAULT_LOCALE,
   landingHref,
-  LOCALES,
   type Locale,
-  switchHref,
 } from '@/app/i18n/locales'
 import { type Tier, tierLimit, tierPrice } from '@/domain/billing/tiers'
 import { landingTiers, type TierRow } from '@/domain/billing/tier-table'
@@ -69,21 +72,17 @@ import { createClient, getUser } from '@/lib/supabase/server'
  * deeper. A landing page is not the manual; it is the reason to open one.
  */
 
-/** The one handle, held once because both accounts answer to the same name. */
-const SOCIAL_HANDLE = '@kxbteam'
-
 /**
- * The two marks, drawn here rather than imported.
+ * The camera, drawn here rather than imported.
  *
- * lucide dropped its brand icons in v1 - there is no `Instagram` to import any
- * more, and `Twitter` was the bird, which is the wrong company now. lucide's
- * `X` is the close-window cross, and a plain ✕ beside a camera glyph reads as
- * "dismiss", not as a link to a profile.
+ * lucide dropped its brand icons in v1, so there is no `Instagram` to import
+ * any more. Same hand as `marketing-icons.tsx` - one weight, `currentColor`,
+ * no fill - and on the same 24-unit grid as the X glyph beside it, so `size-4`
+ * sizes them together.
  *
- * So: the camera in the same hand as `marketing-icons.tsx` - one weight,
- * `currentColor`, no fill - and the X logo as the solid glyph it actually is,
- * because that mark has no line-drawn form that still looks like itself. Both
- * on a 24-unit grid so `size-4` sizes them together.
+ * The X logo used to sit next to this one and is `x-mark.tsx` now: it is on
+ * three surfaces since the channel grew a follow link, and `X_HANDLE` moved
+ * with it. Instagram is still only here, so it stays here.
  */
 function InstagramMark(props: SVGProps<SVGSVGElement>) {
   return (
@@ -103,31 +102,6 @@ function InstagramMark(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-function XMark(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  )
-}
-
-/**
- * The Octocat silhouette, as one path.
- *
- * Drawn here beside the other two rather than pulled from an icon package for
- * the reason `marketing-icons.tsx` gives at length: three small marks are not
- * worth a dependency. Unlike those, this one is a *logo* and is copied exactly
- * - a house-style redraw of somebody else's mark is a worse mark and a worse
- * citizen. Hence `fill` rather than the stroke every drawing of our own uses.
- */
-function GithubMark(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden {...props}>
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-    </svg>
-  )
-}
-
 /**
  * Where the two accounts are, in the order they get looked at.
  *
@@ -138,7 +112,7 @@ function GithubMark(props: SVGProps<SVGSVGElement>) {
  */
 const SOCIALS = [
   { name: 'Instagram', href: 'https://instagram.com/kxbteam', icon: InstagramMark },
-  { name: 'X', href: 'https://x.com/kxbteam', icon: XMark, wordmark: true },
+  { name: 'X', href: X_HREF, icon: XMark, wordmark: true },
 ] as const
 
 /** What the landing page needs to know about who may join, and how many. */
@@ -852,12 +826,22 @@ const PLAN: { id: PlanId; hue: number; live: boolean }[] = [
  * than anchors, so the pill works from every one of them and not only from
  * here - which an anchor row silently does not.
  */
-const SECTIONS = [
-  { key: 'play', href: '/play' },
-  { key: 'create', href: '/create' },
-  { key: 'share', href: '/share' },
-  { key: 'pricing', href: '#pricing' },
-] as const
+/**
+ * The header, down to what is a destination.
+ *
+ * Play, Create, Share and Pricing were here and are not any more. They are
+ * pages *about* the product, and four of them across the top made the header a
+ * table of contents for an argument nobody had asked to read yet. They
+ * introduce themselves on the XO Universe channel now, in a column beside the
+ * story, where somebody is already reading and the question "what is this"
+ * has actually occurred to them.
+ *
+ * What stays is the two places somebody goes - the handbook and the catalogue
+ * - plus the channel. Three short words, which is also what makes them fit on
+ * a phone: the reason the whole row used to be `display: none` under 768px was
+ * that seven links never could.
+ */
+const SECTIONS = [{ key: 'browse', href: '/browse' }] as const
 
 /** Shared attributes for the chip icons: 15px, stroked, inherit the hue. */
 const ICON = {
@@ -968,86 +952,73 @@ const CHIPS: { id: ChipId; hue: number; href: string; icon: React.ReactNode }[] 
   },
 ]
 
-/**
- * EN / DE / BG, in the header pill.
- *
- * Plain links rather than a `<select>` or a dropdown. Three languages still fit
- * in the width of the word "Pricing", so a control that has to be opened before
- * it shows its options is machinery around a link - and a `<select>` here would
- * need client JS to navigate, on a page that is otherwise entirely
- * server-rendered.
- *
- * Each link goes through `/lang/{code}`, which writes the cookie and lands on
- * the page. It used to point straight at the page and write nothing; the note
- * on that route handler is the whole argument for the hop, and the short of it
- * is that the landing pages carry their locale in the path while everything
- * under them reads a cookie, so a switch that only changed the path changed the
- * front page and nothing behind it.
- *
- * `aria-current` rather than only a colour, so the active language is announced
- * rather than merely looking brighter.
- */
-function LanguageSwitch({ locale }: { locale: Locale }) {
-  /*
-   * Below `sm`, only the languages you are not reading.
-   *
-   * The header pill has 38px of slack at 375px and each code with its separator
-   * costs about 29px, so the full set does not fit and never did - with two
-   * locales this dropped the active one and showed a lone "EN", which was
-   * exactly enough. Three do not fit either way, so below `sm` the control
-   * collapses to the *next* language rather than to all the others: one tap
-   * cycles EN → DE → BG → EN, which is a whole control in one code's width.
-   *
-   * At `sm` and up there is room for the honest thing, so all three are drawn
-   * with the current one marked.
-   */
-  const next = LOCALES[(LOCALES.indexOf(locale) + 1) % LOCALES.length]
-
-  return (
-    <span className="mx-1 inline-flex items-center gap-1 text-xs" aria-label="Language">
-      <Link
-        href={switchHref(next)}
-        hrefLang={next}
-        lang={next}
-        className="uppercase text-ink-muted transition hover:text-ink sm:hidden"
-      >
-        {next}
-      </Link>
-
-      {LOCALES.map((code, i) => {
-        const active = code === locale
-        return (
-          <span key={code} className="hidden items-center gap-1 sm:inline-flex">
-            {i > 0 && <span className="text-ink-muted/40">/</span>}
-            {active ? (
-              <span aria-current="true" className="font-medium text-ink uppercase">
-                {code}
-              </span>
-            ) : (
-              <Link
-                href={switchHref(code)}
-                hrefLang={code}
-                lang={code}
-                className="uppercase text-ink-muted transition hover:text-ink"
-              >
-                {code}
-              </Link>
-            )}
-          </span>
-        )
-      })}
-    </span>
-  )
-}
 
 export function Landing({
   registrationOpen,
   seatLimit,
   featured,
   tiers,
+  universe = false,
+  channels = false,
+  episode = null,
+  contest = false,
   dict,
   locale,
-}: AccessTerms & { dict: LandingDict; locale: Locale }) {
+}: AccessTerms & {
+  dict: LandingDict
+  locale: Locale
+  /**
+   * Whether the XO Universe tab is in the header.
+   *
+   * A prop with a default rather than part of `AccessTerms`, and the default
+   * is what makes this file portable: resolving the flag here would mean
+   * importing `@/domain/xo-universe`, and this file is published to the public
+   * repository while that folder deliberately is not. An import would compile
+   * here and not there.
+   *
+   * So the three routes that draw this page look the flag up and pass it in,
+   * and a caller that knows nothing about the channel gets a header without
+   * the tab rather than a build error. See `.sync-to-public.sh` for what is
+   * held back and why.
+   */
+  universe?: boolean
+  /**
+   * Whether the XO menu offers the directory of other people's shows.
+   *
+   * The same arrangement as `universe`, and a second flag rather than a reuse
+   * of that one because they are two decisions: the story channel can be up
+   * while the directory is not. `/xo-universe/channels` 404s when it is off,
+   * so a menu drawn from the wrong boolean would be a menu with a dead item
+   * in it.
+   */
+  channels?: boolean
+  /**
+   * What is on the channel right now, if anything is.
+   *
+   * The same arrangement as `universe` above and for the same reason, one step
+   * further: a chapter is a `Chapter` in `@kxb/xo-universe` and its title is a
+   * `Text<string>` that has to be resolved against a language, and neither
+   * type may be named in this file. So the routes resolve it and hand over two
+   * primitives - a number and a string somebody can read.
+   *
+   * `null` means "draw nothing", which is what a caller with no channel gets,
+   * and also what these routes pass when the flag is off. There is no state
+   * where the band is drawn without a chapter to name in it: a card that says
+   * "read the stories" and cannot say which one is on is an advert for an
+   * empty page.
+   */
+  episode?: { number: number; title: string } | null
+  /**
+   * Whether a prize draw is running, and therefore whether the footer names it.
+   *
+   * A prop with a default for the same portability reason as `universe`: the
+   * answer is a row read with the service role, and this file is published to
+   * the public repository where there is no such row. A caller that knows
+   * nothing about a contest gets a footer without the link, which is also what
+   * the site shows for eleven months of the year.
+   */
+  contest?: boolean
+}) {
   /**
    * One door, whatever the flag says.
    *
@@ -1111,7 +1082,12 @@ export function Landing({
           <Link href={locale === 'de' ? '/de/community' : '/community'} className="nav-pill-link">
             Community
           </Link>
-          <LanguageSwitch locale={locale} />
+          {/* Absent rather than disabled when the flag is off, which is the
+              rule the rail states: a disabled tab is a promise of a feature
+              somebody does not have. The route 404s underneath, so this is the
+              cosmetic half of the switch and not the enforcing one. */}
+          {universe ? <XoMenu locale={locale} channels={channels} /> : null}
+          <LanguageMenu locale={locale} />
           <Link href="/login" className="nav-pill-link nav-pill-quiet">
             {dict.nav.signIn}
           </Link>
@@ -1284,6 +1260,64 @@ export function Landing({
           nothing is featured, which is most weeks.
         */}
         <FeaturedEvents doors={featured} dict={dict} locale={locale} />
+
+        {/*
+          The channel, and it is the first box on the page.
+
+          It sat between the world tour and the price for a day, on the
+          argument that a second lit control near the hero would compete with
+          "Join the beta". That was the wrong end of the trade: two thirds of a
+          long page stood between somebody arriving and any sign that there is
+          a story here at all, and the visitor who would rather read than sign
+          up is exactly the one who leaves before scrolling that far. So it is
+          directly under the hero now - above the three doors, above everything
+          that argues - and it is the first thing the page offers after the
+          crowd and the chip strip.
+
+          What stops it competing is the colour rather than the distance.
+          Magenta, hue 330, because that is the channel's colour everywhere
+          else it appears - the header's XO pill, the phone's jump button on
+          the channel itself. Not the CTA's cyan, and that is a rule rather
+          than a preference: two glowing controls in the same colour are two
+          things claiming to be the next step. This one is a door to a
+          different kind of thing, and it is allowed to say so.
+
+          Under `FeaturedEvents` rather than over it: a room somebody is
+          actually running this week outranks a chapter, and that section draws
+          nothing on the weeks there is none - which is most of them.
+
+          Absent when there is no episode to name. See the prop.
+        */}
+        {episode ? (
+          <section className="xo-band rise col-span-6" style={{ '--i': 0 } as React.CSSProperties}>
+            {/* The mark carries the colour and the movement, so the copy
+                beside it does not have to shout to be the loud thing on this
+                part of the page. */}
+            <XoUniverseMark className="xo-band-mark" />
+
+            <div className="xo-band-copy">
+              <p className="xo-band-tag">{dict.universe.tag}</p>
+              <h2 className="xo-band-title font-pixel">{dict.universe.title}</h2>
+              {/* The number and the title come off the channel's own schedule
+                  rather than being typed here, so this line cannot still be
+                  advertising chapter 00 the week after chapter 03 goes up. */}
+              <p className="xo-band-now">
+                <span className="xo-band-live" aria-hidden="true" />
+                {fill(dict.universe.now, {
+                  n: String(episode.number).padStart(2, '0'),
+                  title: episode.title,
+                })}
+              </p>
+            </div>
+
+            {/* Outside the copy on purpose: it is a grid child, so it can move
+                to the end of the row on a wide screen instead of leaving two
+                thirds of the band empty. See `.xo-band-cta`. */}
+            <Link href="/xo-universe" className="xo-band-cta cta-pixel">
+              {dict.universe.cta}
+            </Link>
+          </section>
+        ) : null}
 
         {/* The three doors. Short on purpose: each one is a page. */}
         <header className="col-span-6 mt-4 text-center">
@@ -1757,6 +1791,20 @@ export function Landing({
           <Link href="/events" className="nav-link">
             {dict.footer.events}
           </Link>
+          {/*
+            The prize draw, while there is one.
+
+            Before the legal links rather than among them, because that is what
+            it is to a reader: a thing happening this month, not a document
+            they will one day go looking for. It disappears the day the
+            backoffice switches the contest off, and the conditions stay up
+            behind the URL - people entered on the strength of them.
+          */}
+          {contest && (
+            <Link href="/gewinnspiel" className="nav-link">
+              {dict.footer.contest}
+            </Link>
+          )}
           {/* The handbook. "Community" is the same word in all three page
               languages, so it is a literal rather than a dictionary key - the
               German handbook lives under its own prefix and gets linked to
@@ -1799,8 +1847,8 @@ export function Landing({
               href={social.href}
               target="_blank"
               rel="me noopener noreferrer"
-              title={`${social.name} · ${SOCIAL_HANDLE}`}
-              aria-label={`${social.name} — ${SOCIAL_HANDLE}`}
+              title={`${social.name} · ${X_HANDLE}`}
+              aria-label={`${social.name} — ${X_HANDLE}`}
               className="nav-link inline-flex items-center gap-1.5"
             >
               <social.icon aria-hidden className="size-4" />

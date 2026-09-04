@@ -159,15 +159,27 @@ describe('the table itself', () => {
     }
   })
 
-  test('free can collect any number of XPs and hold one of each', () => {
+  test('free can collect any number of XPs, play several, and make one', () => {
     // The want-list, and the whole shape of the free funnel. Collecting is free
-    // and unlimited; playing and making are one apiece, so somebody on free can
-    // find out whether they want the thing before the wall - and the wall lands
-    // on the *second* of either, which is somebody who has already used the
-    // first and liked it.
+    // and unlimited; playing is a handful, so a shelf is a shelf rather than a
+    // thing you take down to try the next one; and *making* is where the wall
+    // is, on the second level somebody wants to build.
+    //
+    // Playing was one apiece with authoring, and the asymmetry is deliberate
+    // now: playing is what invites people in, authoring is what the paid tiers
+    // are for.
     expect(tierLimit('free', 'magazine')).toBe(UNLIMITED)
-    expect(tierLimit('free', 'xpPlaces')).toBe(1)
+    expect(tierLimit('free', 'xpPlaces')).toBe(4)
     expect(tierLimit('free', 'projects')).toBe(1)
+  })
+
+  test('a free space can open rooms', () => {
+    // It could not, and that was the whole of "free is a demonstration": the
+    // lobby and nowhere else. A room is not a premium feature - it is how a
+    // group with two things going on stops holding both in one space - so free
+    // holds a few, and the cap stays real because rooms exist to spread
+    // realtime load rather than to be sold.
+    expect(tierLimit('free', 'xoPlaces')).toBe(5)
   })
 
   test('every tier holds at least one XP place, so no tier is a rung', () => {
@@ -294,5 +306,76 @@ describe('reading a sparse tier row', () => {
       ...TIER_LIMITS.xo,
       seats: 9,
     })
+  })
+})
+
+describe('what a member bought with coins', () => {
+  /**
+   * The fourth rung. `docs/product/economy.md` §8: beyond the tier's allowance,
+   * somebody may pay coins and the space holds one more - permanently, and
+   * whether or not the buyer is still around.
+   */
+  test('adds to what the tier included', () => {
+    // free holds three blueprints; two bought makes five.
+    expect(resolveLimit({ tier: 'free', key: 'blueprints', bought: 2 })).toBe(5)
+  })
+
+  /**
+   * The distinction between this rung and the override, and the reason they
+   * cannot share a mechanism. An override says what the cap *is*; a purchase
+   * buys one *more*. Maxing would make the second blueprint somebody paid for
+   * do nothing on a tier that already included three - a charge for nothing.
+   */
+  test('is added rather than maxed, unlike an override', () => {
+    expect(resolveLimit({ tier: 'free', key: 'blueprints', bought: 1 })).toBe(4)
+    expect(resolveLimit({ tier: 'free', key: 'blueprints', override: 1 })).toBe(3)
+  })
+
+  test('stacks on top of an override rather than being swallowed by it', () => {
+    // The operator says ten; two were bought on top of that.
+    expect(
+      resolveLimit({ tier: 'free', key: 'blueprints', override: 10, bought: 2 }),
+    ).toBe(12)
+  })
+
+  /**
+   * The bug the `null` convention exists to prevent, arriving through the one
+   * operation that had never needed it. `null + 2` is `2` in JavaScript, so a
+   * space with no cap at all would acquire one the moment somebody bought an
+   * extra - and the purchase would *lower* their limit.
+   */
+  test('cannot turn unlimited into a number', () => {
+    expect(resolveLimit({ tier: 'xp', key: 'projects', bought: 2 })).toBe(UNLIMITED)
+    expect(
+      resolveLimit({ tier: 'free', key: 'blueprints', override: UNLIMITED, bought: 2 }),
+    ).toBe(UNLIMITED)
+  })
+
+  /**
+   * The sharp edge, and it is deliberate. A space can buy more than the
+   * installation will serve, and what it paid for will not appear. That is the
+   * right way round: the alternative is coins that can overwhelm a box, which
+   * is a capacity incident rather than a billing complaint.
+   */
+  test('is still clamped by the platform ceiling', () => {
+    expect(
+      resolveLimit({ tier: 'free', key: 'blueprints', bought: 50, ceiling: 10 }),
+    ).toBe(10)
+  })
+
+  test('none bought resolves exactly as it did before the rung existed', () => {
+    for (const tier of TIERS) {
+      for (const key of LIMIT_KEYS) {
+        expect(resolveLimit({ tier, key, bought: 0 })).toBe(resolveLimit({ tier, key }))
+        expect(resolveLimit({ tier, key })).toBe(tierLimit(tier, key))
+      }
+    }
+  })
+
+  test('a nonsense count cannot lower a limit', () => {
+    // Negative is not reachable through the purchase path, which counts rows.
+    // It is clamped anyway, because a limit that went *down* when a number went
+    // wrong is the failure nobody would think to look for.
+    expect(resolveLimit({ tier: 'free', key: 'blueprints', bought: -5 })).toBe(3)
   })
 })

@@ -531,4 +531,162 @@ export const PRESETS: Preset[] = [
       { at: 1, ease: 'smooth', lift: 0, bones: STANDING },
     ],
   },
+
+  // -------------------------------------------------------------------------
+  // The performed beats
+  // -------------------------------------------------------------------------
+  // Everything above is locomotion - how a body gets somewhere. These are what
+  // it does when it has arrived, and they exist because the scene language in
+  // `src/domain/channels/scene.ts` can now ask for them by name: laugh, cry,
+  // nod, shrug, point, hit, reach.
+  //
+  // Authored the same way as the rest and held to the same standard: every
+  // number below was measured against the real skeleton before it was written
+  // down, and `presets.test.ts` asserts where the hands actually end up. A
+  // laugh whose head tips the wrong way is correct TypeScript.
+  //
+  // They name only the bones they mean, so they layer: a laugh over a walk is
+  // somebody laughing as they walk, because the laugh says nothing about legs.
+  {
+    id: 'laugh',
+    label: 'Laugh',
+    hint: 'Head back, chest bouncing. Says nothing about the legs.',
+    seconds: 1.2,
+    frames: [
+      // The bounce is the laugh. A head that tips back and holds is somebody
+      // looking at the ceiling; it is the return, twice, that reads as
+      // laughter - which is why the middle frames are not evenly spaced.
+      { at: 0, ease: 'smooth', bones: { head: [0, 0, 0], chest: [0, 0, 0], ...armsTogether(-10, 26) } },
+      { at: 0.18, ease: 'smooth', bones: { head: [-24, 0, 0], chest: [-11, 0, 0], ...armsTogether(-4, 40) } },
+      { at: 0.38, ease: 'smooth', bones: { head: [-12, 0, 0], chest: [-4, 0, 0], ...armsTogether(-10, 30) } },
+      { at: 0.56, ease: 'smooth', bones: { head: [-22, 0, 0], chest: [-10, 0, 0], ...armsTogether(-5, 38) } },
+      { at: 0.76, ease: 'smooth', bones: { head: [-10, 0, 0], chest: [-3, 0, 0], ...armsTogether(-9, 30) } },
+      { at: 1, ease: 'smooth', bones: { head: [0, 0, 0], chest: [0, 0, 0], ...armsTogether(-10, 26) } },
+    ],
+  },
+  {
+    id: 'nod',
+    label: 'Nod',
+    hint: 'Two nods of the head. Touches nothing else at all.',
+    seconds: 0.9,
+    frames: [
+      // The smallest preset in the catalogue, and deliberately so: a nod that
+      // also moved the chest would be a bow, and somebody stamping this over a
+      // pose they have built wants their pose back with a nod in it.
+      { at: 0, ease: 'smooth', bones: { head: [0, 0, 0] } },
+      { at: 0.22, ease: 'smooth', bones: { head: [24, 0, 0] } },
+      { at: 0.44, ease: 'smooth', bones: { head: [-2, 0, 0] } },
+      { at: 0.66, ease: 'smooth', bones: { head: [20, 0, 0] } },
+      { at: 1, ease: 'smooth', bones: { head: [0, 0, 0] } },
+    ],
+  },
+  {
+    id: 'shrug',
+    label: 'Shrug',
+    hint: 'Hands turn out, shoulders lift, head tips. Arms and head.',
+    seconds: 1.1,
+    frames: [
+      { at: 0, ease: 'smooth', bones: { ...armsTogether(-10, 24), head: [0, 0, 0], chest: [0, 0, 0] } },
+      // Hands out and forward at hip height - measured at (+/-0.40, 0.88,
+      // 0.40), which is the palms-up "who knows" rather than arms raised.
+      {
+        at: 0.34,
+        ease: 'smooth',
+        bones: { upperarmr: [-55, 0, 20], lowerarmr: [0, 0, 55], upperarml: [-55, 0, -20], lowerarml: [0, 0, -55], head: [8, 0, 0], chest: [2, 0, 0] },
+      },
+      {
+        at: 0.62,
+        ease: 'hold',
+        bones: { upperarmr: [-55, 0, 20], lowerarmr: [0, 0, 55], upperarml: [-55, 0, -20], lowerarml: [0, 0, -55], head: [8, 0, 0], chest: [2, 0, 0] },
+      },
+      { at: 1, ease: 'smooth', bones: { ...armsTogether(-10, 24), head: [0, 0, 0], chest: [0, 0, 0] } },
+    ],
+  },
+  {
+    id: 'point',
+    label: 'Point',
+    hint: 'Right arm out in front and held there. Right arm only.',
+    seconds: 0.8,
+    frames: [
+      { at: 0, ease: 'smooth', bones: { upperarmr: [-72, 0, -10], lowerarmr: [0, 0, 22] } },
+      // Hand ends at (-0.41, 1.08, 0.54): shoulder height, well in front.
+      { at: 0.35, ease: 'smooth', bones: { upperarmr: [-10, 0, 70], lowerarmr: [0, 0, 6] } },
+      // Held, because a point that snaps back is a flinch. The hold is what
+      // makes this usable as "and he points at it" rather than a twitch.
+      { at: 1, ease: 'hold', bones: { upperarmr: [-10, 0, 70], lowerarmr: [0, 0, 6] } },
+    ],
+  },
+  {
+    id: 'cry',
+    label: 'Cry',
+    hint: 'Hands to the face, shoulders going. Arms, head and chest.',
+    seconds: 1.6,
+    frames: [
+      { at: 0, ease: 'smooth', bones: { ...armsTogether(-10, 26), head: [0, 0, 0], chest: [0, 0, 0] } },
+      // Hands measured at (+/-0.06, 1.26, 0.06) - the head sits at 1.24, so
+      // this is hands covering the face rather than somewhere near it.
+      {
+        at: 0.28,
+        ease: 'smooth',
+        bones: { upperarmr: [-30, 0, 100], lowerarmr: [0, 0, 110], upperarml: [-30, 0, -100], lowerarml: [0, 0, -110], head: [18, 0, 0], chest: [10, 0, 0] },
+      },
+      {
+        at: 0.5,
+        ease: 'smooth',
+        bones: { upperarmr: [-30, 0, 100], lowerarmr: [0, 0, 110], upperarml: [-30, 0, -100], lowerarml: [0, 0, -110], head: [24, 0, 0], chest: [15, 0, 0] },
+      },
+      {
+        at: 0.72,
+        ease: 'smooth',
+        bones: { upperarmr: [-30, 0, 100], lowerarmr: [0, 0, 110], upperarml: [-30, 0, -100], lowerarml: [0, 0, -110], head: [18, 0, 0], chest: [10, 0, 0] },
+      },
+      { at: 1, ease: 'smooth', bones: { ...armsTogether(-10, 26), head: [0, 0, 0], chest: [0, 0, 0] } },
+    ],
+  },
+  {
+    id: 'hit',
+    label: 'Hit',
+    hint: 'Wind up and swing the right arm. Right arm and chest.',
+    seconds: 0.65,
+    frames: [
+      { at: 0, ease: 'smooth', bones: { upperarmr: [-72, 0, -10], lowerarmr: [0, 0, 22], chest: [0, 0, 0] } },
+      // The wind-up takes longer than the swing, which is what makes it read
+      // as a punch rather than a wave: hand goes back to z=-0.08, then through
+      // to z=+0.62 in half the time.
+      {
+        at: 0.42,
+        ease: 'smooth',
+        bones: { upperarmr: [-30, 0, -35], lowerarmr: [0, 0, 80], chest: [0, -18, 0] },
+      },
+      {
+        at: 0.62,
+        ease: 'smooth',
+        bones: { upperarmr: [-20, 0, 70], lowerarmr: [0, 0, 10], chest: [0, 14, 0] },
+      },
+      { at: 1, ease: 'smooth', bones: { upperarmr: [-72, 0, -10], lowerarmr: [0, 0, 22], chest: [0, 0, 0] } },
+    ],
+  },
+  {
+    id: 'reach',
+    label: 'Reach',
+    hint: 'Right arm out and held, body leaning after it. Right arm and spine.',
+    seconds: 0.9,
+    frames: [
+      { at: 0, ease: 'smooth', bones: { upperarmr: [-72, 0, -10], lowerarmr: [0, 0, 22], spine: [0, 0, 0] } },
+      // Held at the end, not returned. A reach *ends holding something* - see
+      // the `reach` action in the scene language, which is one action for the
+      // reach and the pick-up because nobody stages a reach that stops short.
+      // Snapping the arm back would put the thing down again.
+      {
+        at: 0.55,
+        ease: 'smooth',
+        bones: { upperarmr: [-15, 0, 72], lowerarmr: [0, 0, 8], spine: [10, 0, 0] },
+      },
+      {
+        at: 1,
+        ease: 'hold',
+        bones: { upperarmr: [-15, 0, 72], lowerarmr: [0, 0, 8], spine: [10, 0, 0] },
+      },
+    ],
+  },
 ]

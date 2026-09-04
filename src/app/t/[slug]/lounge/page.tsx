@@ -10,8 +10,14 @@ import { loungeImagesProjection } from '@/domain/lounge/image-projection'
 import { listLoungeImages } from '@/domain/lounge/image-queries'
 import { listLoungeBlocks } from '@/domain/lounge/queries'
 import { thingiverseProjection } from '@/domain/thingiverse/projection'
-import { listBlueprints, listClips, listThings } from '@/domain/thingiverse/queries'
-import { readAsDummy, readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { coinsOf, nextPrice } from '@/domain/bank/next'
+import {
+  countBlueprints,
+  listBlueprints,
+  listClips,
+  listThings,
+} from '@/domain/thingiverse/queries'
+import { readProfileAvatar } from '@/domain/profile/avatar-queries'
 import { readLookFor, readXpBody, shopFor } from '@/domain/skins/queries'
 import { readSceneIdentity } from '@/domain/guests/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
@@ -21,11 +27,11 @@ import {
   battleOpen,
   canWrite,
   hasRole,
-  hasTier,
   isGuest,
   perfDisplayOn,
   requireFeature,
   requireTenant,
+  thingiverseOpen,
 } from '@/lib/tenant'
 import { readLocale } from '@/app/i18n/preference'
 import { worldDict } from '@/app/i18n/world'
@@ -79,7 +85,7 @@ export default async function LoungePage({
    * feature off draws no furniture, which is what `initialThings` defaulting to
    * empty in the scene means.
    */
-  const summoning = context.features.thingiverse && hasTier(context, 'xo')
+  const summoning = thingiverseOpen(context)
   if (summoning) {
     await runProjection(supabase, thingiverseProjection, tenant.id)
   }
@@ -112,6 +118,28 @@ export default async function LoungePage({
    * door live in `tenant_guests` instead. For a member this finds no row and
    * hands back exactly what was read above.
    */
+
+  /*
+    What one more blueprint costs here, worked out once on the server.
+
+    Only when the panel that can spend it is reachable at all - `summoning` is
+    the same gate the shelf is loaded behind - and only ever a *read*: the
+    charge is `drawBlueprint`'s, from the same `nextPrice`, so the number drawn
+    on a tile and the number taken out of a purse are one answer to one
+    question. Zero in a space with the economy off, which is almost all of them.
+  */
+  const newThingPrice = summoning
+    ? coinsOf(
+        await nextPrice(
+          supabase,
+          tenant.id,
+          tenant.tier,
+          'blueprints',
+          await countBlueprints(supabase, tenant.id),
+        ),
+      )
+    : 0
+
   const identity = await readSceneIdentity(supabase, tenant.id, user.id, { name, avatar })
 
   /**
@@ -125,7 +153,7 @@ export default async function LoungePage({
   const look = await readLookFor(supabase, user, tenant.id)
 
   /**
-   * The wardrobe's three parts, from the rows that own them.
+   * The wardrobe's two bodies and its one mode, from the rows that own them.
    *
    * `look` above is what the room *draws*; these are what the picker has to
    * highlight, and they are not the same question. Somebody in peep mode still
@@ -133,12 +161,12 @@ export default async function LoungePage({
    * an animal underneath. Reading one from the other is how the two bodies
    * became one and the peep got overwritten.
    *
-   * An anonymous visitor has neither row: they stand in the dummy and the XP
-   * half is not offered at all.
+   * An anonymous visitor has no row at all: they stand in the dummy, and the XP
+   * half is not offered to them.
    */
-  const [xp, dummy] = user.is_anonymous
-    ? ([{ model: null, inLounge: false }, false] as const)
-    : await Promise.all([readXpBody(supabase, user.id), readAsDummy(supabase, user.id)])
+  const xp = user.is_anonymous
+    ? { model: null, inLounge: false }
+    : await readXpBody(supabase, user.id)
 
   /**
    * The wardrobe's other half, for anybody who has one.
@@ -174,6 +202,7 @@ export default async function LoungePage({
       initialGoals={goals}
       initialThings={things}
       initialShelf={shelf}
+      newThingPrice={newThingPrice}
       initialClips={clips}
       /*
         Whether running costs anything here. Defaults off - every world this
@@ -228,7 +257,6 @@ export default async function LoungePage({
        */
       xpBody={xp.model}
       showXp={xp.inLounge}
-      asDummy={dummy}
       /*
         Measuring, when an operator has turned it on for this space. Off for
         everybody by default, and invisible in the room either way - see the

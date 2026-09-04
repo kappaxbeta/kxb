@@ -10,6 +10,8 @@ import {
   searchModels,
   thumbnailFor,
 } from '@/domain/thingiverse/models'
+import { CoinPrice } from '@/app/components/coin-price'
+import { priceOfThing } from '@/domain/thingiverse/blueprint'
 import type { BlueprintView } from '@/domain/thingiverse/queries'
 import type { SummonMatch } from '@/domain/thingiverse/summon'
 
@@ -42,6 +44,30 @@ import type { SummonMatch } from '@/domain/thingiverse/summon'
  * keystroke to filter a list that is *already here* would be slower and would
  * also mean a Server Action firing while a canvas is running - which this scene
  * is written throughout to avoid.
+ *
+ * ---------------------------------------------------------------------------
+ * It wears the room's own chrome
+ * ---------------------------------------------------------------------------
+ * This was a black box with a white hairline round it, drawn over a world whose
+ * every other panel - the controls, the blocks, the entry gate - is `.hud-panel`
+ * glass inside a fuchsia-to-cyan wire. One surface in the system's default
+ * dialogue reads as a browser dialog that happens to be open on top of the
+ * game, which is the one thing a panel drawn *inside* a room must not look
+ * like. The classes are the ones already in globals.css; nothing new is
+ * invented here.
+ *
+ * ---------------------------------------------------------------------------
+ * And it says what a summon costs
+ * ---------------------------------------------------------------------------
+ * The rail's summon button has carried `priceOfThing(spec)` since blueprints
+ * could be priced. This panel summons the *same* blueprints, by the same
+ * action, and said nothing - so the one number that is a promise depended on
+ * which of two controls you happened to reach for. It is the shelf entries
+ * only, and that is not a gap: picking a raw model draws a fresh blueprint with
+ * `freshSpec`, which carries no price, so there is nothing to charge and
+ * `CoinPrice` correctly draws nothing - unless the space is past the blueprint
+ * allowance its plan includes, in which case drawing one is what costs, and
+ * `newPrice` is that number on every tile in the pack sections.
  */
 
 /**
@@ -66,11 +92,20 @@ const TILES = 40
 
 export function ThingiverseView({
   shelf,
+  newPrice = 0,
   dict,
   onSummon,
   onClose,
 }: {
   shelf: readonly BlueprintView[]
+  /**
+   * What drawing a *new* blueprint costs, which is what picking a raw model
+   * does. Zero when the plan still has room, and zero in every space with the
+   * economy off - see `nextPrice`, which is the one place that decides it and
+   * which `drawBlueprint` charges from, so the number on the tile and the
+   * number taken out of the purse cannot disagree.
+   */
+  newPrice?: number
   dict: WorldDict['things']
   /** Stand one up. The caller closes this - see `summon`. */
   onSummon: (match: SummonMatch) => void
@@ -141,9 +176,14 @@ export function ThingiverseView({
   const nothing = query.trim() !== '' && !first
 
   return (
-    <div className="pointer-events-auto absolute inset-x-2 bottom-4 top-16 mx-auto flex max-w-3xl flex-col rounded-2xl border border-white/20 bg-black/80 p-3 text-white backdrop-blur-md sm:inset-x-8">
+    <div className="hud-panel hud-panel-enter pointer-events-auto absolute inset-x-2 bottom-4 top-16 mx-auto flex max-w-3xl flex-col p-3 text-[var(--color-ink)] sm:inset-x-8">
       <div className="mb-1.5 flex items-center gap-3">
-        <span className="text-xs font-medium">{dict.browse}</span>
+        {/* The panel's name, in the face and the colour every other title in
+            this room is drawn in - see the heading on the controls dialog. The
+            glow is the same one, at the smaller size this row can carry. */}
+        <span className="font-pixel shrink-0 text-xs uppercase tracking-[0.1em] text-[var(--color-accent)] [text-shadow:0_0_1rem_oklch(0.7_0.27_322/0.6)]">
+          {dict.browse}
+        </span>
         <input
           autoFocus
           value={query}
@@ -155,12 +195,12 @@ export function ThingiverseView({
           }}
           placeholder={dict.searchPacks}
           aria-label={dict.searchPacks}
-          className="min-w-0 flex-1 rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-xs text-white placeholder:text-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+          className="min-w-0 flex-1 rounded-full border border-[oklch(0.66_0.16_275_/_0.45)] bg-[oklch(0.12_0.04_285_/_0.72)] px-3 py-1 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
         />
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-full px-1.5 text-xs text-white/60 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="hud-chip shrink-0 !py-1 text-[11px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {dict.cancel}
         </button>
@@ -173,7 +213,31 @@ export function ThingiverseView({
         in front of you, and nothing on screen said so. One line under the
         search is where somebody reads it without being taught.
       */}
-      <p className="mb-2 text-[10px] text-white/40">{dict.browseHint}</p>
+      {/*
+        What picking one does, and what it costs, in one line above the grid.
+
+        The price is *not* on each tile, which is a deliberate exception to the
+        rule `CoinPrice` states - put it on the control that spends it. That
+        rule is about a number that differs per control, and this one does not:
+        every model in every pack draws the same new blueprint against the same
+        allowance, so on forty tiles it is the same figure forty times, and a
+        number repeated forty times stops being read. Worse, it drowns the
+        shelf's prices directly above, which *do* differ per thing and are the
+        ones somebody has to compare.
+
+        So: once, in the sentence that already explains what a press does, over
+        the grid it applies to. The shelf keeps its per-item prices on its
+        tiles, where they belong.
+      */}
+      <p className="mb-2 flex items-baseline gap-1 text-[10px] text-[var(--color-ink-muted)]">
+        <span>{dict.browseHint}</span>
+        {newPrice > 0 && (
+          <span className="text-[var(--color-ink)]">
+            {dict.drawCosts}
+            <CoinPrice coins={newPrice} />
+          </span>
+        )}
+      </p>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
         {mine.length > 0 && (
@@ -183,6 +247,7 @@ export function ThingiverseView({
                 key={entry.id}
                 model={entry.spec.model}
                 label={entry.name}
+                price={priceOfThing(entry.spec)}
                 onPick={() => onSummon(asMatch(entry))}
               />
             ))}
@@ -196,6 +261,7 @@ export function ThingiverseView({
                 key={entry.id}
                 model={entry.spec.model}
                 label={entry.name}
+                price={priceOfThing(entry.spec)}
                 onPick={() => onSummon(asMatch(entry))}
               />
             ))}
@@ -216,7 +282,9 @@ export function ThingiverseView({
         ))}
 
         {nothing && (
-          <p className="py-8 text-center text-xs text-white/50">{dict.nothingFound}</p>
+          <p className="py-8 text-center text-xs text-[var(--color-ink-muted)]">
+            {dict.nothingFound}
+          </p>
         )}
 
         {/*
@@ -228,7 +296,7 @@ export function ThingiverseView({
           is this space's own things and then the size of what is behind them.
         */}
         {query.trim() === '' && (
-          <p className="py-6 text-center text-xs text-white/40">
+          <p className="py-6 text-center text-xs text-[var(--color-ink-muted)]">
             {fill(dict.catalogue, {
               models: MODEL_COUNT.toLocaleString(),
               packs: String(MODEL_PACKS.length),
@@ -254,7 +322,20 @@ function packLabel(packId: string): string {
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="sticky top-0 z-10 bg-black/80 py-1 text-[10px] uppercase tracking-wide text-white/40 backdrop-blur-sm">
+      {/*
+        A chip rather than a bar, and cyan rather than grey.
+
+        Cyan is the split the whole room makes: fuchsia is the thing you press,
+        cyan is the thing you read. The chip is about the ground underneath. A
+        sticky heading needs one - tiles scrolling under transparent text are
+        unreadable - and a full-width strip of any single colour is wrong here
+        for the reason the block picker's own note gives: `.hud-panel`'s fill is
+        a gradient over a translucent glass, so a bar matched to it at one
+        height reads as a hole cut in it at every other. A pill is only as wide
+        as the word, so there is no strip to mismatch, and `.hud-chip` is the
+        shape this room already uses for a small standing label.
+      */}
+      <h3 className="hud-chip font-pixel sticky top-0 z-10 mb-1.5 w-fit !py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--color-accent-2)]">
         {label}
       </h3>
       <ul className="grid grid-cols-3 gap-2 pt-1 sm:grid-cols-5">{children}</ul>
@@ -273,10 +354,16 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 function Tile({
   model,
   label,
+  price = 0,
   onPick,
 }: {
   model: string
   label: string
+  /**
+   * What pressing this costs, if anything. Zero for a raw catalogue model,
+   * which is honest rather than defaulted: nothing is charged for one.
+   */
+  price?: number
   onPick: () => void
 }) {
   return (
@@ -295,7 +382,12 @@ function Tile({
           event.dataTransfer.setData(THING_DRAG, model)
           event.dataTransfer.effectAllowed = 'copy'
         }}
-        className="w-full rounded-lg border border-white/15 bg-white/5 p-1.5 text-left transition hover:border-white/40 hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        /*
+          The lit outline the keycaps wear, at tile size: cyan at rest, fuchsia
+          under the pointer, which is what fuchsia means everywhere else in this
+          room. `.hud-chip`'s hover rule, drawn on a square.
+        */
+        className="w-full rounded-lg border border-[oklch(0.66_0.16_275_/_0.45)] bg-[oklch(0.12_0.04_285_/_0.6)] p-1.5 text-left transition hover:border-[var(--color-accent)] hover:bg-[oklch(0.2_0.07_300_/_0.7)] hover:shadow-[0_0_1rem_oklch(0.7_0.27_322_/_0.3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -305,8 +397,12 @@ function Tile({
           decoding="async"
           className="aspect-square w-full rounded bg-white/5 object-contain"
         />
-        <span className="mt-1 block text-[10px] leading-tight text-white/70 line-clamp-2">
-          {label}
+        <span className="mt-1 flex items-baseline justify-between gap-1">
+          <span className="min-w-0 text-[10px] leading-tight text-[var(--color-ink-muted)] line-clamp-2">
+            {label}
+          </span>
+          {/* Nothing at all when it is free - see `CoinPrice`. */}
+          <CoinPrice coins={price} />
         </span>
       </button>
     </li>

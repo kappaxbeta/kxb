@@ -2,18 +2,16 @@
 
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
-import { taskDecider } from '@/domain/tasks/aggregate'
 import {
   createTaskSchema,
   renameTaskSchema,
   type TaskCommand,
   taskIdSchema,
 } from '@/domain/tasks/commands'
+import { dispatchTask, type TaskResult } from '@/domain/tasks/dispatch'
 import { tasksProjection } from '@/domain/tasks/projection'
-import { executeCommand } from '@/es/command'
-import { ConcurrencyError, DomainError } from '@/es/errors'
 import { resetProjection, runProjection } from '@/es/projection'
-import { requireFeature, requireTenant, writeBlockedReason } from '@/lib/tenant'
+import { requireFeature, requireTenant } from '@/lib/tenant'
 
 /**
  * Server Actions are the command handlers. Each one does the same five things:
@@ -34,25 +32,17 @@ import { requireFeature, requireTenant, writeBlockedReason } from '@/lib/tenant'
  * the command.
  */
 
-export type ActionResult = { ok: true } | { ok: false; error: string }
+export type ActionResult = TaskResult
 
 /**
- * Turn a thrown error into something worth showing a user, while letting
- * genuine bugs surface instead of being swallowed as "something went wrong".
+ * The browser's way in: the door, the shared command, and the cache.
+ *
+ * Everything between those three moved to `./dispatch.ts` when the native app
+ * arrived, because a route handler has to run the identical write and cannot
+ * call a Server Action. What stays here is what is genuinely about being a
+ * browser - `requireTenant` reads the session cookie and redirects, and
+ * `revalidatePath` is a Next.js cache a phone does not have.
  */
-function toResult(error: unknown): ActionResult {
-  if (error instanceof DomainError) {
-    return { ok: false, error: error.message }
-  }
-  if (error instanceof ConcurrencyError) {
-    return {
-      ok: false,
-      error: 'That task was changed elsewhere. Please try again.',
-    }
-  }
-  throw error
-}
-
 async function dispatch(
   slug: string,
   streamId: string,
@@ -60,31 +50,10 @@ async function dispatch(
 ): Promise<ActionResult> {
   const context = await requireTenant(slug)
   requireFeature(context, 'tasks')
-  const { user, supabase, tenant } = context
 
-  // Archived, or billing lapsed. Either way the workspace is readable but
-  // records nothing new - which is the whole "read-only, keep all data" rule.
-  const blocked = writeBlockedReason(context)
-  if (blocked) {
-    return { ok: false, error: blocked }
-  }
-
-  try {
-    await executeCommand({
-      supabase,
-      decider: taskDecider,
-      tenantId: tenant.id,
-      streamId,
-      command,
-      metadata: { actorId: user.id },
-    })
-  } catch (error) {
-    return toResult(error)
-  }
-
-  await runProjection(supabase, tasksProjection, tenant.id)
-  revalidatePath(`/t/${slug}/tasks`)
-  return { ok: true }
+  const result = await dispatchTask(context, streamId, command)
+  if (result.ok) revalidatePath(`/t/${slug}/tasks`)
+  return result
 }
 
 // These take plain arguments rather than (prevState, FormData). The UI drives

@@ -114,7 +114,34 @@ export interface LandingDict {
     play: string
     create: string
     share: string
+    /**
+     * The money page, in the menu with the other three.
+     *
+     * "Bank" rather than "Coins", and the same word in English and German: it
+     * is the name of the place, and the place holds three balances rather than
+     * one - your purse, the space's bank, your wallet. A menu item called
+     * Coins would promise the smallest of the three.
+     */
+    bank: string
+    /**
+     * The directory of shows other people write.
+     *
+     * Plural, and distinct from "XO Universe" one line above it in the menu:
+     * that is *the* channel, ours, and this is the list of everybody else's.
+     * A singular label would have read as a second name for the same place.
+     */
+    channels: string
     pricing: string
+    /**
+     * The catalogue.
+     *
+     * In the header since play/create/share moved off it: those three are
+     * pages *about* the product and now introduce themselves on the XO
+     * Universe channel, where somebody is already reading. Browse is the one
+     * of the four that is a place rather than an explanation, so it is the one
+     * that stays a destination in the nav.
+     */
+    browse: string
     signIn: string
     join: string
   }
@@ -256,6 +283,26 @@ export interface LandingDict {
     /** Describes the summon standing beside the words. See `SummonScene`. */
     summonAlt: string
   }
+  /**
+   * The band pointing at the XO Universe channel.
+   *
+   * `now` is the only line here with a placeholder in it, and it has two: the
+   * episode number and its title come from the channel's own schedule at
+   * render time rather than being written into the copy. A dictionary that
+   * named a chapter would be a second place to remember on the morning an
+   * episode goes up.
+   *
+   * "XO Universe" is not in here at all - it is the name of the channel in
+   * every one of these languages, like "Community" in the nav, so it is a
+   * literal in the markup. What is translated is the sentence around it.
+   */
+  universe: {
+    tag: string
+    title: string
+    /** `{n}` is the zero-padded number, `{title}` the chapter's own title. */
+    now: string
+    cta: string
+  }
   closing: {
     title: string
     body: string
@@ -269,6 +316,15 @@ export interface LandingDict {
     contact: string
     signIn: string
     events: string
+    /**
+     * The prize draw, shown only while it is being run.
+     *
+     * A word rather than "Gewinnspiel" in English, because the footer's other
+     * five labels are all the reader's own language and a German noun in the
+     * middle of them reads as a section of the site rather than as a thing
+     * happening this month.
+     */
+    contest: string
   }
 }
 
@@ -294,16 +350,20 @@ export const EN: LandingDict = {
     play: 'Play',
     create: 'Create',
     share: 'Share',
+    bank: 'Bank',
+    channels: 'Channels',
     pricing: 'Pricing',
+    browse: 'Browse',
     signIn: 'Sign in',
     join: 'Join the beta',
   },
   hero: {
     // The badge is on the eyebrow rather than in the headline: the headline is
-    // the position and has been earning its place for months, and "closed beta"
-    // is news, which belongs in the line news goes on.
-    eyebrowOpen: '👾 Closed beta — come in, it’s open',
-    eyebrowClosed: '👾 Closed beta — and you’re invited',
+    // the position and has been earning its place for months, and "open (closed)
+    // beta" is news, which belongs in the line news goes on. The parenthesis is
+    // the whole joke: the door is open, the beta is not.
+    eyebrowOpen: '👾 Open (closed) beta — come in',
+    eyebrowClosed: '👾 Open (closed) beta — and you’re invited',
     headlineLead: STANCE.en.lead,
     headlineAccent: STANCE.en.accent,
     sub: 'The fastest way to hang out online. A virtual arcade for your crew, game jam, or community. Zero downloads — just drop a link and jump straight into the action in seconds.',
@@ -538,7 +598,7 @@ export const EN: LandingDict = {
         lines: [
           'The lounge, with emotes and chat',
           'All against all, and races',
-          'Shelve as many XPs as you like — play them when you upgrade',
+          '4 XP places, one XP you can edit, and an unlimited magazine',
           'Joining someone else’s space always costs nothing',
         ],
       },
@@ -625,6 +685,12 @@ export const EN: LandingDict = {
     summonAlt:
       'A fox in a dinosaur costume arriving inside a ring of green light, with a crate, two animal heads and a block of hay turning in the air around it',
   },
+  universe: {
+    tag: 'The story',
+    title: 'Read the stories from the XO Universe',
+    now: 'Now on Episode {n} — {title}',
+    cta: 'Open the channel',
+  },
   closing: {
     title: 'Come and play. Bring somebody.',
     body: 'We’re just starting the closed beta and honestly, I’m happy to finally show it to anyone. Walk into the arcade first — it costs nothing and asks nothing. If you like it, join, and help me shape where it goes next.',
@@ -638,6 +704,7 @@ export const EN: LandingDict = {
     contact: 'Contact',
     signIn: 'Sign in',
     events: 'Events',
+    contest: 'Prize draw',
   },
 }
 
@@ -674,13 +741,16 @@ export const DE: LandingDict = {
     play: 'Spielen',
     create: 'Bauen',
     share: 'Teilen',
+    bank: 'Bank',
+    channels: 'Kanäle',
     pricing: 'Preise',
+    browse: 'Entdecken',
     signIn: 'Anmelden',
     join: 'Beta beitreten',
   },
   hero: {
-    eyebrowOpen: '👾 Closed Beta — komm rein, es ist offen',
-    eyebrowClosed: '👾 Closed Beta — und du bist eingeladen',
+    eyebrowOpen: '👾 Open (closed) Beta — komm rein',
+    eyebrowClosed: '👾 Open (closed) Beta — und du bist eingeladen',
     headlineLead: STANCE.de.lead,
     headlineAccent: STANCE.de.accent,
     sub: 'Der schnellste Weg, online zusammen abzuhängen. Eine virtuelle Spielhalle für deine Crew, deinen Game Jam oder deine Community. Keine Downloads – einfach einen Link schicken und in Sekunden mittendrin sein.',
@@ -916,7 +986,7 @@ export const DE: LandingDict = {
         lines: [
           'Die Lounge, mit Emotes und Chat',
           'Jeder gegen jeden, und Rennen',
-          'So viele XPs ins Magazin, wie du willst – spielen kannst du sie ab xo',
+          '4 XP-Plätze, ein XP zum Bearbeiten, und ein unbegrenztes Magazin',
           'Der Space von jemand anderem kostet dich nie etwas',
         ],
       },
@@ -1003,6 +1073,12 @@ export const DE: LandingDict = {
     summonAlt:
       'Ein Fuchs im Dinokostüm erscheint in einem Ring aus grünem Licht, um ihn kreisen eine Kiste, zwei Tierköpfe und ein Block Heu',
   },
+  universe: {
+    tag: 'Die Geschichte',
+    title: 'Lies die Geschichten aus dem XO Universe',
+    now: 'Jetzt: Folge {n} — {title}',
+    cta: 'Zum Kanal',
+  },
   closing: {
     title: 'Komm spielen. Bring jemanden mit.',
     body: 'Wir starten gerade erst in die Closed Beta, und ehrlich gesagt freue ich mich, es endlich zeigen zu können. Geh erst mal in die Spielhalle – das kostet nichts und verlangt nichts. Wenn es dir gefällt, komm dazu und hilf mir, zu gestalten, wohin es geht.',
@@ -1016,6 +1092,7 @@ export const DE: LandingDict = {
     contact: 'Kontakt',
     signIn: 'Anmelden',
     events: 'Events',
+    contest: 'Gewinnspiel',
   },
 }
 
@@ -1056,13 +1133,16 @@ export const BG: LandingDict = {
     play: 'Играй',
     create: 'Твори',
     share: 'Сподели',
+    bank: 'Банка',
+    channels: 'Канали',
     pricing: 'Цени',
+    browse: 'Разгледай',
     signIn: 'Вход',
     join: 'Влез в бетата',
   },
   hero: {
-    eyebrowOpen: '👾 Затворена бета — влизай, отворено е',
-    eyebrowClosed: '👾 Затворена бета — и си поканен',
+    eyebrowOpen: '👾 Отворена (затворена) бета — влизай',
+    eyebrowClosed: '👾 Отворена (затворена) бета — и си поканен',
     headlineLead: STANCE.bg.lead,
     headlineAccent: STANCE.bg.accent,
     sub: 'Най-бързият начин да се съберете онлайн. Виртуална зала за твоята компания, game jam или общност. Нула сваляне — просто пускаш линк и скачаш право в действието за секунди.',
@@ -1297,7 +1377,7 @@ export const BG: LandingDict = {
         lines: [
           'Лоунджът, с жестове и чат',
           'Всеки срещу всеки, и състезания',
-          'Слагай на рафта колкото XP-та искаш — играеш ги, щом надградиш',
+          '4 XP места, едно XP за редактиране, и неограничено списание',
           'Да влезеш в чужд спейс никога не струва нищо',
         ],
       },
@@ -1384,6 +1464,12 @@ export const BG: LandingDict = {
     summonAlt:
       'Лисица в динозавърски костюм се появява в пръстен от зелена светлина, а около нея се въртят щайга, две животински глави и блок сено',
   },
+  universe: {
+    tag: 'Историята',
+    title: 'Чети историите от XO Universe',
+    now: 'Сега: Епизод {n} — {title}',
+    cta: 'Към канала',
+  },
   closing: {
     title: 'Ела да играеш. Доведи някого.',
     body: 'Тъкмо започваме затворената бета и честно казано, радвам се най-после да го покажа на когото и да било. Първо влез в залата — не струва нищо и не иска нищо. Ако ти хареса, влез в бетата и ми помогни да оформя накъде върви оттук нататък.',
@@ -1397,6 +1483,7 @@ export const BG: LandingDict = {
     contact: 'Контакт',
     signIn: 'Вход',
     events: 'Събития',
+    contest: 'Игра с награди',
   },
 }
 

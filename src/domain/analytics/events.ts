@@ -66,6 +66,15 @@ export const EVENTS: EventDefinition[] = [
   { name: 'battle_join', hint: 'Somebody joined a match lobby.' },
   { name: 'battle_start', hint: 'A match kicked off.' },
 
+  // --- reading the book ---------------------------------------------------
+  // Two halves of one question: how many people take the book away, and how
+  // many of the ones who start a chapter on the site actually finish it. The
+  // second is the interesting one and it is the one a page-view count cannot
+  // answer - an episode opened and abandoned in the first screen looks exactly
+  // like an episode read to the last line.
+  { name: 'oasis_download', hint: 'The book PDF was downloaded. `props.lang` says which edition.' },
+  { name: 'oasis_chapter_end', hint: 'A chapter was scrolled to its last line. `props.slug` says which. Once per page view.' },
+
   // --- money --------------------------------------------------------------
   { name: 'pricing_view', hint: 'The pricing section came into view.' },
   { name: 'checkout_start', hint: 'Checkout was opened.' },

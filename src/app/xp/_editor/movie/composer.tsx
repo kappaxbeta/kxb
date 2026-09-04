@@ -21,6 +21,7 @@ import { useNarrow } from '@/app/xp/_editor/shell/mobile'
 import { movieClock, type MovieClock } from '@/app/xp/_editor/movie/clock'
 import { MovieStage } from '@/app/xp/_editor/movie/stage'
 import { canRecord, capturePng, record, save, type CaptureParts } from '@/app/xp/_editor/movie/export'
+import { useClientCapability } from '@/lib/use-client-capability'
 
 /**
  * The composer: shots, in order, trimmed and retimed.
@@ -747,7 +748,13 @@ function Export({
 }) {
   const t = xpEditorDict(useLocale()).movie
   const [recording, setRecording] = useState<{ stop: () => void } | null>(null)
-  const able = useMemo(() => canRecord(), [])
+  /**
+   * `useMemo(() => canRecord(), [])` used to sit here, and it is the same bug
+   * as the studio's: `useMemo` still runs during the hydration render, so the
+   * server's "no `MediaRecorder`" answer was the only one this ever produced.
+   * See `useClientCapability` for the mount-time fix.
+   */
+  const able = useClientCapability(canRecord)
   const size = { width: 1280, height: 720 }
 
   useEffect(() => {

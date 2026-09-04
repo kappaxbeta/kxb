@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import {
   Diamond,
   Film,
+  FileText,
   Gamepad2,
   ImageDown,
   Link2,
@@ -20,7 +21,9 @@ import {
 } from 'lucide-react'
 import { EmoteSwatch, Stick } from '@/app/ovaloffice/studio/parts'
 import { intentFromKeys, isTyping, useKeys } from '@/app/ovaloffice/studio/drive'
+import { downloadText } from '@/app/ovaloffice/studio/capture'
 import { canRecord, captureNote, FFMPEG_HINT, record } from '@/app/ovaloffice/studio/record'
+import { useClientCapability } from '@/lib/use-client-capability'
 import { captureAlpha, type AlphaFormat } from '@/app/ovaloffice/studio/frames'
 import { SavePanel } from '@/app/ovaloffice/studio/save-panel'
 import type { ImportableWorld } from '@/app/ovaloffice/studio/world-picker'
@@ -49,6 +52,7 @@ import {
 } from '@/domain/studio/puppet'
 import { actorAt, encodeShot, parseShot, sceneAt, type ShotSpec } from '@/domain/studio/shot'
 import { placeActor } from '@/domain/studio/staging'
+import { transcribe, type TranscriptMode, transcriptFile } from '@/domain/studio/transcript'
 import { park, parked } from '@/app/ovaloffice/studio/draft'
 import { studioHref } from '@/app/ovaloffice/studio/where'
 
@@ -108,6 +112,17 @@ interface Parts {
 const DRAFT_KEY = 'studio:shot'
 
 /**
+ * What a draft parked against a *saved* scene continues from.
+ *
+ * The draft is keyed on the address it belongs to, and for an unsaved document
+ * that address is the encoded shot itself. Once there is a row, the address is
+ * the row - so the key has to be too, or a reload onto `?scene=<id>` would
+ * compare an id against four thousand characters of base64, decide the draft
+ * belongs to something else, and throw the unsaved minute away.
+ */
+const keptAddress = (id: string) => `scene:${id}`
+
+/**
  * How long a pose beat is when the editor lays one down for you, in seconds.
  *
  * Long enough to see the pose land and short enough not to swallow whatever
@@ -156,13 +171,37 @@ export function ShotEditor({
   const [shot, setShot] = useState(initial)
 
   /**
-   * The document as the address bar last had it.
+   * What the address bar last identified this document by.
    *
-   * The draft is keyed on this rather than on the current state, because it has
-   * to answer "which page load does this continue" - and that is the address,
-   * not the edit.
+   * The encoded document while there is no row, and `keptAddress(id)` once
+   * there is - the two are the two things the address can say, and the draft is
+   * keyed on whichever it is currently saying. Keyed on this rather than on the
+   * current state because it has to answer "which page load does this
+   * continue", and that is the address, not the edit.
    */
-  const written = useRef(encodeShot(initial))
+  const written = useRef(scene.id ? keptAddress(scene.id) : encodeShot(initial))
+
+  /**
+   * The scene this editor is writing to, once there is one.
+   *
+   * Held here rather than only in the save panel because it decides what the
+   * address bar says, and the address bar is what a reload comes back to. A
+   * page opened on `?scene=<id>` starts with it; a save that lands sets it; a
+   * "save as a copy" clears it, because there is no row behind the document
+   * again until the next save makes one.
+   *
+   * The ref beside it is not a duplicate for its own sake: the debounced
+   * rewrite below runs from a timer that closed over an older render, and a
+   * timer that fires after a save has to be able to see that saving happened.
+   * Without it the address flips back to `?v=` a fraction of a second after it
+   * became the scene, which is the bug this whole change is about wearing a
+   * different hat.
+   */
+  const [kept, setKept] = useState<string | null>(scene.id ?? null)
+  const keptRef = useRef<string | null>(scene.id ?? null)
+
+  /** The document as it is right now, for the callbacks that fire outside a render. */
+  const shotRef = useRef(initial)
 
   const [playing, setPlaying] = useState(false)
   const [ready, setReady] = useState(false)
@@ -170,6 +209,14 @@ export function ShotEditor({
   const [warning, setWarning] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [name, setName] = useState('shot')
+
+  /**
+   * Whether this browser can record at all - see `useClientCapability` for
+   * why this is not just `canRecord()` called here. The server's answer is
+   * always "no", and calling it inline during render is how the record button
+   * ended up permanently disabled for everyone.
+   */
+  const supported = useClientCapability(canRecord)
 
   /** What the timeline is pointing at, and what the panel therefore edits. */
   const [selected, setSelected] = useState<Selected | null>(null)
@@ -352,9 +399,24 @@ export function ShotEditor({
    * would otherwise lose. See ./draft.ts.
    */
   useEffect(() => {
+    shotRef.current = shot
     park(DRAFT_KEY, written.current, shot)
 
     const timer = setTimeout(() => {
+      /*
+        Saved: the address is the scene, and every edit after that leaves it
+        alone. The park above is what carries the unsaved minute now, and it is
+        keyed on the same id the address is - so a reload lands on the scene and
+        is handed the newer document over it.
+
+        The ref rather than `kept`, because this timer closed over the render
+        that scheduled it. React clears it on the re-render a save causes, but
+        "React has re-rendered by now" is not something a 300ms timer gets to
+        assume, and the cost of being wrong is the address flipping back to a
+        document a moment after it became a scene.
+      */
+      if (keptRef.current !== null) return
+
       const next = encodeShot(shot)
       window.history.replaceState(null, '', `?v=${next}`)
       // The address has moved, so what a draft continues has moved with it.
@@ -363,6 +425,35 @@ export function ShotEditor({
     }, 300)
     return () => clearTimeout(timer)
   }, [shot])
+
+  /**
+   * A save landed, or somebody asked for a copy.
+   *
+   * Written here rather than left to the effect above, and imperatively: the
+   * address has to change at the moment the row appears, not on the next edit.
+   * Somebody who saves and immediately reloads is the person this is for, and
+   * they are also the person the old behaviour lost work to - the reload came
+   * back to `?v=`, the panel forgot it had saved, and the next press made a
+   * second scene beside the first.
+   */
+  const onSaved = useCallback((id: string | null) => {
+    keptRef.current = id
+
+    if (id === null) {
+      // No row behind this document again. Back to the address carrying it,
+      // straight away, so a reload in the next second gets the document rather
+      // than the scene it was a copy of.
+      const next = encodeShot(shotRef.current)
+      written.current = next
+      window.history.replaceState(null, '', `?v=${next}`)
+    } else {
+      written.current = keptAddress(id)
+      window.history.replaceState(null, '', `?scene=${id}`)
+    }
+
+    park(DRAFT_KEY, written.current, shotRef.current)
+    setKept(id)
+  }, [])
 
   /**
    * The panel's copy of the playhead.
@@ -671,6 +762,31 @@ export function ShotEditor({
     window.addEventListener('keydown', down)
     return () => window.removeEventListener('keydown', down)
   }, [driving, perform])
+
+  /**
+   * The words, as a file.
+   *
+   * The one export here that is not pixels, and the cheapest thing in this
+   * component: no GPU, no take, no waiting - `transcribe` is a pure function of
+   * the document, so this is a `Blob` and a click. It does not stop playback
+   * for the same reason: nothing about the picture is involved.
+   *
+   * Two buttons rather than one with a menu, because they are two different
+   * files people want at two different moments - a script to proof-read the
+   * writing, a timeline to check the staging - and a mode switch you have to
+   * set before pressing the button is a way of downloading the wrong one.
+   */
+  const writeTranscript = (mode: TranscriptMode) => {
+    const file = transcriptFile(name, mode)
+    // `text/plain` rather than `downloadText`'s JSON default: this is prose,
+    // and a browser that previews it should show it rather than offer to
+    // import it.
+    downloadText(transcribe(shot, mode, name || 'shot'), file, 'text/plain;charset=utf-8')
+    setWarning(false)
+    setNote(
+      `${file} — ${mode === 'dialogue' ? 'every line, with who says it' : 'every line and every verb, in order'}`,
+    )
+  }
 
   /**
    * Roll again, with a hole in it.
@@ -1145,7 +1261,7 @@ export function ShotEditor({
             onClick={shoot}
             ready={ready}
             progress={progress}
-            supported={canRecord()}
+            supported={supported}
           />
           {/* "Walk here", "Take control" and "Keep this take" used to be here.
               They are on the viewport now, above - a control that moves what is
@@ -1204,6 +1320,34 @@ export function ShotEditor({
           >
             <Film className="size-4" aria-hidden />
             Transparent GIF
+          </button>
+
+          {/*
+            The shot as text, which is the export nothing else here can stand
+            in for.
+
+            Not disabled while a take runs, unlike everything above it: those
+            all want the canvas and this one only wants the document. Off to the
+            side of the picture exports rather than in the panel, because it is
+            an output - the panel edits the shot, this row leaves with it.
+          */}
+          <button
+            type="button"
+            onClick={() => writeTranscript('dialogue')}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+            title="Every line and who says it, with the time it goes up"
+          >
+            <FileText className="size-4" aria-hidden />
+            Dialogue
+          </button>
+          <button
+            type="button"
+            onClick={() => writeTranscript('script')}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+            title="The same, with every move, jump and emote in its place"
+          >
+            <FileText className="size-4" aria-hidden />
+            Dialogue + actions
           </button>
         </div>
 
@@ -1264,7 +1408,8 @@ export function ShotEditor({
         <SavePanel
           shot={shot}
           scope={scene.scope}
-          sceneId={scene.id}
+          sceneId={kept}
+          onSaved={onSaved}
           initialName={scene.name}
           initialBlurb={scene.blurb}
           initialVisibility={scene.visibility}

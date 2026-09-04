@@ -1,6 +1,6 @@
 {
   "name": "kxb",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -23,6 +23,7 @@
     "geo:update": "bun run scripts/update-geoip.ts",
     "worlds:seed": "bun run scripts/seed-worlds.ts",
     "models:thumbs": "bun run scripts/render-models.ts",
+    "banners:render": "bun run scripts/render-banners.ts",
     "mail:art": "bun run scripts/render-email-art.ts",
     "mail:build": "bun run scripts/build-mail-templates.ts",
     "xp:pack": "bun run scripts/xp-pack.ts",
@@ -33,6 +34,8 @@
     "maumau:publish": "bun run scripts/maumau-assets.ts --publish",
     "xp:shapes": "bun run scripts/xp-shapes.ts",
     "xp:vendor": "mkdir -p public/xp/vendor && cp node_modules/p5/lib/p5.min.js public/xp/vendor/p5.min.js",
+    "three:vendor": "bun run scripts/three-vendor.ts",
+    "mocap:vendor": "bun run scripts/mocap-vendor.ts",
     "xp:catalogue": "bun run scripts/xp-catalogue.ts",
     "xp:wasm": "bun run scripts/xp-wasm.ts",
     "xp:clips": "bun run scripts/xp-clips.ts",
@@ -55,6 +58,7 @@
     "@kxb/maumau": "workspace:*",
     "@kxb/peepz-world": "workspace:*",
     "@kxb/xp": "workspace:*",
+    "@mediapipe/tasks-vision": "0.10.17",
     "@react-three/drei": "^10.7.7",
     "@react-three/xr": "^6.6.30",
     "@shadcn/react": "^0.2.1",

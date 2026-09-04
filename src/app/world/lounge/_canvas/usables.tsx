@@ -59,7 +59,7 @@ export function Usables({
   /** The nearest thing you could act on, or null. Called only when it changes. */
   onNear: (id: string | null) => void
 }) {
-  const { playerRef } = useSceneRefs()
+  const { playerRef, thingSpotsRef } = useSceneRefs()
   const clock = useRef(0)
   const last = useRef<string | null>(null)
 
@@ -76,11 +76,28 @@ export function Usables({
       const spec = thing.blueprint?.spec
       if (!spec || (!all && !usable(spec))) continue
 
+      /*
+        Where it is drawn, and only the row as a fallback.
+
+        The row is where a thing was *put*. A ball is the case that makes the
+        difference the whole feature: it rolls where it is kicked and only
+        writes itself down when it stops - and in a read-only room it never
+        writes itself down at all. Measuring to the row meant "E to use" stayed
+        at the cell the ball was summoned in, so getting it back meant walking
+        to a spot with nothing standing on it.
+
+        The fallback is not defensive tidying: <Usables> is handed the list a
+        frame or two before the things themselves have mounted and published,
+        and the row is the right answer for every one of them until they do.
+        See `thingSpotsRef`.
+      */
+      const spot = thingSpotsRef.current.get(thing.id)
+
       // Feet rather than eye: a chair is at your feet, and measuring from the
       // camera would make a thing on the floor further away the taller the body.
-      const dx = thing.x + 0.5 - player.x
-      const dz = thing.z + 0.5 - player.z
-      const dy = thing.y - (player.y - EYE_HEIGHT)
+      const dx = (spot?.x ?? thing.x + 0.5) - player.x
+      const dz = (spot?.z ?? thing.z + 0.5) - player.z
+      const dy = (spot?.y ?? thing.y) - (player.y - EYE_HEIGHT)
       const distance = Math.hypot(dx, dy, dz)
 
       if (distance < bestDistance) {

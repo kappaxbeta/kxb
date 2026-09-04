@@ -282,6 +282,25 @@ export const FEATURES = {
    */
   thingiverse: { label: 'Thingiverse', fallback: false },
   /**
+   * The bearer door: may this space be used through `/api/m`?
+   *
+   * `false`, like the other flags guarding new surface, and the intended way
+   * to hold it is a tenant override on top of a global off - the app is being
+   * tried with particular spaces, not launched. A resolver blip that defaulted
+   * to `true` would open a second door into every space in the installation;
+   * falling back to off costs a phone a refusal it already knows how to show.
+   *
+   * What it gates is the *space* half of the API: every route that resolves a
+   * tenant refuses before it reads anything, in one place -
+   * `requireBearerTenant`. The account routes - `/me`, the space list, making
+   * a space - are deliberately not behind it, for the reason `worlds` and `xp`
+   * give: they have no tenant to read a flag from, and a person's own name and
+   * shelf of spaces belong to them, not to any space's plan. The shelf may
+   * therefore list a space whose door then answers `blocked`; that is the
+   * honest shape, and the refusal carries the sentence to show.
+   */
+  mobile_api: { label: 'Mobile API', fallback: false },
+  /**
    * The front door.
    *
    * On, anybody may create an account. Off, sign-up is by invitation, and
@@ -477,6 +496,142 @@ export const FEATURES = {
     label: 'Uploaded images per space',
     fallback: false,
     valued: { unit: 'images per space', min: 1, max: 10_000 },
+  },
+  /**
+   * Vouchers, and what one is worth.
+   *
+   * Off, there are no vouchers: a player with an empty purse earns their way
+   * back through the café, which always works and is why nobody is ever
+   * permanently stuck.
+   *
+   * On, somebody with nothing left may claim one - once per space - worth
+   * whatever `value_int` says. **The number matters more than the switch.** The
+   * brief named 10,000, which is a hundred times the opening balance: a player
+   * holding one has no reason to care what anything costs for a long time, and
+   * every price in the product flattens while they spend it. That is right for
+   * a space running an event and wrong for one running an economy, which is
+   * exactly why it is a valued flag and not a constant.
+   */
+  voucher: {
+    label: 'Vouchers',
+    fallback: false,
+    valued: { unit: 'coins per voucher', min: 1, max: 100_000 },
+  },
+  /**
+   * The economy itself, as one switch.
+   *
+   * Off, **nothing charges anybody and nothing pays out.** Battles are free to
+   * enter and pay nothing, doors do not take a toll, needs cost nothing, and a
+   * quota is whatever the tier says with no way to buy past it. Coins already
+   * in a purse stay there and the café keeps paying them, because that predates
+   * all of this and switching the economy off must not take somebody's savings
+   * with it.
+   *
+   * On, `docs/product/economy.md` applies.
+   *
+   * ---------------------------------------------------------------------------
+   * Why it falls back off, against the habit of this file
+   * ---------------------------------------------------------------------------
+   * Most surfaces here fall back to *show*, because a lookup blip that hid half
+   * the app would look like a deletion. This one follows `pictures` and
+   * `billing` instead: the safe failure is **not to charge**. A resolver
+   * hiccup that briefly makes battles free costs nothing anybody will notice; a
+   * resolver hiccup that charges every player a coin they did not agree to is a
+   * refund conversation with no refund mechanism behind it.
+   *
+   * It is also what makes the migration safe to run. A space that has never
+   * heard of coins does not start taking them from its members on a Tuesday
+   * because a deploy went out - the same posture `20261127000000` argued for
+   * when it shipped five caps all switched off.
+   *
+   * Add a tenant override to switch one space on. That is the intended way in:
+   * a space that wants an economy opts into one.
+   */
+  economy: { label: 'The coin economy', fallback: false },
+  /**
+   * The XO Universe channel: Project Oasis, and the nav tab that opens it.
+   *
+   * `true`, which is the opposite direction to `agents`, `battle` and
+   * `thingiverse` above, and the difference is what a resolver outage would
+   * cost. Those three guard machinery that puts creatures in a kitchen or
+   * opens a shelf of blueprints in a space somebody else pays for; falling
+   * back to on would be doing something to a workspace nobody asked for.
+   *
+   * This is a page of prose on the public marketing site. Falling back to on
+   * shows a story to a reader who did not ask for one, which is what the front
+   * page is for. Falling back to off would take a published channel off the
+   * air because a lookup timed out, and a reader who followed a link to a
+   * chapter would get a 404 for it - the worse of the two failures, and the
+   * one that looks like we withdrew the story.
+   *
+   * Off is still a real state, and a complete one: no nav tab, and the routes
+   * return 404 rather than redirecting. It gates the surface and deliberately
+   * not the content - the chapters are files in `@kxb/xo-universe` and the
+   * visibility rows stay in the table, so switching it back on restores the
+   * channel exactly as the editors left it.
+   */
+  xo_universe: { label: 'XO Universe', fallback: true },
+  /**
+   * Shows a member writes, rather than the one the platform wrote.
+   *
+   * `docs/product/channels.md`. The editor inside a space, the review queue in
+   * the backoffice, and the public directory at `/xo-universe/channels`.
+   *
+   * Falls back **off**, unlike `xo_universe` directly above it, and the
+   * contrast is the point. That flag guards prose we wrote, on a page whose
+   * worst failure is a 404 on a link somebody followed. This one guards a
+   * surface where members publish into a public directory and charge each
+   * other coins to read - so the safe failure is *closed*, for the same reason
+   * `economy` gives: briefly unavailable costs nothing, and accidentally open
+   * is a moderation queue nobody is watching.
+   */
+  channels: { label: 'Channels', fallback: false },
+  /**
+   * The five quantities a member can buy one more of with coins.
+   *
+   * `docs/product/economy.md` §7. They are ordinary valued limits and behave
+   * like every other one in this block - the tier says how many you get, an
+   * override raises it for one space, the global default is a platform ceiling.
+   * What is new is the *fourth* way past them: a member spends coins, and the
+   * space holds one more permanently.
+   *
+   * That is worth knowing before touching these numbers, because it changes
+   * what an override means here. Everywhere else, raising a limit is the only
+   * way a space gets more. Here it is a shortcut past a price - so an operator
+   * who raises `blueprint_limit` for one space is not just being generous with
+   * capacity, they are handing over coins' worth of stuff. The audit log
+   * records it either way, which is the point of it doing so.
+   *
+   * `vehicle_limit` has a `min` of 1 like the rest, which reads oddly given
+   * every tier includes zero vehicles. It is not a contradiction: a flag that
+   * is *off* is unlimited-or-absent and leaves the tier's zero standing, and
+   * the minimum only governs what an operator may type when they turn it on.
+   * "Off means the tier decides" is the convention the whole block runs on.
+   */
+  private_xp_limit: {
+    label: 'Private XPs per space',
+    fallback: false,
+    valued: { unit: 'private XPs per space', min: 1, max: 10_000 },
+  },
+  public_xp_limit: {
+    label: 'Published XPs per space',
+    fallback: false,
+    valued: { unit: 'published XPs per space', min: 1, max: 10_000 },
+  },
+  blueprint_limit: {
+    label: 'Blueprints per space',
+    fallback: false,
+    valued: { unit: 'blueprints per space', min: 1, max: 10_000 },
+  },
+  clip_limit: {
+    label: 'Clips per space',
+    fallback: false,
+    valued: { unit: 'clips per space', min: 1, max: 10_000 },
+  },
+  vehicle_limit: {
+    label: 'Vehicles per space',
+    fallback: false,
+    valued: { unit: 'vehicles per space', min: 1, max: 1_000 },
   },
   /**
    * How many *free* spaces one account may own.

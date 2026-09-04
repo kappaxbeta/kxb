@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { fill } from '@/app/i18n/fill'
 import type { WorkspaceDict } from '@/app/i18n/workspace'
-import { AVATARS, AVATAR_CLIPS, type AvatarClip, avatarShotUrl } from '@/domain/lounge/avatars'
+import { useRehearsal } from '@/app/t/[slug]/thingiverse/rehearsal'
+import { AVATARS, AVATAR_CLIPS, type AvatarClip, avatarShotUrl, DUMMY_LOOK } from '@/domain/lounge/avatars'
 import { BodyStage } from '@/app/world/_canvas/body-stage'
 import { chooseAvatar } from '@/domain/profile/avatar-actions'
 import { skinThumbUrl } from '@/domain/skins/application'
@@ -27,7 +28,7 @@ import { wearSkinInLounge } from '@/domain/skins/actions'
  * The arrows are the two bodies, not a carousel of one
  * ---------------------------------------------------------------------------
  * An account has two and keeps both: a peep - one of twenty-four animals - and
- * an XP body, which is a skin you own. `in_lounge` decides which one a world
+ * an XP body, which is a skin you own. `show_xp` decides which one a world
  * draws, and it is a *mode* rather than a costume: changing it never touches
  * the other, which is the whole reason a Knight stopped turning up in the
  * lounge. See `readXpBody`.
@@ -75,8 +76,40 @@ export function Showcase({
   const [clip, setClip] = useState<AvatarClip>(AVATAR_CLIPS.idle)
   const [pending, start] = useTransition()
 
-  const both = skin !== null
-  const showingSkin = wearing && both
+  /**
+   * The clip somebody pressed play on, three doors down. See `RehearsalProvider`.
+   */
+  const rehearsal = useRehearsal()
+  const playing = rehearsal.clip
+
+  /**
+   * Which body is standing there, and why a clip can overrule the switch.
+   *
+   * ---------------------------------------------------------------------------
+   * The clip decides, for as long as it is playing
+   * ---------------------------------------------------------------------------
+   * A clip binds to bones *by name*, and the two rigs share none: a dummy has
+   * `hips` and `upperarm.l`, a peep has `leg-*`. So a wave keyed on the
+   * mannequin, played on a fox, drives nothing at all - the mixer binds zero
+   * tracks and the body stands there idling, which reads as a broken play
+   * button rather than as a clip on the wrong body.
+   *
+   * Rather than refuse, the mirror shows the body the clip is *for*. This is a
+   * preview and nothing else: `wearing` is untouched, no action is sent, and the
+   * moment the clip stops the picture goes back to whichever body the switch
+   * says. A play button that quietly rewrote which body you wear in the lounge
+   * would be a much worse surprise than one that changes a picture for six
+   * seconds.
+   *
+   * With no skin owned, a dummy clip plays on the mannequin - the same grey body
+   * the animator poses, and the one every skin in the pack is rigged as. It is
+   * not the account's body, and it is the honest thing to draw: the alternative
+   * is a play button that does nothing for everybody who has not been to the
+   * shop.
+   */
+  const showingSkin = playing ? playing.skeleton !== 'peep' : wearing
+
+  const shownSkin = showingSkin ? (skin ?? DUMMY_LOOK) : null
 
   /**
    * Throwing the switch, optimistically.
@@ -91,7 +124,10 @@ export function Showcase({
    * below it in the same render.
    */
   const swap = (next: boolean) => {
-    if (!both) return
+    // A clip overrules the switch while it plays - see `showingSkin` - so an
+    // arrow pressed mid-rehearsal would look inert. Stopping first makes the
+    // press do the visible thing it promises.
+    rehearsal.stop()
     const was = wearing
     setWearing(next)
     start(async () => {
@@ -105,6 +141,9 @@ export function Showcase({
   }
 
   const wear = (animal: string) => {
+    // Same reason as `swap`: picking an animal while a dummy clip plays would
+    // change a body nobody can see.
+    rehearsal.stop()
     const was = chosen
     setChosen(animal)
     start(async () => {
@@ -148,20 +187,21 @@ export function Showcase({
           <Arrow
             side="left"
             label={t.otherBody}
-            shown={both}
+            shown
             onClick={() => swap(!wearing)}
           />
 
           <div className="relative size-44 shrink-0 sm:size-56">
             <BodyStage
-              skin={showingSkin ? skin : null}
+              skin={shownSkin}
               avatar={chosen}
               clip={clip}
+              pose={playing?.clip ?? null}
               fallback={
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={showingSkin ? skinThumbUrl(skin) : avatarShotUrl(chosen, 'three')}
+                    src={shownSkin ? skinThumbUrl(shownSkin) : avatarShotUrl(chosen, 'three')}
                     alt=""
                     className="size-full rounded-2xl bg-surface-raised object-contain"
                   />
@@ -170,21 +210,55 @@ export function Showcase({
             />
           </div>
 
+          {/*
+            Always offered, whether or not anything has been bought.
+
+            The arrows used to be hidden until you owned a skin, on the grounds
+            that there was no second body to turn to. There always is: an XP body
+            with nothing on it is the dummy, which is what every player already
+            is in the games. Hiding the switch for the people who own nothing is
+            what made the mannequin need a second, separate control of its own -
+            worn by the *peep*, where it did not belong.
+          */}
           <Arrow
             side="right"
             label={t.otherBody}
-            shown={both}
+            shown
             onClick={() => swap(!wearing)}
           />
         </div>
 
         <div className="min-w-0 flex-1 space-y-2 text-center sm:max-w-[34ch] sm:text-left">
           <p className="font-pixel text-xl uppercase leading-none text-ink">
-            {showingSkin ? (skin?.split('/').pop() ?? '') : chosen}
+            {shownSkin ? (shownSkin.split('/').pop() ?? '') : chosen}
           </p>
           <p className="text-xs leading-relaxed text-ink-muted">
-            {showingSkin ? t.xpBody : both ? t.peepBody : t.onlyBody}
+            {showingSkin ? t.xpBody : t.peepBody}
           </p>
+
+          {/*
+            What it is rehearsing, and the way out of it.
+
+            Drawn here rather than beside the row that was pressed, because this
+            is where the thing is happening: the row is behind a door somebody
+            may have switched away from, and a clip still looping with no visible
+            stop is the state this line exists to prevent. The chips underneath
+            keep working the whole time - a partial clip rides *over* the gait,
+            so pressing `walk` while a wave plays gets a walking wave, which is
+            the point of it being additive.
+          */}
+          {playing && (
+            <p className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-accent sm:justify-start">
+              <span className="min-w-0 truncate">{fill(t.rehearsing, { name: playing.name })}</span>
+              <button
+                type="button"
+                onClick={rehearsal.stop}
+                className="shrink-0 rounded-full border border-accent/50 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-accent transition hover:bg-accent/10"
+              >
+                {t.stop}
+              </button>
+            </p>
+          )}
 
           {/*
             What it can do, as four words you can press.
@@ -237,7 +311,7 @@ export function Showcase({
               */
               <Link
                 href={`/t/${slug}/skins`}
-                className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs text-ink transition hover:border-accent/70"
+                className="not-in-app rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs text-ink transition hover:border-accent/70"
               >
                 {t.shop}
               </Link>

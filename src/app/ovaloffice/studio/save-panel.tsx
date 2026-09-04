@@ -17,17 +17,23 @@ import { encodeShot, type ShotSpec } from '@/domain/studio/shot'
  * author and an address that is not four thousand characters long.
  *
  * ---------------------------------------------------------------------------
- * The link does not go away
+ * The link gives way to the row
  * ---------------------------------------------------------------------------
- * Saving does not change how the editor works. The document still lives in the
- * address bar, it is still what the undo-by-back-button behaviour rests on, and
- * a scene that has never been saved still works exactly as before. This panel
- * copies the same string into a row - so the two are never out of step, because
- * one is made from the other at the moment you press the button.
+ * An unsaved scene lives in the address bar and works exactly as it always did:
+ * the editor writes the encoded document there on a debounce, and that string
+ * is what this panel copies into a row when you press the button - so the two
+ * are never out of step, because one is made from the other at that moment.
  *
- * That is also why saving does not navigate. The thing you are looking at is
- * the thing that was saved, and taking you to a listing to prove it would lose
- * the playhead, the selection and the framing.
+ * What changes at that moment is which of the two the address carries. It used
+ * to keep carrying the document, and the row's id lived only in this
+ * component's state: a reload came back to a document nothing was behind, this
+ * panel came back saying "not kept yet", and the next press kept a second scene
+ * beside the first. So the id goes up to the editor through `onSaved` and the
+ * address becomes the scene. See the note on `onSaved` in ./shot-editor.
+ *
+ * Saving still does not *navigate*. The thing you are looking at is the thing
+ * that was saved, and taking you to a listing to prove it would lose the
+ * playhead, the selection and the framing.
  */
 export function SavePanel({
   shot,
@@ -39,6 +45,7 @@ export function SavePanel({
   initialVisibility,
   canPin = false,
   canPinTop = false,
+  onSaved,
 }: {
   shot: ShotSpec
   scope: SceneScope
@@ -64,6 +71,21 @@ export function SavePanel({
    * can post a scene; `publishPost` clamps it either way.
    */
   canPinTop?: boolean
+  /**
+   * The row this panel now writes to, announced upwards.
+   *
+   * The editor above keeps the document in the address bar, and until this
+   * existed a save left that address alone: you saved, the URL still carried
+   * four thousand characters of encoded shot, and a reload came back to *that*
+   * rather than to the scene. The row was reachable only through this
+   * component's own `saved` state, so the reload also forgot it had ever been
+   * saved and the next press made a second scene.
+   *
+   * So the id goes up the moment there is one, and `null` goes up when somebody
+   * asks for a copy - which is the same statement in reverse: there is no row
+   * behind this document any more.
+   */
+  onSaved?: (id: string | null) => void
 }) {
   const [name, setName] = useState(initialName ?? '')
   const [blurb, setBlurb] = useState(initialBlurb ?? '')
@@ -91,12 +113,17 @@ export function SavePanel({
         return
       }
       setSaved(result.id)
-      setNote(saved ? 'saved' : 'saved as a new scene')
+      onSaved?.(result.id)
+      setNote(saved ? `Saved over “${name}”.` : `Kept as “${name}”. The address is this scene now.`)
     })
   }
 
   return (
-    <Section title="Save" summary={saved ? 'kept' : 'not kept yet'} open={!saved}>
+    <Section
+      title="Save"
+      summary={saved ? (name.trim() ? `over “${name.trim()}”` : 'kept') : 'not kept yet'}
+      open={!saved}
+    >
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Name
         <input
@@ -153,7 +180,8 @@ export function SavePanel({
               // a second scene, which is the only way to say "keep both" from
               // an editor whose document is not a file.
               setSaved(null)
-              setNote(null)
+              onSaved?.(null)
+              setNote('The next save keeps this as a second scene.')
             }}
             className="rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition hover:bg-secondary hover:text-foreground"
           >
@@ -161,6 +189,21 @@ export function SavePanel({
           </button>
         )}
       </div>
+
+      {/*
+        What the button will do, before it is pressed.
+
+        The two states of this panel differ in one word on a button - "Save"
+        against "Save over it" - and that word is doing more work than a word
+        can: whether a press keeps a second scene or replaces one is the whole
+        question somebody has when they come back to a document they saved
+        yesterday. Said in a sentence instead, beside the control that means it.
+      */}
+      <p className="text-[11px] text-muted-foreground">
+        {saved
+          ? 'This document is that scene. Saving replaces it, and a reload comes back here.'
+          : 'Nothing is kept yet — this document lives in the address bar until you save it.'}
+      </p>
 
       {/*
         The share link, once there is something to share.

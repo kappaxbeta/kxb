@@ -4,6 +4,7 @@ import {
   type RoomMode,
   type RoomVisibility,
 } from '@/domain/rooms/events'
+import { MAX_PRICE } from '@/domain/bank/prices'
 import type { RoomCommand } from '@/domain/rooms/commands'
 import { DomainError } from '@/es/errors'
 import type { Decider } from '@/es/types'
@@ -19,6 +20,8 @@ export interface RoomState {
   cap: number | null
   /** May a guest build in here? Only ever narrows the event's answer. */
   guestBuild: boolean
+  /** Coins to walk in. `0` is free, and is what every room starts as. */
+  doorPrice: number
   /**
    * Is the space keeping this one at the top of the list?
    *
@@ -51,6 +54,7 @@ export const initialRoomState: RoomState = {
   roundStartedAt: null,
   cap: null,
   guestBuild: true,
+  doorPrice: 0,
   pinned: false,
   group: null,
   icon: null,
@@ -95,6 +99,9 @@ export function evolve(state: RoomState, event: RoomEvent): RoomState {
 
     case 'RoomGuestBuildSet':
       return { ...state, guestBuild: event.data.allowed }
+
+    case 'RoomDoorPriceSet':
+      return { ...state, doorPrice: event.data.price }
 
     case 'RoomPinSet':
       return { ...state, pinned: event.data.pinned }
@@ -275,6 +282,30 @@ export function decide(state: RoomState, command: RoomCommand): RoomEvent[] {
       assertOpen(state)
       if (state.guestBuild === command.allowed) return []
       return [{ type: 'RoomGuestBuildSet', data: { allowed: command.allowed } }]
+    }
+
+    /**
+     * Put a toll on the door, or take it off.
+     *
+     * The bound is checked here rather than at the form because this is the
+     * number a purse is later charged, and `MAX_PRICE` is what makes a stray
+     * zero a refusal instead of an emptied purse - the same argument every
+     * other price in this codebase makes.
+     *
+     * Who may set it is not decided here and cannot be: this aggregate knows a
+     * room, not who owns the space it is in. The action checks that, exactly as
+     * it does for every other room setting.
+     */
+    case 'SetRoomDoorPrice': {
+      assertOpen(state)
+
+      const { price } = command
+      if (!Number.isInteger(price) || price < 0 || price > MAX_PRICE) {
+        throw new DomainError('That is not a plausible door price', 'room_bad_price')
+      }
+
+      if (state.doorPrice === price) return []
+      return [{ type: 'RoomDoorPriceSet', data: { price } }]
     }
 
     /**

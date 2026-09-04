@@ -141,10 +141,70 @@ describe('gathering a frame of claims', () => {
   test('a frame with nothing in it is all zeroes', () => {
     expect(gather([], 'crate')).toEqual({
       hit: 0,
+      // Nobody hit it, so nobody is credited - which is the same answer as a
+      // hit from a client that did not name itself. See `hitBy`.
+      hitBy: null,
       used: false,
       touched: false,
       put: [],
       took: [],
     })
+  })
+})
+
+describe('who gets the credit for a kill', () => {
+  /**
+   * `docs/product/economy.md` §7. A thing with health pays a coin when somebody
+   * breaks it, so the frame that finishes it has to name somebody - and the
+   * damage total cannot, because it is a sum.
+   */
+  const on = (id: string, claims: Claim[]) => gather(claims, id)
+
+  test('the biggest hit takes the credit, not the last one to arrive', () => {
+    /*
+      The order of claims within a frame is the order packets happened to
+      arrive: arbitrary, and different on every machine in the room. Crediting
+      the last one would hand the same kill to different people depending on
+      whose network was quicker, which is a scoreboard nobody can argue with
+      because nobody can reproduce it.
+    */
+    const heard = on('crate', [
+      { i: 'crate', c: 'ana', hit: 9 },
+      { i: 'crate', c: 'bo', hit: 2 },
+    ])
+    expect(heard.hit).toBe(11)
+    expect(heard.hitBy).toBe('ana')
+  })
+
+  test('a tie keeps whoever got there first rather than flipping on order', () => {
+    const heard = on('crate', [
+      { i: 'crate', c: 'ana', hit: 5 },
+      { i: 'crate', c: 'bo', hit: 5 },
+    ])
+    expect(heard.hitBy).toBe('ana')
+  })
+
+  test('damage still adds up, which is the other half of the question', () => {
+    // Two people hitting one crate in one frame is two hits against its health.
+    // Only one of them can be credited; both of them count.
+    expect(on('crate', [
+      { i: 'crate', c: 'ana', hit: 3 },
+      { i: 'crate', c: 'bo', hit: 4 },
+    ]).hit).toBe(7)
+  })
+
+  test('a hit from nobody in particular credits nobody', () => {
+    /*
+      An unattributable kill pays nobody, rather than paying whoever happens to
+      be driving. The driver is the thing's owner - crediting them would mean a
+      crate paid its own owner for being smashed by somebody else.
+    */
+    const heard = on('crate', [{ i: 'crate', hit: 40 }])
+    expect(heard.hit).toBe(40)
+    expect(heard.hitBy).toBeNull()
+  })
+
+  test('a frame with no hits names nobody', () => {
+    expect(on('crate', [{ i: 'crate', touched: true }]).hitBy).toBeNull()
   })
 })

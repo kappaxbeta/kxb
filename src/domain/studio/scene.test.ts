@@ -39,6 +39,8 @@ describe('a round trip', () => {
           emote: 40,
           emoteHeight: 3.4,
           emoteSize: 1.2,
+          sayHeight: 4.6,
+          saySize: 0.8,
           glow: { colour: '#ff00aa', sparkle: true, strength: 1.4 },
           say: 'Every field, non-default.',
         },

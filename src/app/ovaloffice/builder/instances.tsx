@@ -3,7 +3,7 @@
 import { useGLTF } from '@react-three/drei'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { builderUrl, splitModel } from '@/domain/builder/packs'
+import { placementDrawing, placementUrl } from '@/domain/builder/props'
 import type { Placement } from '@/domain/builder/world'
 
 /**
@@ -96,8 +96,20 @@ export function ModelInstances({
   model: string
   placements: Placement[]
 }) {
-  const url = builderUrl(model)
-  const pack = splitModel(model)?.pack
+  const url = placementUrl(model)
+  /**
+   * The multiplier and the lift, whichever catalogue this came out of.
+   *
+   * It was the world pack's own two fields read straight off the table, which
+   * is the same pair for a world model and no answer at all for a level one.
+   * See `@/domain/builder/props` for why the level half's own scale is thrown
+   * away on the way through.
+   *
+   * Memoised on the id rather than called inline: it returns a fresh object,
+   * and an unstable dependency would rebuild every matrix in the world on every
+   * render of a component whose whole job is not doing that.
+   */
+  const drawing = useMemo(() => placementDrawing(model), [model])
   const parts = useParts(url)
 
   /**
@@ -110,8 +122,8 @@ export function ModelInstances({
    * block placed in the same cell both look like they are in it.
    */
   const matrices = useMemo(() => {
-    const scale = pack?.scale ?? 1
-    const lift = pack?.lift ?? 0
+    const scale = drawing?.scale ?? 1
+    const lift = drawing?.lift ?? 0
     const position = new THREE.Vector3()
     const quaternion = new THREE.Quaternion()
     const axis = new THREE.Vector3(0, 1, 0)
@@ -132,7 +144,7 @@ export function ModelInstances({
       size.setScalar(factor)
       return new THREE.Matrix4().compose(position, quaternion, size)
     })
-  }, [placements, pack])
+  }, [placements, drawing])
 
   if (parts.length === 0 || matrices.length === 0) return null
 

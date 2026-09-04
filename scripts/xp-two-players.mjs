@@ -92,7 +92,7 @@ const BASE = process.argv[2] ?? 'http://localhost:3000'
 const XP = process.argv[3] ?? 'shooter'
 const ROOM = `probe-${Date.now()}`
 
-const env = readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
+const env = readFileSync('/Users/pinklion/WebstormProjects/unkown.t/.env.local', 'utf8')
 const read = (key) =>
   env
     .split('\n')

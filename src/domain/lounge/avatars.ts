@@ -160,6 +160,27 @@ export const AVATAR_CLIPS = {
 export type AvatarClip = (typeof AVATAR_CLIPS)[keyof typeof AVATAR_CLIPS]
 
 /**
+ * A clip name off a blueprint, as one of the four this rig has.
+ *
+ * Null for anything else, including null itself. A blueprint's vocabulary is
+ * deliberately open - see `UseSpec` - and this is the one place it meets a
+ * closed one, so the narrowing happens here rather than at the boundary where a
+ * name is written down.
+ *
+ * In the domain rather than beside the scene that first needed it, because two
+ * renderers now ask: the lounge draws your own body from what you pressed E on,
+ * and it draws everybody else's from the same name arriving over presence. Two
+ * copies of this would be a body that sat down on its owner's screen and stood
+ * up on everybody else's.
+ */
+export function asAvatarClip(name: string | null): AvatarClip | null {
+  if (!name) return null
+  return (Object.values(AVATAR_CLIPS) as readonly string[]).includes(name)
+    ? (name as AvatarClip)
+    : null
+}
+
+/**
  * How tall the animals are, in world units - which are also blocks.
  *
  * Measured by walking the glTF node tree and applying each node's translation to

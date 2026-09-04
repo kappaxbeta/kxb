@@ -1,4 +1,5 @@
 import { DEFAULT_MODEL, isBuildable } from '@/domain/builder/catalogue'
+import { isPlaceable } from '@/domain/builder/props'
 import type { Cell } from '@/domain/builder/draw'
 import { DEFAULT_LIGHT, type LightSpec, type Vec3 } from '@/domain/studio/scene'
 
@@ -367,7 +368,11 @@ function placement(value: unknown): Placement | null {
   // An unknown model has no sensible substitute: the renderer would fetch a
   // glTF that is not there and suspend forever, taking the whole world's
   // Suspense boundary with it. Dropped, exactly as the studio drops a block.
-  if (typeof raw.model !== 'string' || !isBuildable(raw.model)) return null
+  //
+  // `isPlaceable` rather than `isBuildable`: a placement may be a prop out of
+  // the level catalogue as well as a model out of the world's own. See
+  // ./props.ts for what widened and what deliberately did not.
+  if (typeof raw.model !== 'string' || !isPlaceable(raw.model)) return null
 
   const cell = {
     x: integer(raw.x, 0, -GRID_REACH, GRID_REACH),
@@ -389,6 +394,10 @@ function ground(value: unknown): WorldGround | null {
   return {
     cols: integer(raw.cols, 25, 1, GRID_REACH * 2 + 1),
     rows: integer(raw.rows, 25, 1, GRID_REACH * 2 + 1),
+    // Still the world catalogue only, unlike a placement. The ground is a slab
+    // of one model repeated over every cell of a rectangle, which is a thing
+    // only a floor tile is: a ground of chests is thousands of chests, and the
+    // control that sets it is a floor picker rather than a prop picker.
     model: typeof raw.model === 'string' && isBuildable(raw.model) ? raw.model : DEFAULT_MODEL,
     rounded: raw.rounded === true,
   }

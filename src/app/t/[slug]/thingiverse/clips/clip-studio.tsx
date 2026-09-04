@@ -6,6 +6,7 @@ import { attempt } from '@/app/components/connection'
 import { fill } from '@/app/i18n/fill'
 import type { WorkspaceDict } from '@/app/i18n/workspace'
 import { Animator } from '@/app/ovaloffice/animator/animator'
+import { Capture } from '@/app/ovaloffice/animator/capture/capture'
 import type { AnimationDoc, BakedClip } from '@/domain/animator/clip'
 import { ALL_SPECS, type BoneSpec, isRigId, RIGS } from '@/domain/animator/rig'
 import {
@@ -40,10 +41,17 @@ export function ClipStudio({
   clips,
   t,
   editing,
+  price,
   skin,
 }: {
   slug: string
   clips: ClipView[]
+  /**
+   * What keeping a new clip costs this space, in coins. Zero when the plan
+   * still has room, and zero wherever the economy is off - which is where
+   * `nextPrice` decides it, and where `saveClip` charges from.
+   */
+  price: number
   t: WorkspaceDict['thingiverse']['clips']
   /** The clip being reopened, or null for a new one. */
   editing: { id: string; name: string; doc: unknown } | null
@@ -52,6 +60,38 @@ export function ClipStudio({
 }) {
   const router = useRouter()
   const [name, setName] = useState(editing?.name ?? '')
+
+  /**
+   * The clip on the shelf this editor is writing to, once there is one.
+   *
+   * The page opens on `?edit=<id>` or on nothing, and until now that was the
+   * only thing that decided whether Save kept a clip or wrote over one - which
+   * meant the first save of a new clip left the editor still saying "new". A
+   * second press made a second clip, a reload came back to a blank editor with
+   * the work only in the row nobody had told you about, and the shelf grew
+   * three copies of one wave.
+   *
+   * So the id is held here and the address is corrected the moment it exists.
+   * `replaceState` rather than a navigation: the animator would remount, and
+   * remounting a rig the instant somebody saves is indistinguishable from
+   * losing what they saved.
+   */
+  const [kept, setKept] = useState<string | null>(editing?.id ?? null)
+
+  /**
+   * Which clip this page *mounted* on, for the animator's key.
+   *
+   * State with no setter rather than a ref, because it is read while rendering
+   * - a ref read there is the thing React now lints for, and it is right to:
+   * a value the render depends on has to be one a re-render can be triggered
+   * by, even when this one never changes.
+   *
+   * Following a link in the list above is a full page load, so this is that
+   * link's id in every real case. What it is not is `kept` - a save that
+   * corrects the address must not change the key, because the whole point of
+   * correcting it without navigating was to leave the editor standing.
+   */
+  const [openedOn] = useState(editing?.id ?? 'new')
 
   /**
    * Which parts of the body this clip is allowed to drive.
@@ -72,6 +112,24 @@ export function ClipStudio({
   )
   const [saving, start] = useTransition()
   const [note, setNote] = useState<string | null>(null)
+
+  /**
+   * The camera, and what it last handed over.
+   *
+   * Mounted only while it is open, which is not tidiness: the recorder draws
+   * its own body in its own canvas, and two WebGL contexts drawing two dummies
+   * on one page is a cost paid by everybody who never opens the camera.
+   *
+   * `captureAt` counts takes rather than holding a boolean, because it is part
+   * of the editor's `key`. The animator adopts a document when its *model*
+   * loads and never again - see `onReady` - so a take arriving as a prop into
+   * a live editor would be ignored. Counting means each take remounts it, and
+   * a remount at that moment costs nothing: what it would throw away is the
+   * work somebody has just replaced on purpose.
+   */
+  const [recording, setRecording] = useState(false)
+  const [captured, setCaptured] = useState<AnimationDoc | null>(null)
+  const [captureAt, setCaptureAt] = useState(0)
 
   const mine = clips.filter((clip) => clip.mine)
   const shared = clips.filter((clip) => !clip.mine)
@@ -110,8 +168,8 @@ export function ClipStudio({
       }
 
       const result = await attempt(() =>
-        editing
-          ? reshapeClip(slug, { id: editing.id, clip: trimmed, doc })
+        kept
+          ? reshapeClip(slug, { id: kept, clip: trimmed, doc })
           : saveClip(slug, {
               name: called,
               // Which rig it was keyed on, read off the baked bones rather than
@@ -128,7 +186,21 @@ export function ClipStudio({
         return
       }
 
-      setNote(t.saved)
+      /*
+        The address now names the clip, so a reload comes back to it and the
+        next press writes over it rather than keeping a second one.
+
+        Before the list is refreshed, deliberately: `router.refresh` refetches
+        this route at whatever address the router is now holding, and that has
+        to be the one with the id in it or the new clip arrives in the list
+        without the editor being told it made it.
+      */
+      if (!kept) {
+        setKept(result.id)
+        window.history.replaceState(null, '', `?edit=${result.id}`)
+      }
+
+      setNote(kept ? t.saved : t.kept)
       router.refresh()
     })
 
@@ -161,7 +233,7 @@ export function ClipStudio({
                   <li
                     key={clip.id}
                     className={`rounded-xl border px-3 py-2 ${
-                      editing?.id === clip.id
+                      kept === clip.id
                         ? 'border-accent/50 bg-accent/10'
                         : 'border-line/60 bg-surface'
                     }`}
@@ -232,7 +304,7 @@ export function ClipStudio({
             </div>
           ))}
 
-        {editing && (
+        {kept && (
           <a
             href={`/t/${slug}/thingiverse/clips`}
             className="inline-block rounded-lg border border-line/60 px-3 py-1.5 text-xs text-ink transition hover:bg-surface-raised"
@@ -265,25 +337,76 @@ export function ClipStudio({
         <span className="w-full text-[11px] text-ink-muted">{t.partsHint}</span>
       </fieldset>
 
+      <section className="space-y-2 rounded-xl border border-line/60 bg-surface p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setRecording((open) => !open)}
+            className="rounded-lg border border-line/60 px-3 py-1.5 text-xs text-ink transition hover:bg-surface-raised"
+          >
+            {recording ? t.captureClose : t.capture}
+          </button>
+          <span className="text-[11px] text-ink-muted">{t.captureIntro}</span>
+        </div>
+
+        {recording && (
+          <Capture
+            keepLabel={t.captureUse}
+            onKeep={(doc) => {
+              setCaptured(doc)
+              setCaptureAt((count) => count + 1)
+              // Closed on the way out: the take is in the editor now, and a
+              // camera left running behind it is a light on for nothing.
+              setRecording(false)
+              setNote(null)
+            }}
+          />
+        )}
+      </section>
+
       {/*
         The editor itself, unchanged from the one in the backoffice.
 
-        `key` on the clip being opened, so following a link from the list above
-        remounts it: the animator adopts its document when the *model* loads
-        (see `onReady`), which happens once, and a second clip arriving as a
-        prop into a live editor would be ignored.
+        `key` on the clip this page opened on, so following a link from the list
+        above remounts it: the animator adopts its document when the *model*
+        loads (see `onReady`), which happens once, and a second clip arriving as
+        a prop into a live editor would be ignored.
+
+        What it is deliberately *not* keyed on is the clip a save just made.
+        That correction happens in place - see `kept` - and remounting the rig
+        on the press of Save would throw away the playhead, the selection and
+        the undo history of the person who had just told us to keep their
+        work.
+
+        A take from the camera is the other case that has to remount, and for
+        the first reason rather than the second: it arrives as `initial` on a
+        living editor, which would ignore it. `captureAt` counts takes so each
+        one is a new key. See it declared above.
       */}
       <Animator
-        key={editing?.id ?? 'new'}
+        key={`${openedOn}:${captureAt}`}
         skin={skin}
         shelf={{
-          label: t.save,
+          label: kept ? t.saveOver : t.save,
+          /*
+            Only on a *new* clip. `onSave` sends `reshapeClip` when there is
+            one to save over, and reshaping charges nothing - the space already
+            holds the row, so there is no slot to buy. A price on "Save over"
+            would be a number nobody is taking.
+          */
+          price: kept ? 0 : price,
           saving,
           note,
           name,
           onName: setName,
           onSave,
-          initial: editing?.doc,
+          /*
+            A take that has just been recorded wins over the clip this page
+            opened on, for the same reason the editor's own note gives about
+            the shelf beating the localStorage draft: somebody who pressed
+            "use this take" means that take.
+          */
+          initial: captured ?? editing?.doc,
         }}
       />
     </div>

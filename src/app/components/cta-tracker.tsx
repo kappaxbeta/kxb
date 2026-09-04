@@ -31,8 +31,9 @@ import { track } from '@/app/components/track'
  * whether its label is "Come and play" or "Walk into the demo", and a redesign
  * that renames every button changes none of the numbers.
  *
- * `data-cta` overrides the derived id, for the one case the rule cannot cover:
- * two links to the same place on one page that are worth telling apart.
+ * `data-cta` overrides the derived id, for the two cases the rule cannot cover:
+ * two links to the same place on one page that are worth telling apart, and a
+ * link that leaves the site (see the origin check below).
  */
 
 /** Destinations worth counting, and the id each is recorded under. */
@@ -41,9 +42,20 @@ const DESTINATIONS: { prefix: string; id: string }[] = [
   { prefix: '/signup', id: 'signup' },
   { prefix: '/waitlist', id: 'waitlist' },
   { prefix: '/events', id: 'events' },
+  // Both spellings of the same three pages, and both are live traffic rather
+  // than one being legacy: the pages moved to `/xo-universe/...`, and the
+  // landing page - which ships to the public repository, where those routes do
+  // not exist - deliberately still links to the old ones and lets the redirect
+  // do the work. A click is counted where it was clicked, so a landing-page
+  // door and a card on the channel both land on `play`.
+  { prefix: '/xo-universe/play', id: 'play' },
+  { prefix: '/xo-universe/create', id: 'create' },
+  { prefix: '/xo-universe/share', id: 'share' },
+  { prefix: '/xo-universe/coins', id: 'coins' },
   { prefix: '/play', id: 'play' },
   { prefix: '/create', id: 'create' },
   { prefix: '/share', id: 'share' },
+  { prefix: '/coins', id: 'coins' },
 ]
 
 function ctaFor(anchor: HTMLAnchorElement): string | null {
@@ -66,11 +78,27 @@ export function CtaTracker() {
 
       const anchor = (event.target as Element | null)?.closest?.('a')
       if (!(anchor instanceof HTMLAnchorElement)) return
-      // Same-origin only: an outbound link is not a step in our funnel.
-      if (anchor.origin !== window.location.origin) return
 
       const id = ctaFor(anchor)
       if (!id) return
+
+      /*
+        An outbound link counts only when it was labelled by hand.
+
+        The default is still "an outbound link is not a step in our funnel" -
+        every footer link, every citation and every link inside a piece of
+        writing leaves the site, and counting them turns the CTA numbers into a
+        measure of how much prose is on the page. But some outbound links *are*
+        the ask: "star it on GitHub" is a call to action whose whole point is
+        that it goes somewhere else, and refusing to count it means the button
+        exists and its number does not.
+
+        Keyed on `data-cta` rather than on a list of allowed hosts, because the
+        distinction being drawn is intent - somebody put that attribute on that
+        anchor - and a host list would silently start counting every mention of
+        a domain that once had a button.
+      */
+      if (anchor.origin !== window.location.origin && !anchor.dataset.cta) return
 
       track('cta_click', { id, from: window.location.pathname })
     }

@@ -41,7 +41,7 @@ export async function listSignupOffers(limit = 3): Promise<SignupOffer[]> {
 
   const { data, error } = await admin
     .from('promo_codes')
-    .select('code, label, tier, free_days, spaces, max_uses, uses, starts_at, expires_at, revoked_at')
+    .select('code, label, tier, free_days, spaces, bucks, vouchers, coins, max_uses, uses, starts_at, expires_at, revoked_at')
     // Prefix match on the stored code. `code` is uppercase by the column's own
     // check constraint, so this needs no case folding - and `like` rather than
     // `ilike` keeps it on the unique index.
@@ -77,6 +77,9 @@ export async function listSignupOffers(limit = 3): Promise<SignupOffer[]> {
          * us.
          */
         remaining: row.max_uses === null ? null : Math.max(0, row.max_uses - row.uses),
+        bucks: row.bucks ?? 0,
+        vouchers: row.vouchers ?? 0,
+        coins: row.coins ?? 0,
       }),
     )
     .sort(compareSignupOffers)

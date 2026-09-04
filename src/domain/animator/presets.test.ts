@@ -104,7 +104,13 @@ describe('the catalogue', () => {
   })
 
   test('the cycles close, so looping them does not jolt', () => {
-    for (const id of ['walk', 'run', 'armswing', 'wave', 'idle', 'dance', 'jump']) {
+    // `point` and `reach` are deliberately absent: both end held, because a
+    // point that snaps back is a flinch and a reach that snaps back puts the
+    // thing down again. See their entries in the catalogue.
+    for (const id of [
+      'walk', 'run', 'armswing', 'wave', 'idle', 'dance', 'jump',
+      'laugh', 'nod', 'shrug', 'cry', 'hit',
+    ]) {
       const entry = preset(id)
       const first = entry.frames[0]
       const last = entry.frames[entry.frames.length - 1]
@@ -313,5 +319,109 @@ describe('stamping', () => {
     // one, so the clip ends a frame short of 3.6 rather than at it.
     expect(stamped.duration).toBeGreaterThan(3.5)
     expect(stamped.duration).toBeCloseTo(snapTime(2.6, 24) + 1, 6)
+  })
+})
+
+
+/**
+ * The performed beats, measured.
+ *
+ * Same standard as the walk above: every one of these was a sign that could
+ * have gone either way, and a laugh whose head tips forward is correct
+ * TypeScript. What is asserted is the thing that makes each one recognisable -
+ * where the hands end up, which way the head goes, and whether it returns.
+ */
+describe('the performed beats', () => {
+  const frames = (id: string) => preset(id).frames
+
+  test('the laugh tips the head back, not forward', () => {
+    // Back is negative about X here - the same axis the spine leans forward
+    // on. Getting this backwards is a bow.
+    const head = frames('laugh').map((frame) => frame.bones.head[0])
+    expect(Math.min(...head)).toBeLessThan(-15)
+    expect(Math.max(...head)).toBe(0)
+  })
+
+  test('and bounces rather than holding, which is what reads as laughter', () => {
+    // Two dips, not one. A head that goes back and stays is somebody looking
+    // at the ceiling.
+    const head = frames('laugh').map((frame) => frame.bones.head[0])
+    const dips = head.filter((angle, i) => i > 0 && i < head.length - 1 && angle < head[i - 1] && angle < head[i + 1])
+    expect(dips.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('the nod goes down and touches nothing else', () => {
+    for (const frame of frames('nod')) {
+      expect(Object.keys(frame.bones)).toEqual(['head'])
+    }
+    expect(Math.max(...frames('nod').map((f) => f.bones.head[0]))).toBeGreaterThan(15)
+  })
+
+  test('the shrug puts both hands out in front, level and symmetric', () => {
+    const out = frames('shrug')[1]
+    rig.apply(out.bones)
+    const right = rig.at('handr')
+    const left = rig.at('handl')
+    expect(right.z).toBeGreaterThan(0.3)
+    // Symmetric, or it is a shrug with one shoulder - which is a different
+    // gesture entirely.
+    expect(left.z).toBeCloseTo(right.z, 2)
+    expect(left.x).toBeCloseTo(-right.x, 2)
+    expect(left.y).toBeCloseTo(right.y, 2)
+  })
+
+  test('the point puts the right hand well in front and leaves the left alone', () => {
+    const held = frames('point')[frames('point').length - 1]
+    rig.apply(held.bones)
+    expect(forward('handr')).toBeGreaterThan(0.45)
+    // The left arm is not mentioned, so it stays wherever it was.
+    expect(Object.keys(held.bones).every((bone) => bone.endsWith('r'))).toBe(true)
+  })
+
+  test('the point holds instead of returning', () => {
+    const list = frames('point')
+    expect(list[list.length - 1].bones).toEqual(list[list.length - 2].bones)
+  })
+
+  test('the cry brings both hands up to the head', () => {
+    const covering = frames('cry')[1]
+    rig.apply(covering.bones)
+    const head = rig.at('head')
+    for (const hand of ['handr', 'handl']) {
+      // Within a hand's width of the head, in every direction.
+      expect(rig.at(hand).distanceTo(head)).toBeLessThan(0.2)
+    }
+  })
+
+  test('the hit travels forward through the swing', () => {
+    const list = frames('hit')
+    rig.apply(list[1].bones)
+    const back = forward('handr')
+    rig.apply(list[2].bones)
+    const through = forward('handr')
+
+    // The wind-up goes behind the body and the swing comes well past it.
+    expect(back).toBeLessThan(0)
+    expect(through).toBeGreaterThan(0.5)
+  })
+
+  test('the reach ends holding rather than snapping back', () => {
+    const list = frames('reach')
+    expect(list[list.length - 1].bones).toEqual(list[list.length - 2].bones)
+    rig.apply(list[list.length - 1].bones)
+    expect(forward('handr')).toBeGreaterThan(0.5)
+  })
+
+  test('every performed beat leaves the legs alone', () => {
+    // They are layers. A laugh over a walk has to be somebody laughing while
+    // they walk, which only works if the laugh says nothing about legs.
+    for (const id of ['laugh', 'nod', 'shrug', 'point', 'cry', 'hit', 'reach']) {
+      for (const frame of frames(id)) {
+        for (const bone of Object.keys(frame.bones)) {
+          expect(bone).not.toContain('leg')
+          expect(bone).not.toContain('foot')
+        }
+      }
+    }
   })
 })

@@ -417,3 +417,43 @@ export {
   type FlowStarter,
   type FlowStarterId,
 } from './document/flow-starters'
+
+/**
+ * The sketch runtime's host-agnostic half: the SDK a container wakes up
+ * inside, the postMessage protocol that reaches it, and the pure functions
+ * that drive its `flow`.
+ *
+ * On the root rather than a subpath because every other block a host reads
+ * to run an XP - the document, the engine, the camera, the rules - lives
+ * here too; a sketch host asking "what do I hand a container" should not
+ * have to know this is a different file from `parseXp`. Moved from
+ * `src/app/xp/_sketch/` so a phone's WebView can reach the same SDK string
+ * and flow driver a web iframe does - see `./sketch/sdk.ts` for the argument
+ * in full.
+ */
+export { SKETCH_SDK } from './sketch/sdk'
+export {
+  MAX_LOG_LINE,
+  MAX_SEND_BYTES,
+  MAX_SENDS_PER_SECOND,
+  MAX_STATE_BYTES,
+  readFrameMessage,
+  readWireControl,
+  WIRE_CONTROL,
+  WIRE_DATA,
+  WIRE_EMIT,
+  WIRE_FLOW,
+  WIRE_STATE,
+  type FrameMessage,
+  type StageMessage,
+} from './sketch/protocol'
+export {
+  flowAllows,
+  flowOnEvent,
+  flowSays,
+  flowTick,
+  packFlow,
+  readPackedFlow,
+  startFlow,
+  type SketchFlowState,
+} from './sketch/flow-driver'

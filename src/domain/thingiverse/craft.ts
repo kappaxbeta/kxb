@@ -1,3 +1,6 @@
+import type { WeaponSpec } from '@/domain/thingiverse/fight'
+import type { HoldSpec } from '@/domain/thingiverse/hold'
+
 /**
  * Things that hold other things, and things made out of them.
  *
@@ -208,6 +211,85 @@ export function sameItem(a: string, b: string): boolean {
 
 function normal(word: string): string {
   return word.trim().toLowerCase().replace(/[\s_]+/g, ' ')
+}
+
+/**
+ * How an item is *drawn*, once something is holding one.
+ *
+ * ---------------------------------------------------------------------------
+ * Why a lookup, and why it is built from the shelf
+ * ---------------------------------------------------------------------------
+ * An item is a word. A word has no model, no size and no picture - the thing
+ * that has all three is the blueprint the space called "Bun", and the rule for
+ * getting from one to the other is the rule at the top of this file: lowercase,
+ * spaces and underscores the same character. Until now nothing resolved it,
+ * because nothing drew what was on a table; a bun put on a board went into a
+ * `Map` on the driver and was never seen again.
+ *
+ * A map built once per shelf rather than a search per slot, because the callers
+ * are a frame loop and a scene with sixty things in it: `find` over a
+ * two-hundred-row shelf, per socket, per frame, is the shape that turns a room
+ * into a slideshow the day somebody has a big shelf.
+ *
+ * **First one wins.** Two blueprints called "bun" is a coin toss that `sameItem`
+ * cannot break, and the shelf arrives oldest first - so the winner is the older
+ * one, which is the same tie-break `resolveSummon` documents (yours outranks the
+ * space's, and within a rank the list keeps its order). A newer duplicate is
+ * therefore invisible to a recipe rather than intermittently visible, which is
+ * the failure somebody can actually diagnose.
+ */
+export interface ItemLook {
+  model: string
+  /** The blueprint's own multiplier. An item is drawn as its maker drew it. */
+  scale: number
+  /**
+   * How it sits in a hand, when somebody is carrying it rather than putting it
+   * down. Absent for the things nobody has posed a grip for.
+   *
+   * Carried on the *look* rather than fetched separately because both callers
+   * want it in the same breath as the model: what is on a table ignores it, and
+   * what is in a fist cannot be drawn without it. See `@/domain/thingiverse/hold`.
+   */
+  hold?: HoldSpec
+  /**
+   * How hard it hits, if it is a weapon at all.
+   *
+   * Here for the same reason the grip is: the two callers that care ask in the
+   * same breath as they ask for the model - what is drawn in a fist, and what
+   * happens when the person holding it swings. Absent for a bun.
+   */
+  weapon?: WeaponSpec
+}
+
+export function itemLooks(
+  shelf: readonly {
+    name: string
+    model: string
+    scale: number
+    hold?: HoldSpec
+    weapon?: WeaponSpec
+  }[],
+): Map<string, ItemLook> {
+  const looks = new Map<string, ItemLook>()
+  for (const entry of shelf) {
+    const key = normal(entry.name)
+    if (looks.has(key)) continue
+    looks.set(key, {
+      model: entry.model,
+      scale: entry.scale,
+      hold: entry.hold,
+      weapon: entry.weapon,
+    })
+  }
+  return looks
+}
+
+/** What this word looks like, or nothing if the shelf has never heard of it. */
+export function itemLook(
+  looks: ReadonlyMap<string, ItemLook>,
+  word: string,
+): ItemLook | undefined {
+  return looks.get(normal(word))
 }
 
 /** Whether a slot will accept this item. */

@@ -118,6 +118,10 @@ export const roomsProjection: Projection<RoomEvent> = {
         await patch(supabase, event, { guest_build: event.data.allowed })
         return
 
+      case 'RoomDoorPriceSet':
+        await patch(supabase, event, { door_price: event.data.price })
+        return
+
       /*
        * The pin, stamped with the event's own time.
        *
@@ -163,6 +167,8 @@ type RoomPatch = {
   xp_ref?: string
   cap?: number | null
   guest_build?: boolean
+  /** Coins to walk in. `0` is free. See `RoomDoorPriceSet`. */
+  door_price?: number
   closed?: boolean
   round_started_at?: string | null
   pinned_at?: string | null

@@ -15,6 +15,7 @@ import { resolveFeatures } from '@/domain/flags/queries'
 import { requireUser } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { stripe } from '@/lib/stripe'
+import { isAppShell, NOT_FOR_SALE_IN_APP } from '@/lib/app-shell'
 
 /**
  * Buy bucks through Stripe Checkout.
@@ -32,6 +33,11 @@ import { stripe } from '@/lib/stripe'
 export async function startBucksCheckout(
   bundleId: string,
 ): Promise<{ ok: false; error: string } | never> {
+  // Nothing is sold inside the installed app - see `isAppShell`. Checked here
+  // and not only in the UI, because a Server Action is a public POST endpoint
+  // and a hidden button is a rendering decision.
+  if (await isAppShell()) return { ok: false, error: NOT_FOR_SALE_IN_APP }
+
   const { user, supabase } = await requireUser()
 
   const features = await resolveFeatures(supabase, null)

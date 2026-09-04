@@ -287,6 +287,9 @@ export function PromoList({ codes }: { codes: PromoCodeView[] }) {
               maxUses: Number(formData.get('maxUses') ?? 0),
               days: Number(formData.get('days') ?? 0),
               tier: paidTierOr(formData.get('tier')),
+              bucks: Number(formData.get('bucks') ?? 0),
+              vouchers: Number(formData.get('vouchers') ?? 0),
+              coins: Number(formData.get('coins') ?? 0),
             }),
           )
         }}
@@ -346,6 +349,56 @@ export function PromoList({ codes }: { codes: PromoCodeView[] }) {
             className={`${FIELD} w-16`}
           />
         </label>
+        {/*
+          The three things a code hands over besides the month, beside the free
+          days rather than beside the plan.
+
+          Next to each other because they are one sentence - "a month of xo,
+          five bucks and 500 coins" - and an operator setting one almost always
+          wants to see the other two. All three default to zero: most codes are
+          still a month and nothing else, and a form that started at one would
+          quietly make every campaign more expensive than it was asked to be.
+
+          `bucks` is the one to reach for. It lands in the redeemer's own pocket
+          and buys skins; `vouchers` mints bearer codes they can pass on, which
+          is a different present and a rarer one.
+        */}
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          bucks
+          <input
+            name="bucks"
+            type="number"
+            min={0}
+            max={50}
+            defaultValue={0}
+            aria-label="Bucks dropped in the redeemer's pocket, on top of the free month"
+            className={`${FIELD} w-16`}
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          voucher codes
+          <input
+            name="vouchers"
+            type="number"
+            min={0}
+            max={50}
+            defaultValue={0}
+            aria-label="Bearer voucher codes handed to the redeemer to pass on"
+            className={`${FIELD} w-16`}
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          coins
+          <input
+            name="coins"
+            type="number"
+            min={0}
+            max={100000}
+            defaultValue={0}
+            aria-label="Coins minted into the redeemer's wallet"
+            className={`${FIELD} w-20`}
+          />
+        </label>
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
           uses
           <input
@@ -378,7 +431,15 @@ export function PromoList({ codes }: { codes: PromoCodeView[] }) {
           gets once they redeem — <strong className="font-medium">valid days</strong>{' '}
           is how long the code itself keeps working. A poster that comes down in a
           fortnight still promises a full month to whoever reads it on the last
-          day. Leave uses or valid days at 0 for no limit.
+          day. Leave uses or valid days at 0 for no limit.{' '}
+          <strong className="font-medium">Bucks</strong> land in the pocket the
+          moment the code is redeemed and buy skins in the shop — the half of the
+          offer somebody can spend the same minute.{' '}
+          <strong className="font-medium">Voucher codes</strong> are bearer codes
+          handed to them instead, to pass on; they are shown once, on the screen
+          that took the code. <strong className="font-medium">Coins</strong> are
+          minted into their wallet and only spend in a space with the economy
+          switched on.
         </p>
         {/*
           The naming convention, said on the form rather than in a handbook.
@@ -473,6 +534,13 @@ export function PromoList({ codes }: { codes: PromoCodeView[] }) {
                       on the common case to label the rare one. */}
                   {code.spaces !== null &&
                     ` · ${code.spaces} space${code.spaces === 1 ? '' : 's'}`}
+                  {/* The three extras, each silent at zero. Most codes carry
+                      none of them and a row that said "0 bucks · 0 coins"
+                      would be three words of nothing on every line. */}
+                  {code.bucks > 0 && ` · ${code.bucks} bucks`}
+                  {code.vouchers > 0 &&
+                    ` · ${code.vouchers} voucher code${code.vouchers === 1 ? '' : 's'}`}
+                  {code.coins > 0 && ` · ${code.coins} coins`}
                   {code.expiresAt &&
                     ` · until ${new Date(code.expiresAt).toLocaleDateString()}`}
                 </span>

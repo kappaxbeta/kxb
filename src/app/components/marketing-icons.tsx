@@ -70,6 +70,10 @@ export type MarkName =
   | 'machine'
   | 'craft'
   | 'clip'
+  // the bank, on /xo-universe/coins
+  | 'coins'
+  | 'purse'
+  | 'bank'
   // the room's own voices, on /play
   | 'vehicle'
   | 'chat'
@@ -153,6 +157,46 @@ const MARKS: Record<MarkName, React.ReactElement> = {
       <path d="M2.5 5.5h8.5V10a3.5 3.5 0 0 1-3.5 3.5H6A3.5 3.5 0 0 1 2.5 10V5.5Z" />
       <path d="M11 6.5h1.3a1.9 1.9 0 1 1 0 3.8H11" />
       <path d="M5.2 3.4c.6-.6 0-1 .5-1.6M8 3.4c.6-.6 0-1 .5-1.6" />
+    </svg>
+  ),
+
+  /**
+   * A stack of coins, seen slightly from above.
+   *
+   * An ellipse for the face and two skirts under it rather than three
+   * overlapping circles: circles at this size read as a Venn diagram, and the
+   * one thing this mark has to say at 16px is *more than one*.
+   */
+  coins: (
+    <svg {...ICON}>
+      <ellipse cx="8" cy="4.4" rx="5" ry="2.3" />
+      <path d="M3 4.4v3.1c0 1.27 2.24 2.3 5 2.3s5-1.03 5-2.3V4.4" />
+      <path d="M3 7.9V11c0 1.27 2.24 2.3 5 2.3s5-1.03 5-2.3V7.9" />
+    </svg>
+  ),
+
+  /** A drawstring purse: a rounded pouch, a neck and the tie across it. */
+  purse: (
+    <svg {...ICON}>
+      <path d="M5.4 5.6h5.2c1.7 1.3 2.7 3 2.7 4.9A3.5 3.5 0 0 1 9.8 14H6.2a3.5 3.5 0 0 1-3.5-3.5c0-1.9 1-3.6 2.7-4.9Z" />
+      <path d="M5.4 5.6c0-1.6 1.2-2.9 2.6-2.9s2.6 1.3 2.6 2.9" />
+      <path d="M3.4 7.8h9.2" />
+    </svg>
+  ),
+
+  /**
+   * A bank: a roof on columns, on a step.
+   *
+   * The classical portico, which is the one building everybody draws the same
+   * way. It is a *shared* balance rather than a personal one, and a building is
+   * the only shape in this alphabet that says an institution rather than a
+   * thing you carry.
+   */
+  bank: (
+    <svg {...ICON}>
+      <path d="M1.8 6.2 8 2.6l6.2 3.6" />
+      <path d="M3.6 6.6v5.2M6.5 6.6v5.2M9.5 6.6v5.2M12.4 6.6v5.2" />
+      <path d="M2.2 13.4h11.6" />
     </svg>
   ),
 

@@ -26,6 +26,13 @@ import { useRefusal } from '@/app/i18n/use-refusal'
  * Server Action. That keeps the OAuth start on the server, where the PKCE code
  * verifier can be written to a cookie, and means the buttons work before any
  * JavaScript has loaded.
+ *
+ * The whole block - the button and the "or" under it - is `not-in-app`, which
+ * is `display: none` inside `packages/shell`. Not a policy: Google refuses
+ * OAuth from an embedded browser as `disallowed_useragent`, so in the installed
+ * app this button can only ever produce Google's error page. Email and the
+ * one-time link work there, and are what is left. See the note at the bottom of
+ * `globals.css`.
  */
 function SocialButtons({
   invite,
@@ -39,7 +46,7 @@ function SocialButtons({
   dict: AuthDict
 }) {
   return (
-    <div className="space-y-3">
+    <div className="not-in-app space-y-3">
       <form action={signInWithGoogle}>
         <KeepField keep={keep} />
         {/* Carried through the provider round trip by the action, which writes
@@ -270,6 +277,19 @@ function Offers({
                 .replace('{tier}', offer.tier)
 
         /**
+         * Everything the code hands over besides the month, in the order
+         * somebody would care about it: what buys a skin, what can be given
+         * away, what sits in a wallet until a space switches its economy on.
+         */
+        const extras = [
+          offer.bucks > 0 ? dict.offerBucks.replace('{n}', String(offer.bucks)) : null,
+          offer.vouchers > 0
+            ? dict.offerVouchers.replace('{n}', String(offer.vouchers))
+            : null,
+          offer.coins > 0 ? dict.offerCoins.replace('{n}', String(offer.coins)) : null,
+        ].filter((line): line is string => line !== null)
+
+        /**
          * The two facts that make an offer feel finite, and neither is shown
          * unless it is true. An uncapped code has no "left" to report, and one
          * with no expiry has no date - printing "unlimited" and "no end" would
@@ -295,6 +315,21 @@ function Offers({
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{headline}</p>
+                {/*
+                  What else it carries, under the headline rather than inside
+                  it.
+
+                  Two short lines read faster than one long one at this width,
+                  and it keeps the plan and the length - the two facts that
+                  decide whether an offer is worth taking - on a line of their
+                  own. Nothing is drawn for a code that carries none of the
+                  three, which is still most of them.
+                */}
+                {extras.length > 0 && (
+                  <p className="text-sm font-medium text-accent">
+                    {extras.join(' · ')}
+                  </p>
+                )}
                 <p className="auth-offer-code mt-0.5">{offer.code}</p>
                 {offer.label && (
                   <p className="mt-1.5 text-xs text-ink-muted">{offer.label}</p>

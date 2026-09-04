@@ -5,9 +5,17 @@ host builds. The third kind of document, next to a level (a world this format
 describes) and a cartridge (`frame`, a game the host already ships).
 
 Built 2026-08-30. The format half is `packages/xp/src/document/sketch.ts`;
-the host half is `src/app/xp/_sketch/`; the one runtime fork is `isSketch`
-in `_runtime/scene.tsx`, beside `isFramed` — so the store, the wizard, the
-match room and the XP rooms all open one without having changed.
+the runtime half is split across two places since the native app needed to
+reach it too: the host-agnostic string and pure functions — the SDK
+(`packages/xp/src/sketch/sdk.ts`), the postMessage protocol
+(`packages/xp/src/sketch/protocol.ts`) and the flow driver
+(`packages/xp/src/sketch/flow-driver.ts`), all re-exported from `@kxb/xp` —
+live in the package, next to `parseXp` and the engine; what is web-specific —
+the `<iframe srcdoc>` builder (`src/app/xp/_sketch/srcdoc.ts`) and the React
+stage that wires it to a socket (`src/app/xp/_sketch/stage.tsx`) — stays in
+the app. The one runtime fork is `isSketch` in `_runtime/scene.tsx`, beside
+`isFramed` — so the store, the wizard, the match room and the XP rooms all
+open one without having changed.
 
 ## The trust story, because it is the whole design
 
@@ -19,20 +27,22 @@ folder rules did not move:
 - **Sources are strings inside the JSON document**, the same way `scripts`
   has always carried QuickJS sources. Nothing stores or serves a script
   file.
-- **The container** (`_sketch/srcdoc.ts`) is an `<iframe srcdoc>` with
-  `sandbox="allow-scripts"` and **no** `allow-same-origin`: an opaque
-  origin, our cookies unreachable, `postMessage` the only door.
+- **The container** (`_sketch/srcdoc.ts`, web-specific) is an
+  `<iframe srcdoc>` with `sandbox="allow-scripts"` and **no**
+  `allow-same-origin`: an opaque origin, our cookies unreachable,
+  `postMessage` the only door.
 - **The CSP inside** is `default-src 'none'`, opened for inline script, our
   origin (p5 at `/xp/vendor/p5.min.js`, pack pictures, sounds — CORS for
   those three directories is in `next.config.ts`) and data/blob. A sketch
   cannot phone home.
-- **Everything the frame says is validated** (`_sketch/protocol.ts`) and
-  rate-limited (`xp.send` 20/s, 8 kB; state 4 kB) on the stage's side of
-  the membrane, because the other side is the code being limited.
+- **Everything the frame says is validated** (`@kxb/xp`'s
+  `packages/xp/src/sketch/protocol.ts`) and rate-limited (`xp.send` 20/s,
+  8 kB; state 4 kB) on the stage's side of the membrane, because the other
+  side is the code being limited.
 
 ## What a sketch is handed — `window.xp`
 
-The SDK (`_sketch/sdk.ts`, inlined into the container) gives ordinary p5
+The SDK (`packages/xp/src/sketch/sdk.ts`, inlined into the container) gives ordinary p5
 global-mode code a multiplayer game's worth of platform, without netcode:
 
 | | |
@@ -54,7 +64,7 @@ stage forwards key edges it hears and the SDK replays them as real events.
 
 ## The flow, honoured in the shape a sketch can
 
-`_sketch/flow-driver.ts` (pure, tested) drives phases, `says`, `allow`,
+`packages/xp/src/sketch/flow-driver.ts` (pure, tested) drives phases, `says`, `allow`,
 `after` timers, `on` events, `rounds` and the two reserved destinations. The
 lowest id in the roster drives and broadcasts; newest `seq` wins. Steps with
 `when` never hold here and `does` fires nothing — a sketch's world is inside
@@ -65,7 +75,11 @@ authored `says` line.
 ## Where you meet one
 
 - **Play**: anywhere an XP opens. Shipped examples:
-  `neon-pond.xp.json` (2D, flow, rounds) and `cube-yard.xp.json` (WEBGL —
+  `neon-pond.xp.json` (2D, flow, rounds), `conways-gambit.xp.json` (two
+  players taking turns: one client holds the position in an `xp.object`
+  whose every field is a *string*, because the SDK eases numeric ones
+  towards the owner's value and half a turn is not a turn) and
+  `cube-yard.xp.json` (WEBGL —
   p5 reads OBJ/STL, not our `.glb`, so its third dimension is p5 geometry;
   a GLB→OBJ conversion is the path if pack models are ever wanted inside).
 - **Create**: the `p5` template (`templates.ts`) — the new-project form

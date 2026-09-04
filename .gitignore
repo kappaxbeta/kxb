@@ -97,3 +97,17 @@ docs/marketing/images/
 
 # ...and the same for the card game. `bun run maumau:assets --publish`.
 /public/maumau
+
+# Vendored by `bun run mocap:vendor` for the camera capture page: MediaPipe's
+# wasm runtime, copied out of node_modules, and the two pose models, fetched
+# from Google's bucket. Fifteen megabytes that is a pure function of a version
+# number and two URLs - the script is the part worth keeping. Same bargain as
+# /public/boxing above.
+/public/mocap
+
+# Written by `bun run banners:render`: seventy-two App Store panels and the
+# manifest saying where the gameplay captures go. Three hundred megabytes that
+# is a pure function of `domain/banners/panels.ts` and `ovaloffice/banners/
+# paint.ts` - the config and the template are the part worth keeping, and a
+# PNG in the history is a picture nobody can diff.
+/marketing/banners

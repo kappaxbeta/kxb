@@ -27,6 +27,8 @@ function room(id: string, extra: Partial<RoomView> = {}): RoomView {
     mode: 'creative',
     cap: null,
     guestBuild: true,
+    // Free, like every room until an owner puts a price on the door.
+    doorPrice: 0,
     xpRef: null,
     roundStartedAt: null,
     adminPinnedAt: null,

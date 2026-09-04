@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import {
   Bullets,
   ControllerBlock,
@@ -402,9 +403,13 @@ export default function PrivacyPage() {
         </p>
         <p>
           The full conditions are in the{' '}
-          <a href="/gewinnspiel/en" className="text-accent hover:underline">
+          {/* A `<Link>` rather than an `<a>`: the contest conditions are a page in
+              this app, and since they moved to a `[lang]` route Next's own lint
+              rule says so. The other legal cross-links stay anchors because
+              they point at documents, not at routes with a segment. */}
+          <Link href="/gewinnspiel/en" className="text-accent hover:underline">
             contest terms
-          </a>
+          </Link>
           .
         </p>
       </Section>

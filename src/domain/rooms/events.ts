@@ -226,6 +226,33 @@ export type RoomCapSet = DomainEvent<'RoomCapSet', { cap: number | null }>
 export type RoomGuestBuildSet = DomainEvent<'RoomGuestBuildSet', { allowed: boolean }>
 
 /**
+ * What it costs to walk in.
+ *
+ * `docs/product/economy.md` §11. A toll on the door, set by the space's owner,
+ * paid into the space's bank. `0` is free and is the default - nothing about
+ * this existing changes what an untouched room costs.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not a kind of "need"
+ * ---------------------------------------------------------------------------
+ * A need is a *consequence*: you got hungry, and food costs something. A door
+ * charge is a *toll*, paid before anything has happened to you, and it is the
+ * only charge in this product that can stop somebody getting in at all. Those
+ * are different bargains and an owner tunes them for different reasons, so they
+ * are different events with different reasons on the movement.
+ *
+ * ---------------------------------------------------------------------------
+ * It applies to members and admins, not only to strangers
+ * ---------------------------------------------------------------------------
+ * Deliberately, and it is the part most likely to be "fixed" by somebody who
+ * assumes a toll must be for outsiders. A room whose regulars walk past the
+ * turnstile is not a room with a price on it - it is a room with a price on
+ * *visitors*, which is a different feature and a meaner one. The space's owner
+ * is not charged, for the reason nobody is ever charged to pay themselves.
+ */
+export type RoomDoorPriceSet = DomainEvent<'RoomDoorPriceSet', { price: number }>
+
+/**
  * Somebody dealt.
  *
  * The moment a room that is a level stops taking newcomers. `at` is the
@@ -256,6 +283,7 @@ export type RoomEvent =
   | RoomTintSet
   | RoomCapSet
   | RoomGuestBuildSet
+  | RoomDoorPriceSet
   | RoomClosed
 
 export const ROOM_EVENT_LABELS: Record<RoomEvent['type'], string> = {
@@ -270,6 +298,7 @@ export const ROOM_EVENT_LABELS: Record<RoomEvent['type'], string> = {
   RoomModeSet: 'room mode changed',
   RoomCapSet: 'room capacity changed',
   RoomGuestBuildSet: 'room guest building changed',
+  RoomDoorPriceSet: 'room door price changed',
   RoomClosed: 'room closed',
   RoundStarted: 'round started',
   RoundReopened: 'round reopened',

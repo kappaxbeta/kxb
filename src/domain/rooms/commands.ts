@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_PRICE } from '@/domain/bank/prices'
 import {
   ROOM_CAP_MAX,
   ROOM_CAP_MIN,
@@ -82,6 +83,27 @@ export const setRoomCapSchema = z.object({
 export const setRoomGuestBuildSchema = z.object({
   roomId: z.uuid(),
   allowed: z.boolean(),
+})
+
+/**
+ * A toll on the door. `docs/product/economy.md` §11.
+ *
+ * `0` takes it off, which is why the floor is zero rather than one - "free" has
+ * to be expressible or a price could be set and never removed.
+ *
+ * The ceiling is `MAX_PRICE`, shared with every other price in the economy. The
+ * decider checks it again, and the overlap is the arrangement this file's own
+ * header describes: the schema refuses a malformed shape with a readable
+ * message, and the decider refuses an implausible one next to the invariant it
+ * protects.
+ */
+export const setRoomDoorPriceSchema = z.object({
+  roomId: z.uuid(),
+  price: z
+    .number()
+    .int('A price is a whole number of coins')
+    .min(0, 'A price cannot be negative')
+    .max(MAX_PRICE, `At most ${MAX_PRICE} coins`),
 })
 
 export const setRoomPinnedSchema = z.object({
@@ -181,6 +203,17 @@ export type SetRoomCap = {
   actorId: string
   cap: number | null
 }
+/**
+ * A toll on the door. See `RoomDoorPriceSet`.
+ *
+ * `0` takes it off. The bound is in the decider, next to the invariant, because
+ * this is the number a purse is later charged.
+ */
+export type SetRoomDoorPrice = {
+  type: 'SetRoomDoorPrice'
+  price: number
+}
+
 export type SetRoomGuestBuild = {
   type: 'SetRoomGuestBuild'
   actorId: string
@@ -227,6 +260,7 @@ export type RoomCommand =
   | SetRoomMode
   | SetRoomCap
   | SetRoomGuestBuild
+  | SetRoomDoorPrice
   | SetRoomPinned
   | SetRoomGroup
   | SetRoomIcon

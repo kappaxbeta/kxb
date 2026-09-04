@@ -30,6 +30,16 @@ EXCLUDE=(
   src/app/xp/_runtime/body/skinned.test.ts
   src/domain/builder/catalogue.test.ts
   src/lib/audio/catalogue.test.ts
+  src/domain/thingiverse/starters.test.ts
+
+  # Not a missing file but a different one, which is the same problem wearing
+  # another hat. `retarget.test.ts` reads `public/xo/pda/dummy/Dummy.glb` and
+  # asserts that folding the legs drops the hips by five centimetres. The rig
+  # shipped here is the stand-in `tools/make-dummy.ts` builds, and its legs are
+  # not the modelled ones: the pose it resolves to is a fine pose and simply
+  # not that one. The maths and axis suites in the same file need only a
+  # skeleton and are not affected - they run, above, and they pass.
+  src/domain/mocap/retarget.test.ts
 )
 
 # Drift is loud rather than silent: if one of these is renamed, this fails

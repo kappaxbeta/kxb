@@ -180,6 +180,15 @@ export function evolve(
       return { ...state, coins: state.coins + event.data.amount }
     }
 
+    /**
+     * Coins from outside. Note it moves `coins` and nothing else - a won battle
+     * is not a customer served, and must not climb the café's `earned`, which
+     * is what the homestead leaderboard is ranked on.
+     */
+    case 'CoinsEarned': {
+      return { ...state, coins: state.coins + event.data.amount }
+    }
+
     case 'GroundBought': {
       const { place, tiles, cost } = event.data
       return {
@@ -400,13 +409,15 @@ export function decide(
      * it simply lands, and the balance is correct whenever they do open one.
      */
     case 'ReceiveCoins': {
-      const { from, amount, transfer } = command
+      const { from, amount, transfer, owner } = command
 
       if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_TRANSFER) {
         throw new DomainError('That is not an amount you can receive', 'homestead_bad_amount')
       }
 
-      return [{ type: 'CoinsReceived', data: { from, amount, transfer } }]
+      // `owner` is the recipient - this stream's own member - and it is what
+      // the projection reads to know whose purse to move. See `CoinsReceived`.
+      return [{ type: 'CoinsReceived', data: { from, amount, transfer, owner } }]
     }
 
     /**
@@ -424,7 +435,7 @@ export function decide(
      */
     case 'SpendCoins': {
       requireFounded(state)
-      const { cost, on, what } = command
+      const { cost, on, what, reason } = command
 
       if (!Number.isInteger(cost) || cost < 0 || cost > MAX_PRICE) {
         throw new DomainError('That is not a plausible price', 'homestead_bad_price')
@@ -435,7 +446,97 @@ export function decide(
 
       requireAffordable(state, cost)
 
-      return [{ type: 'CoinsSpent', data: { on, what, cost } }]
+      return [
+        {
+          type: 'CoinsSpent',
+          data: {
+            // Spread rather than passed, for both: an explicit `undefined` in a
+            // jsonb payload is a key holding null, and every summon in the log
+            // would grow a `reason: null` beside it.
+            ...(on === undefined ? {} : { on }),
+            ...(reason === undefined ? {} : { reason }),
+            what,
+            cost,
+          },
+        },
+      ]
+    }
+
+    /**
+     * A loss you cannot fully pay.
+     *
+     * The one charge that takes what it can rather than refusing. See
+     * `ChargeCoins` in `commands.ts` for why losing must not be free for the
+     * people who lose most, and `docs/product/economy.md` §7.5 for why the
+     * shortfall is recorded and then forgiven rather than carried.
+     *
+     * Deliberately no `requireFounded`, and for `ReceiveCoins`' reason turned
+     * around: a player who has never opened a café has no stream and no coins,
+     * and the honest outcome of fining them is that they pay nothing. Refusing
+     * outright would throw an error about a café at somebody who just lost a
+     * battle, which explains nothing and blocks the round from being recorded.
+     */
+    case 'ChargeCoins': {
+      const { amount, what, reason } = command
+
+      if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_PRICE) {
+        throw new DomainError('That is not a plausible charge', 'homestead_bad_price')
+      }
+
+      const taken = Math.min(amount, Math.max(state.coins, 0))
+      const shortfall = amount - taken
+
+      // Nothing to take and nothing owed afterwards. An event recording that a
+      // broke player was charged nothing is a row per defeat saying nothing
+      // moved - and this is the aggregate a busy battle writes to most.
+      if (taken === 0) return []
+
+      return [
+        {
+          type: 'CoinsSpent',
+          data: {
+            what,
+            cost: taken,
+            reason,
+            ...(shortfall === 0 ? {} : { shortfall }),
+          },
+        },
+      ]
+    }
+
+    /**
+     * Coins arriving from outside, and the second command in this file that can
+     * create money.
+     *
+     * `ServeCustomer` is the other, and it is strict because a browser reports
+     * the payment. This one is strict for the opposite reason: **no browser
+     * reports anything here at all.** Every amount comes from a constant in
+     * `bank/prices.ts` or a price read out of a row, server-side, so the guard
+     * is a plausibility bound rather than a ceiling derived from a dish.
+     *
+     * No `requireFounded`, exactly as `ReceiveCoins` argues: somebody who has
+     * never opened a café can still win a battle, and a payout that refused to
+     * land until they did would be a rule nobody could discover.
+     */
+    case 'EarnCoins': {
+      const { amount, reason, what, from, owner } = command
+
+      if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_PRICE) {
+        throw new DomainError('That is not a plausible amount', 'homestead_bad_amount')
+      }
+
+      return [
+        {
+          type: 'CoinsEarned',
+          data: {
+            amount,
+            reason,
+            owner,
+            ...(what === undefined ? {} : { what }),
+            ...(from === undefined ? {} : { from }),
+          },
+        },
+      ]
     }
 
     /**

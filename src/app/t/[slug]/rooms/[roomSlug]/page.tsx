@@ -11,14 +11,22 @@ import { battlefieldsProjection } from '@/domain/battlefields/projection'
 import { listBattlefields } from '@/domain/battlefields/queries'
 import { guestMay } from '@/domain/events/queries'
 import { admitToRoom } from '@/domain/rooms/admission'
+import { takeToll } from '@/domain/rooms/toll'
+import { DoorClosed } from '@/app/t/[slug]/rooms/[roomSlug]/door-closed'
 import { touchRoom } from '@/domain/rooms/marks'
 import { loungeProjection } from '@/domain/lounge/projection'
 import { loungeGoalsProjection } from '@/domain/lounge/goal-projection'
 import { listGoals } from '@/domain/lounge/goal-queries'
 import { listLoungeBlocks } from '@/domain/lounge/queries'
 import { thingiverseProjection } from '@/domain/thingiverse/projection'
-import { listBlueprints, listClips, listThings } from '@/domain/thingiverse/queries'
-import { readAsDummy, readProfileAvatar } from '@/domain/profile/avatar-queries'
+import { coinsOf, nextPrice } from '@/domain/bank/next'
+import {
+  countBlueprints,
+  listBlueprints,
+  listClips,
+  listThings,
+} from '@/domain/thingiverse/queries'
+import { readProfileAvatar } from '@/domain/profile/avatar-queries'
 import { readLookFor, readLookForLevel, readXpBody, shopFor } from '@/domain/skins/queries'
 import { readSceneIdentity } from '@/domain/guests/queries'
 import { readDisplayName } from '@/domain/profile/username-queries'
@@ -34,11 +42,11 @@ import {
   canWrite,
   chatOpen,
   hasRole,
-  hasTier,
   isGuest,
   perfDisplayOn,
   requireFeature,
   requireTenant,
+  thingiverseOpen,
   xpOpen,
 } from '@/lib/tenant'
 import { fill } from '@/app/i18n/fill'
@@ -159,6 +167,35 @@ export default async function RoomPage({
    * than throwing, so the cost of certainty here is a millisecond and no new
    * failure mode.
    */
+  /**
+   * The toll, if this door has one.
+   *
+   * Here rather than higher up, and for exactly the reason `touchRoom` is here:
+   * everything above this line is a refusal, and somebody redirected to another
+   * room, held outside a round, or turned away from a full one did not come in.
+   * Charging them for a door they were bounced off would be the worst kind of
+   * bug - money taken for nothing, invisibly.
+   *
+   * Charged once per UTC day per person per room, so a refresh or a reconnect
+   * after a dropped socket costs nothing. `takeToll` owns that; see its note on
+   * why the claim is written before the coins move.
+   *
+   * Free doors and the space's owner fall straight through without a query.
+   */
+  const toll = await takeToll(
+    supabase,
+    tenant.id,
+    { id: room.roomId, name: room.name, doorPrice: room.doorPrice },
+    { id: user.id, ownsSpace: hasRole(context, ['owner']) },
+  )
+
+  // The one place in this product where being broke closes something. A page
+  // rather than a redirect: a silent bounce reads as a bug, and what somebody
+  // in this position needs is the price and the way to earn it.
+  if (!toll.ok) {
+    return <DoorClosed slug={slug} roomName={room.name} price={room.doorPrice} />
+  }
+
   await touchRoom(supabase, tenant.id, user.id, room.roomId)
 
   /**
@@ -257,7 +294,7 @@ export default async function RoomPage({
    * here; a summoned thing belongs to *this world*, keyed by the room's own id
    * exactly as its blocks and its goals are.
    */
-  const summoning = context.features.thingiverse && hasTier(context, 'xo')
+  const summoning = thingiverseOpen(context)
   if (summoning) {
     await runProjection(supabase, thingiverseProjection, tenant.id)
   }
@@ -305,12 +342,34 @@ export default async function RoomPage({
     .filter((skin) => wardrobe?.owned[skin.id])
     .map((skin) => ({ id: skin.id, name: skin.name }))
 
-  // The wardrobe's three parts, for the reasons the lounge page gives at
-  // length: what the room draws and what the picker highlights are different
-  // questions, and reading one off the other is what lost people their peep.
-  const [xp, dummy] = user.is_anonymous
-    ? ([{ model: null, inLounge: false }, false] as const)
-    : await Promise.all([readXpBody(supabase, user.id), readAsDummy(supabase, user.id)])
+  // The wardrobe's two parts, for the reasons the lounge page gives at length:
+  // what the room draws and what the picker highlights are different questions,
+  // and reading one off the other is what lost people their peep.
+  const xp = user.is_anonymous
+    ? { model: null, inLounge: false }
+    : await readXpBody(supabase, user.id)
+
+
+  /*
+    What one more blueprint costs here, worked out once on the server.
+
+    Only when the panel that can spend it is reachable at all - `summoning` is
+    the same gate the shelf is loaded behind - and only ever a *read*: the
+    charge is `drawBlueprint`'s, from the same `nextPrice`, so the number drawn
+    on a tile and the number taken out of a purse are one answer to one
+    question. Zero in a space with the economy off, which is almost all of them.
+  */
+  const newThingPrice = summoning
+    ? coinsOf(
+        await nextPrice(
+          supabase,
+          tenant.id,
+          tenant.tier,
+          'blueprints',
+          await countBlueprints(supabase, tenant.id),
+        ),
+      )
+    : 0
 
   return (
     <>
@@ -331,6 +390,7 @@ export default async function RoomPage({
       initialGoals={goals}
       initialThings={things}
       initialShelf={shelf}
+      newThingPrice={newThingPrice}
       initialClips={clips}
       /*
         Whether running costs anything here. Defaults off - every world this
@@ -384,7 +444,6 @@ export default async function RoomPage({
        */
       xpBody={xp.model}
       showXp={xp.inLounge}
-      asDummy={dummy}
       /* Rooms are measured on the same switch the lounge is - they are the
          same scene on a `hall:` topic. See the lounge page. */
       perf={context.features.perf}

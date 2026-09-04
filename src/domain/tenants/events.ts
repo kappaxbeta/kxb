@@ -113,6 +113,59 @@ export type LoungeModeSet = DomainEvent<'LoungeModeSet', { mode: LoungeMode }>
 export type ChatEnabledSet = DomainEvent<'ChatEnabledSet', { enabled: boolean }>
 
 /**
+ * Whether this space's levels may make you hungry, and what that costs.
+ *
+ * `docs/product/economy.md` §11. **Off by default**, and the default is the
+ * important half: a space that has never thought about needs is a space where
+ * nothing starves and nothing costs anything, and it stays that way until an
+ * owner decides otherwise.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it is a space rule and not a level's
+ * ---------------------------------------------------------------------------
+ * Because it is a decision about what *playing here* is like, and a level that
+ * could switch it on for itself would mean one cartridge changing the rules of
+ * the console it was slotted into. The level designer's half is the other one:
+ * with needs on, they place something to eat and price it. Without needs on,
+ * that thing is scenery.
+ *
+ * ---------------------------------------------------------------------------
+ * The switch that matters most is the one that turns it off
+ * ---------------------------------------------------------------------------
+ * A hungry player who cannot afford food is a player who cannot play, and the
+ * first space to discover that should be able to fix it in one click. That is
+ * why this is a single event rather than a per-level setting somebody would
+ * have to go and find in eleven places.
+ *
+ * ---------------------------------------------------------------------------
+ * Two switches, not one
+ * ---------------------------------------------------------------------------
+ * `hunger` is whether the mechanic exists at all. `charged` is whether the
+ * things that answer it cost coins. They come apart in a way that is worth
+ * having: a space can run hunger as a pure survival mechanic with free food -
+ * a pressure on attention rather than on a purse - and that is a real thing to
+ * want, especially for a space whose players have no coins yet.
+ *
+ * The reverse combination is not expressible and should not be: charging for
+ * food in a space where nobody gets hungry is a shop selling nothing.
+ */
+export type SpaceNeedsSet = DomainEvent<
+  'SpaceNeedsSet',
+  {
+    /** Does anybody get hungry here? */
+    hunger: boolean
+    /**
+     * Do the things that answer a need cost coins?
+     *
+     * Ignored while `hunger` is off - there is nothing to buy - but recorded as
+     * given rather than normalised, so switching hunger back on restores the
+     * space to the arrangement its owner last chose instead of to a default.
+     */
+    charged: boolean
+  }
+>
+
+/**
  * The switches a host reaches for during the day.
  *
  * Deliberately the *second* half of an answer, never the whole of one. What a
@@ -247,6 +300,7 @@ export type TenantEvent =
   | LoungePublicitySet
   | LoungeModeSet
   | ChatEnabledSet
+  | SpaceNeedsSet
   | SpaceCapabilitySet
 
 export const TENANT_STREAM_TYPE = 'tenant'
@@ -282,5 +336,6 @@ export const TENANT_EVENT_LABELS: Record<TenantEvent['type'], string> = {
   LoungePublicitySet: 'lounge publicity changed',
   LoungeModeSet: 'lounge mode changed',
   ChatEnabledSet: 'chat turned on or off',
+  SpaceNeedsSet: 'space needs changed',
   SpaceCapabilitySet: 'capability turned on or off',
 }

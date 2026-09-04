@@ -4,12 +4,31 @@ import { OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useRef, useState, useTransition } from 'react'
+import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
 import { attempt } from '@/app/components/connection'
 import { fill } from '@/app/i18n/fill'
 import type { WorkspaceDict } from '@/app/i18n/workspace'
-import { Stage } from '@/app/t/[slug]/thingiverse/blueprint/[id]/stage'
+import { type BoxHandle, Stage } from '@/app/t/[slug]/thingiverse/blueprint/[id]/stage'
+import { BodyStage } from '@/app/world/_canvas/body-stage'
+import {
+  freshHold,
+  HANDS,
+  MAX_HOLD_OFFSET,
+  MAX_HOLD_SCALE,
+  MIN_HOLD_SCALE,
+  type HoldSpec,
+} from '@/domain/thingiverse/hold'
+import {
+  freshCrusher,
+  freshLift,
+  MAX_MOVE,
+  MAX_MOVE_SECONDS,
+  MAX_MOVE_WAIT,
+  MIN_MOVE_SECONDS,
+  type MotionSpec,
+} from '@/domain/thingiverse/motion'
 import { Rig } from '@/app/world/shots/pieces'
+import { AVATAR_CLIPS } from '@/domain/lounge/avatars'
 import { findParts, renameBlueprint, reshapeBlueprint } from '@/domain/thingiverse/actions'
 import {
   type BlueprintPart,
@@ -18,7 +37,9 @@ import {
   freshPart,
   freshUse,
   MAX_BLUEPRINT_NAME,
+  MAX_COLLIDER_SIZE,
   MAX_PART_OFFSET,
+  MIN_COLLIDER_SIZE,
   MAX_PARTS,
   MAX_SEATS,
   MAX_SOCKET_NAME,
@@ -75,8 +96,12 @@ import {
   VEHICLE_LIMITS,
   type WheelSpec,
 } from '@/domain/thingiverse/vehicle'
-import type { BlueprintView } from '@/domain/thingiverse/queries'
+import type { BlueprintView, ClipView } from '@/domain/thingiverse/queries'
+import { CoinPrice } from '@/app/components/coin-price'
+import { toClip } from '@/app/world/_canvas/baked-clip'
+import * as THREE from 'three'
 import { DEFAULT_LIGHT } from '@/domain/studio/scene'
+import { MAX_COLLIDER_BOXES, type PlacementBox } from '@kxb/xp/blueprints'
 
 /**
  * The bench a thing is built on.
@@ -112,10 +137,45 @@ import { DEFAULT_LIGHT } from '@/domain/studio/scene'
 export function Composer({
   slug,
   blueprint,
+  vehiclePrice = 0,
+  body,
+  clips,
   t,
 }: {
   slug: string
   blueprint: BlueprintView
+  /**
+   * What making this a vehicle costs, in coins.
+   *
+   * Every plan holds zero vehicles, so unless an operator has comped this space
+   * on `vehicle_limit` the box always costs something once the economy is on -
+   * which is exactly why the number has to be beside it rather than discovered
+   * by a purse that emptied. `reshapeBlueprint` charges the same figure, from
+   * the same `nextPrice`, and only on the save that first adds the block.
+   *
+   * Defaulted, because a blueprint that already is one has nothing to buy.
+   */
+  vehiclePrice?: number
+  /**
+   * The body the grip preview draws, which is *this* reader's own.
+   *
+   * Their own rather than a stock mannequin, because the question the preview
+   * answers is "does this sit right in a hand", and a hand is a fact about a
+   * body: an XP rig has one and a peep has four legs and no arms. Somebody
+   * posing a grip on the body they walk around in is somebody posing it on the
+   * body they will see it on.
+   */
+  body: { avatar: string; skin: string | null }
+  /**
+   * What this space has animated, for the seat pickers and the preview.
+   *
+   * The space's own only; the body's four are added below. A picker rather than
+   * a text field is the whole point - a clip name that finds nothing leaves the
+   * body in its last pose, which looks exactly like the field not working, and
+   * the only way to type one correctly is to have the list. The samples come
+   * with it so the body in the first seat can be seen doing what was chosen.
+   */
+  clips: readonly ClipView[]
   t: WorkspaceDict['thingiverse']
 }) {
   const router = useRouter()
@@ -137,6 +197,97 @@ export function Composer({
    */
   const [showSockets, setShowSockets] = useState(true)
   const [showSeats, setShowSeats] = useState(true)
+
+  /**
+   * The clip the Machine panel asked the viewport to play, and what it found.
+   *
+   * State rather than a prop threaded only to `Machine`, because it is the
+   * *viewport* that plays it - see `Stage`'s `playClip` - and the panel that
+   * asked is three components away from the canvas that can answer. `clipFound`
+   * starts true so a thing with no machine at all never shows a false refusal.
+   */
+  const [previewClip, setPreviewClip] = useState<string | null>(null)
+  const [clipFound, setClipFound] = useState(true)
+
+  /** Standing the reader's own body up in the vehicle's first seat. See `Vehicle`. */
+  const [previewDriver, setPreviewDriver] = useState(false)
+
+  /**
+   * Blocking it out: which box has the handles, and which handles they are.
+   *
+   * A mode rather than a panel that is always on. The boxes are drawn over the
+   * model and one of them is nearly always as big as the thing, so a viewport
+   * that showed them while somebody was placing a lamp would be a viewport with
+   * a translucent crate in front of the lamp. Off unless you are blocking out,
+   * and on the moment you draw the first box - which is the one time nobody has
+   * to be told to turn it on.
+   */
+  const [showCollide, setShowCollide] = useState(false)
+  const [pickedBox, setPickedBox] = useState<number | null>(null)
+  const [boxHandle, setBoxHandle] = useState<BoxHandle>('move')
+
+  /**
+   * How big the thing measures, straight off the models. See `Stage.onMeasured`.
+   *
+   * Null until the first piece has drawn itself, which is a frame or two after
+   * the glTFs land - and null is why "start from the measurement" is disabled
+   * rather than absent while that is true: a button that appears late reads as
+   * a button that was not there a moment ago.
+   */
+  const [measured, setMeasured] = useState<PlacementBox | null>(null)
+
+  /**
+   * Every clip a body here can be asked to play.
+   *
+   * The pack's own four plus whatever the space animated, deduped and in that
+   * order - the same list the lounge builds for `/clip` and the emote menu, and
+   * deduped for the same reason: a space may animate one called `dance`, and
+   * when it does the space's is the one that plays. One name, one answer.
+   */
+  const bodyClips = useMemo(
+    () => [...new Set([...Object.values(AVATAR_CLIPS), ...clips.map((one) => one.name)])],
+    [clips],
+  )
+
+  /**
+   * A clip name, built into something the preview body can play.
+   *
+   * Cached, because `toClip` allocates a `Float32Array` per bone track and the
+   * viewport asks for the same seat's clip on every render of the panel beside
+   * it. Null for a name this space has not animated, which includes all four of
+   * the pack's own - those are played by name instead. See `BodyModel.pose`.
+   */
+  /**
+   * A ref rather than state, and read only from inside the callback below -
+   * which is where a cache belongs: it is not something anything renders from,
+   * and the compiler is right that a value built during render must not be
+   * quietly written to afterwards.
+   */
+  const poseCache = useRef<{
+    from: unknown
+    made: Map<string, THREE.AnimationClip | null>
+  }>({ from: null, made: new Map() })
+  const poseNamed = useCallback(
+    (name: string) => {
+      // Emptied when the clip list is a different one, so a name that used to
+      // miss is looked up again rather than answered from a cache built before
+      // the space animated it.
+      const cache = poseCache.current
+      if (cache.from !== clips) {
+        cache.from = clips
+        cache.made.clear()
+      }
+
+      const held = cache.made.get(name)
+      if (held !== undefined) return held
+
+      const found = clips.find((one) => one.name === name)
+      const made = found ? toClip(found.clip) : null
+      cache.made.set(name, made)
+      return made
+    },
+    [clips],
+  )
 
   const parts: readonly BlueprintPart[] = spec.parts ?? []
   const problems = [
@@ -257,6 +408,27 @@ export function Composer({
                 onPick={setSelected}
                 showSockets={showSockets}
                 showSeats={showSeats}
+                collide={
+                  showCollide
+                    ? {
+                        boxes: spec.collider ?? [],
+                        picked: pickedBox,
+                        handle: boxHandle,
+                        onPick: setPickedBox,
+                        onChange: (index, box) =>
+                          change({
+                            collider: (spec.collider ?? []).map((one, at) =>
+                              at === index ? box : one,
+                            ),
+                          }),
+                      }
+                    : null
+                }
+                onMeasured={setMeasured}
+                poseFor={poseNamed}
+                playClip={previewClip}
+                onClipStatus={setClipFound}
+                driver={previewDriver ? body : null}
               />
             </Canvas>
 
@@ -271,6 +443,30 @@ export function Composer({
               <div className="pointer-events-auto flex gap-1.5">
                 <Toggle on={showSockets} onChange={setShowSockets} label={c.showSockets} />
                 <Toggle on={showSeats} onChange={setShowSeats} label={c.showSeats} />
+                <Toggle on={showCollide} onChange={setShowCollide} label={c.showCollide} />
+                {/*
+                  Which handles, and only while one box is being held.
+
+                  Beside the mode switch rather than in the panel, because it is
+                  a question about the *viewport* - the answer changes what the
+                  handles under your pointer do, and a control for that three
+                  hundred pixels away in a scrolling column is a control nobody
+                  finds while dragging.
+                */}
+                {showCollide && pickedBox !== null && (
+                  <>
+                    <Toggle
+                      on={boxHandle === 'move'}
+                      onChange={() => setBoxHandle('move')}
+                      label={c.boxMoved}
+                    />
+                    <Toggle
+                      on={boxHandle === 'size'}
+                      onChange={() => setBoxHandle('size')}
+                      label={c.boxSized}
+                    />
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -376,9 +572,53 @@ export function Composer({
               />
             )}
 
-            <Seats spec={spec} onChange={change} c={c} t={t} />
+            {/*
+              What you bump into, directly under what the thing is made of: the
+              boxes are drawn against the pieces above and are meaningless
+              without them, and every question this panel answers - can I walk
+              through the arch, can I get under the table - is a question about
+              the models in the list it follows.
+            */}
+            <Blocking
+              spec={spec}
+              measured={measured}
+              picked={pickedBox}
+              onPick={(index) => {
+                setPickedBox(index)
+                if (index !== null) setShowCollide(true)
+              }}
+              onChange={change}
+              c={c}
+            />
 
-            <Vehicle slug={slug} spec={spec} onChange={change} c={c} />
+            <Seats spec={spec} clips={bodyClips} onChange={change} c={c} t={t} />
+
+            {/*
+              How it sits in a hand, directly under how a body sits *on* it.
+
+              The two are the same question asked from either end - where the
+              body and the thing meet - and putting them together is what makes
+              a bench and a bat read as two answers rather than two features.
+            */}
+            <Grip spec={spec} body={body} onChange={change} c={c} />
+
+            {/*
+              And where it goes on its own, under the two panels about where a
+              body meets it: a lift is furniture that will not stay still, and
+              the question it raises - can I stand on that - is the one the
+              seats above just answered for a bench.
+            */}
+            <Moving spec={spec} onChange={change} c={c} />
+
+            <Vehicle
+              slug={slug}
+              spec={spec}
+              price={vehiclePrice}
+              onChange={change}
+              c={c}
+              previewDriver={previewDriver}
+              onPreviewDriver={setPreviewDriver}
+            />
 
             {/*
               The three that make a thing more than furniture: what it can be,
@@ -387,7 +627,14 @@ export function Composer({
               is mostly benches - and a panel somebody scrolls past is cheaper
               than one they scroll through.
             */}
-            <Machine spec={spec} onChange={change} c={c} />
+            <Machine
+              spec={spec}
+              onChange={change}
+              c={c}
+              previewing={previewClip}
+              clipFound={clipFound}
+              onPreview={setPreviewClip}
+            />
 
             <Fighting slug={slug} spec={spec} onChange={change} c={c} />
 
@@ -768,6 +1015,199 @@ function Sockets({
 }
 
 /**
+ * What you bump into.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this panel exists at all, when a switch already answered the question
+ * ---------------------------------------------------------------------------
+ * `blocking` says whether a thing stops you and the room works out *where* by
+ * measuring the model - which is right for a crate and wrong for a surprising
+ * amount of furniture, always in the same direction. The measurement is a box
+ * around everything drawn, so an arch is solid across its opening, a table is
+ * solid from the floor to its top, and a parasol is a pole that blocks whatever
+ * its canopy hangs over. See `BlueprintSpec.collider`.
+ *
+ * None of those can be fixed by measuring better, because the measurement is
+ * answering the only question it can. What is needed is somebody who can *see*
+ * the thing saying "here, and here, and not in between" - so this is a list of
+ * boxes, drawn in the viewport, dragged with a handle, and typed as numbers
+ * when a handle is not precise enough.
+ *
+ * ---------------------------------------------------------------------------
+ * Two ways in, because there are two kinds of thing
+ * ---------------------------------------------------------------------------
+ * "Start from the model" fills a box with what the room would have measured
+ * anyway, which is the right first move for anything that is *mostly* right: an
+ * arch is its own bounds minus the doorway, so you take the measurement, shrink
+ * it to one leg, and add a second. "Add a box" starts at one cell at the
+ * origin, which is the right first move for a thing whose measurement is
+ * nowhere near - a lamppost, where the answer is a pole and nothing else.
+ */
+function Blocking({
+  spec,
+  measured,
+  picked,
+  onPick,
+  onChange,
+  c,
+}: {
+  spec: BlueprintSpec
+  /** What the viewport measured, or null while the models are still landing. */
+  measured: PlacementBox | null
+  picked: number | null
+  onPick: (index: number | null) => void
+  onChange: (patch: Partial<BlueprintSpec>) => void
+  c: WorkspaceDict['thingiverse']['composer']
+}) {
+  const boxes: readonly PlacementBox[] = spec.collider ?? []
+
+  const setBox = (index: number, patch: Partial<PlacementBox>) =>
+    onChange({
+      collider: boxes.map((one, at) => (at === index ? { ...one, ...patch } : one)),
+    })
+
+  const add = (box: PlacementBox) => {
+    onChange({ collider: [...boxes, box] })
+    onPick(boxes.length)
+  }
+
+  return (
+    <section className="space-y-2">
+      <Heading>{c.collide}</Heading>
+
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={spec.blocking}
+          onChange={(event) => onChange({ blocking: event.target.checked })}
+          className="mt-0.5 size-4 accent-accent"
+        />
+        <span>
+          <span className="block text-xs font-medium text-ink">{c.blocks}</span>
+          <span className="block text-[11px] leading-relaxed text-ink-muted">{c.blocksHint}</span>
+        </span>
+      </label>
+
+      {/*
+        The boxes are only offered on something solid. A thing you walk through
+        is walked through whatever anybody drew on it - see `colliderOf`, where
+        the switch wins - so offering the drawing here would be offering a
+        control that does nothing until another one is changed.
+      */}
+      {spec.blocking && (
+        <>
+          <p className="text-[11px] leading-relaxed text-ink-muted">{c.collideHint}</p>
+
+          {boxes.map((box, index) => (
+            <div
+              key={index}
+              className={`space-y-1.5 rounded-xl border bg-surface p-2 ${
+                picked === index ? 'border-accent/70' : 'border-line/60'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                {/*
+                  Picking a box here is what puts the handles on it in the
+                  viewport, so the two halves of this panel are one selection -
+                  the same rule the pieces list and the stage already keep.
+                */}
+                <button
+                  type="button"
+                  onClick={() => onPick(picked === index ? null : index)}
+                  aria-pressed={picked === index}
+                  className="min-w-0 flex-1 rounded-lg border border-line/60 px-2 py-1 text-left text-xs text-ink transition hover:bg-surface-raised"
+                >
+                  {fill(c.pickBox, { n: String(index + 1) })}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange({ collider: boxes.filter((_, at) => at !== index) })
+                    onPick(null)
+                  }}
+                  className="shrink-0 rounded-lg border border-red-400/40 px-2 py-1 text-[11px] text-red-300 transition hover:bg-red-500/10"
+                >
+                  {c.remove}
+                </button>
+              </div>
+
+              {/*
+                Six numbers: a corner and a size, in that order, because that is
+                what the format stores and what the catalogue prints. Halving it
+                into a middle for the sake of the form would be a second
+                convention for one idea. See `PlacementBox`.
+              */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['x', 'y', 'z'] as const).map((axis) => (
+                  <Number
+                    key={axis}
+                    label={axis.toUpperCase()}
+                    value={box[axis] ?? 0}
+                    step={0.1}
+                    min={-MAX_PART_OFFSET}
+                    max={MAX_PART_OFFSET}
+                    onChange={(value) => setBox(index, { [axis]: value })}
+                  />
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(
+                  [
+                    ['w', 'W'],
+                    ['h', 'H'],
+                    ['d', 'D'],
+                  ] as const
+                ).map(([axis, label]) => (
+                  <Number
+                    key={axis}
+                    label={label}
+                    value={box[axis]}
+                    step={0.1}
+                    min={MIN_COLLIDER_SIZE}
+                    max={MAX_COLLIDER_SIZE}
+                    onChange={(value) => setBox(index, { [axis]: value })}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {measured && (
+            <p className="text-[11px] text-ink-muted">
+              {fill(c.measuredAs, {
+                w: measured.w.toFixed(2),
+                h: measured.h.toFixed(2),
+                d: measured.d.toFixed(2),
+              })}
+            </p>
+          )}
+
+          {boxes.length < MAX_COLLIDER_BOXES && (
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => add({ x: -0.5, y: 0, z: -0.5, w: 1, h: 1, d: 1 })}
+                className="flex-1 rounded-lg border border-line/60 px-2 py-1.5 text-xs text-ink transition hover:bg-surface-raised"
+              >
+                {c.addBox}
+              </button>
+              <button
+                type="button"
+                disabled={!measured}
+                onClick={() => measured && add(measured)}
+                className="flex-1 rounded-lg border border-line/60 px-2 py-1.5 text-xs text-ink transition hover:bg-surface-raised disabled:opacity-40"
+              >
+                {c.fitBox}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+/**
  * Where the bodies stand.
  *
  * The same list the shelf's row editor holds, with one field more: a socket to
@@ -777,11 +1217,14 @@ function Sockets({
  */
 function Seats({
   spec,
+  clips,
   onChange,
   c,
   t,
 }: {
   spec: BlueprintSpec
+  /** Every clip a body can play here. See `bodyClips`. */
+  clips: readonly string[]
   onChange: (patch: Partial<BlueprintSpec>) => void
   c: WorkspaceDict['thingiverse']['composer']
   t: WorkspaceDict['thingiverse']
@@ -805,6 +1248,39 @@ function Seats({
           <span className="block text-[11px] leading-relaxed text-ink-muted">{t.useHint}</span>
         </span>
       </label>
+
+      {/*
+        The three moments, in the order they happen.
+
+        Here as well as on the shelf's row editor, and as pickers rather than
+        text fields - which is the difference that matters. A clip name that
+        names nothing leaves the body in whatever pose it was in, so a typo is
+        invisible until somebody sits down and does not sit down. The list is
+        what this space has actually animated plus the body's own four; if
+        `sit` is not in it, the answer is the clip studio, not a better guess.
+      */}
+      {use && (
+        <div className="grid grid-cols-3 gap-1.5">
+          {(
+            [
+              ['enter', t.enterClip],
+              ['loop', t.loopClip],
+              ['leave', t.leaveClip],
+            ] as const
+          ).map(([field, label]) => (
+            <ClipPick
+              key={field}
+              label={label}
+              value={use[field]}
+              clips={clips}
+              none={c.noClip}
+              // Blank goes back to null rather than to an empty string: null is
+              // "no clip" and is the only spelling of it.
+              onChange={(clip) => onChange({ use: { ...use, [field]: clip } })}
+            />
+          ))}
+        </div>
+      )}
 
       {use &&
         use.seats.map((seat, index) => (
@@ -876,6 +1352,31 @@ function Seats({
                 />
               ))}
             </div>
+
+            {/*
+              And what the body does while it is in *this* one.
+
+              Inherit is the first option and the common answer - a bench seats
+              three people the same way. The seats that differ are the ones
+              worth the field: a kart's driver holds a wheel, its passenger
+              holds on. See `seatClip`.
+            */}
+            <ClipPick
+              label={c.seatClip}
+              value={seat.clip ?? null}
+              clips={clips}
+              none={c.inheritClip}
+              onChange={(clip) =>
+                onChange({
+                  use: {
+                    ...use,
+                    seats: use.seats.map((one, at) =>
+                      at === index ? { ...one, clip: clip ?? undefined } : one,
+                    ),
+                  },
+                })
+              }
+            />
           </div>
         ))}
 
@@ -914,14 +1415,23 @@ function Vehicle({
   spec,
   onChange,
   c,
+  price,
+  previewDriver,
+  onPreviewDriver,
 }: {
   slug: string
   spec: BlueprintSpec
   onChange: (patch: Partial<BlueprintSpec>) => void
   c: WorkspaceDict['thingiverse']['composer']
+  /** What ticking the box costs. See `Composer`. */
+  price: number
+  /** Whether the viewport is standing a body up in the first seat. */
+  previewDriver: boolean
+  onPreviewDriver: (on: boolean) => void
 }) {
   const vehicle = spec.vehicle
   const wheels: readonly WheelSpec[] = vehicle?.wheels ?? []
+  const hasSeat = (spec.use?.seats.length ?? 0) > 0
 
   const changeWheel = (index: number, patch: Partial<WheelSpec>) => {
     if (!vehicle) return
@@ -951,7 +1461,18 @@ function Vehicle({
           className="mt-0.5 size-4 accent-accent"
         />
         <span>
-          <span className="block text-xs font-medium text-ink">{c.vehicleLabel}</span>
+          <span className="block text-xs font-medium text-ink">
+            {c.vehicleLabel}
+            {/*
+              Only while it is not one yet. The charge lands on the save that
+              first adds the block - `reshapeBlueprint` compares against the
+              stored spec - so a car already on the shelf has nothing left to
+              buy, and a price beside a box that is already ticked would be a
+              number nobody is taking. Unticking is free and is not refunded:
+              the slot belongs to the space, so ticking again costs nothing.
+            */}
+            {!vehicle && <CoinPrice coins={price} />}
+          </span>
           <span className="block text-[11px] leading-relaxed text-ink-muted">
             {c.vehicleHint}
           </span>
@@ -1003,6 +1524,14 @@ function Vehicle({
               </span>
             </span>
           </label>
+
+          {hasSeat && (
+            <Toggle
+              on={previewDriver}
+              onChange={onPreviewDriver}
+              label={c.previewDriver}
+            />
+          )}
 
           {wheels.map((wheel, index) => (
             <div
@@ -1130,6 +1659,282 @@ const STEP_PX = 26
  * steps - and it is the same grid the viewport's floor is drawn in, two inches
  * to the left.
  */
+/**
+ * Where it goes when somebody picks it up.
+ *
+ * ---------------------------------------------------------------------------
+ * A body, because three numbers cannot be judged on their own
+ * ---------------------------------------------------------------------------
+ * `0.08, 0.1` is not a grip anybody can picture. The panel that shipped for
+ * seats gets away with numbers because a seat is a place on a *thing* the
+ * viewport is already drawing; a grip is a place on a body that is not in the
+ * scene at all. So this panel brings the body: the reader's own, holding the
+ * thing, turnable, so that "is the pistol through the wrist" is a question you
+ * answer by looking rather than by summoning one and walking to a mirror.
+ *
+ * ---------------------------------------------------------------------------
+ * Degrees on the screen, radians in the file
+ * ---------------------------------------------------------------------------
+ * The stored value is radians, because that is what a renderer takes and what
+ * every other angle in this app is stored as. Nobody thinks in radians. The
+ * controls are whole degrees and the conversion happens on the way in and out,
+ * which costs a rounding nobody can see and saves everybody who ever opens this
+ * panel from doing arithmetic about pi.
+ */
+function Grip({
+  spec,
+  body,
+  onChange,
+  c,
+}: {
+  spec: BlueprintSpec
+  body: { avatar: string; skin: string | null }
+  onChange: (patch: Partial<BlueprintSpec>) => void
+  c: WorkspaceDict['thingiverse']['composer']
+}) {
+  const hold = spec.hold
+
+  const change = (patch: Partial<HoldSpec>) => {
+    if (!hold) return
+    onChange({ hold: { ...hold, ...patch } })
+  }
+
+  const degrees = (radians: number) => Math.round((radians * 180) / Math.PI)
+  const radians = (deg: number) => +((deg * Math.PI) / 180).toFixed(4)
+
+  return (
+    <section className="space-y-2">
+      <Heading>{c.grip}</Heading>
+
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={hold !== undefined}
+          onChange={(event) =>
+            onChange({ hold: event.target.checked ? freshHold() : undefined })
+          }
+          className="mt-0.5 size-4 accent-accent"
+        />
+        <span>
+          <span className="block text-xs font-medium text-ink">{c.gripOn}</span>
+          <span className="block text-[11px] leading-relaxed text-ink-muted">{c.gripHint}</span>
+        </span>
+      </label>
+
+      {hold && (
+        <div className="space-y-2 rounded-xl border border-line/60 bg-surface p-2">
+          {/*
+            The preview, above the controls rather than beside them: this column
+            is fourteen rem wide, and a body drawn in half of it is a body you
+            cannot see a wrist in.
+          */}
+          <div className="h-52 w-full">
+            <BodyStage
+              skin={body.skin}
+              avatar={body.avatar}
+              clip="idle"
+              holding={{ model: spec.model, hold, scale: spec.scale }}
+              fallback={null}
+            />
+          </div>
+
+          <div className="flex gap-1">
+            {HANDS.map((hand) => (
+              <button
+                key={hand}
+                type="button"
+                aria-pressed={hold.hand === hand}
+                onClick={() => change({ hand })}
+                className={`min-w-0 flex-1 rounded-md px-1 py-1 text-[11px] transition ${
+                  hold.hand === hand
+                    ? 'bg-accent/25 text-ink'
+                    : 'text-ink-muted hover:bg-surface-raised hover:text-ink'
+                }`}
+              >
+                {hand === 'right' ? c.rightHand : c.leftHand}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-3 gap-1">
+            {(['x', 'y', 'z'] as const).map((axis) => (
+              <Number
+                key={`at-${axis}`}
+                label={`${c.gripAt} ${axis.toUpperCase()}`}
+                value={hold.at[axis]}
+                min={-MAX_HOLD_OFFSET}
+                max={MAX_HOLD_OFFSET}
+                step={0.02}
+                onChange={(value) => change({ at: { ...hold.at, [axis]: value } })}
+              />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-3 gap-1">
+            {(['x', 'y', 'z'] as const).map((axis) => (
+              <Number
+                key={`turn-${axis}`}
+                label={`${c.gripTurn} ${axis.toUpperCase()}`}
+                value={degrees(hold.turn[axis])}
+                min={-360}
+                max={360}
+                step={5}
+                onChange={(value) =>
+                  change({ turn: { ...hold.turn, [axis]: radians(value) } })
+                }
+              />
+            ))}
+          </div>
+
+          <Number
+            label={c.gripScale}
+            value={hold.scale}
+            min={MIN_HOLD_SCALE}
+            max={MAX_HOLD_SCALE}
+            step={0.05}
+            onChange={(scale) => change({ scale })}
+          />
+        </div>
+      )}
+    </section>
+  )
+}
+
+/**
+ * Where it goes on its own.
+ *
+ * ---------------------------------------------------------------------------
+ * Two buttons before six fields
+ * ---------------------------------------------------------------------------
+ * A lift and a crusher are the two things anybody opens this panel to make, and
+ * they differ in every number: one eases up four cells over three seconds and
+ * waits for somebody to step on, the other drops three in a fifth of a second
+ * and grinds back up. Six empty fields is a panel where both are equally far
+ * away and equally easy to get subtly wrong - a crusher that eases is a trap
+ * you can stroll out of.
+ *
+ * So the two are one press each, and everything under them is the ordinary
+ * nudging. The same shape the vehicle door takes: make the thing that works,
+ * then change it.
+ */
+function Moving({
+  spec,
+  onChange,
+  c,
+}: {
+  spec: BlueprintSpec
+  onChange: (patch: Partial<BlueprintSpec>) => void
+  c: WorkspaceDict['thingiverse']['composer']
+}) {
+  const motion = spec.motion
+
+  const change = (patch: Partial<MotionSpec>) => {
+    if (!motion) return
+    onChange({ motion: { ...motion, ...patch } })
+  }
+
+  return (
+    <section className="space-y-2">
+      <Heading>{c.moves}</Heading>
+
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={motion !== undefined}
+          onChange={(event) =>
+            onChange({ motion: event.target.checked ? freshLift() : undefined })
+          }
+          className="mt-0.5 size-4 accent-accent"
+        />
+        <span>
+          <span className="block text-xs font-medium text-ink">{c.movesOn}</span>
+          <span className="block text-[11px] leading-relaxed text-ink-muted">{c.movesHint}</span>
+        </span>
+      </label>
+
+      {motion && (
+        <div className="space-y-2 rounded-xl border border-line/60 bg-surface p-2">
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => onChange({ motion: freshLift() })}
+              className="min-w-0 flex-1 rounded-md px-1 py-1 text-[11px] text-ink-muted transition hover:bg-surface-raised hover:text-ink"
+            >
+              {c.aLift}
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ motion: freshCrusher() })}
+              className="min-w-0 flex-1 rounded-md px-1 py-1 text-[11px] text-ink-muted transition hover:bg-surface-raised hover:text-ink"
+            >
+              {c.aCrusher}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1">
+            {(['x', 'y', 'z'] as const).map((axis) => (
+              <Number
+                key={`by-${axis}`}
+                label={`${c.movesBy} ${axis.toUpperCase()}`}
+                value={motion.by[axis]}
+                min={-MAX_MOVE}
+                max={MAX_MOVE}
+                step={0.5}
+                onChange={(value) => change({ by: { ...motion.by, [axis]: value } })}
+              />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-1">
+            <Number
+              label={c.movesOut}
+              value={motion.out}
+              min={MIN_MOVE_SECONDS}
+              max={MAX_MOVE_SECONDS}
+              step={0.1}
+              onChange={(out) => change({ out })}
+            />
+            <Number
+              label={c.movesBack}
+              value={motion.back}
+              min={MIN_MOVE_SECONDS}
+              max={MAX_MOVE_SECONDS}
+              step={0.1}
+              onChange={(back) => change({ back })}
+            />
+            <Number
+              label={c.waitsThere}
+              value={motion.waitOut ?? 0}
+              min={0}
+              max={MAX_MOVE_WAIT}
+              step={0.1}
+              onChange={(waitOut) => change({ waitOut })}
+            />
+            <Number
+              label={c.waitsHome}
+              value={motion.waitHome ?? 0}
+              min={0}
+              max={MAX_MOVE_WAIT}
+              step={0.1}
+              onChange={(waitHome) => change({ waitHome })}
+            />
+          </div>
+
+          <label className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+            <input
+              type="checkbox"
+              checked={motion.ease ?? false}
+              onChange={(event) => change({ ease: event.target.checked })}
+              className="size-3.5 accent-accent"
+            />
+            {c.eases}
+          </label>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function Nudge({
   at,
   turn,
@@ -1346,6 +2151,55 @@ function Pad({
   )
 }
 
+/**
+ * A clip, chosen from what a body here can actually play.
+ *
+ * A `<select>` and not a text field, and that is the whole feature: a clip name
+ * is looked up on the model at the moment it plays, a name that finds nothing
+ * plays nothing, and *nothing* looks exactly like a working field on a body
+ * that has not moved yet. There is no error to show, so the only fix is to
+ * make the wrong answer unreachable.
+ *
+ * A name the space has since deleted is kept as an option of its own rather
+ * than silently becoming "none": the blueprint still says it, the log still has
+ * it, and a picker that quietly rewrote what was saved would lose the setting
+ * the first time somebody opened the panel to look at something else.
+ */
+function ClipPick({
+  label,
+  value,
+  clips,
+  none,
+  onChange,
+}: {
+  label: string
+  value: string | null
+  clips: readonly string[]
+  /** What the empty option says: "no clip" here, "inherit" on a seat. */
+  none: string
+  onChange: (clip: string | null) => void
+}) {
+  const options = value && !clips.includes(value) ? [value, ...clips] : clips
+
+  return (
+    <label className="flex min-w-0 flex-col gap-0.5">
+      <span className="text-[10px] uppercase tracking-[0.1em] text-ink-muted">{label}</span>
+      <select
+        value={value ?? ''}
+        onChange={(event) => onChange(event.target.value || null)}
+        className="min-w-0 rounded-lg border border-line/60 bg-surface px-2 py-1 text-xs text-ink"
+      >
+        <option value="">{none}</option>
+        {options.map((clip) => (
+          <option key={clip} value={clip}>
+            {clip}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 function Heading({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
@@ -1425,10 +2279,18 @@ function Machine({
   spec,
   onChange,
   c,
+  previewing,
+  clipFound,
+  onPreview,
 }: {
   spec: BlueprintSpec
   onChange: (patch: Partial<BlueprintSpec>) => void
   c: WorkspaceDict['thingiverse']['composer']
+  /** The clip name the viewport is currently playing, or null. */
+  previewing: string | null
+  /** Whether `previewing` is a track the viewport's model actually has. */
+  clipFound: boolean
+  onPreview: (clip: string | null) => void
 }) {
   const machine = spec.states
   const states: readonly ThingState[] = machine?.states ?? []
@@ -1599,6 +2461,25 @@ function Machine({
                   label={`${c.machine.plays}: ${c.machine.nothing}`}
                 />
               </div>
+
+              {/*
+                Playing the name on the model itself, rather than trusting the
+                spelling. Only offered for a name actually typed here - blank
+                means "the blueprint's own", and a state that inherits has
+                nothing of its own to test.
+              */}
+              {typeof state.clip === 'string' && state.clip.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Toggle
+                    on={previewing === state.clip}
+                    onChange={(on) => onPreview(on ? (state.clip as string) : null)}
+                    label={previewing === state.clip ? c.machine.stopPreview : c.machine.preview}
+                  />
+                  {previewing === state.clip && !clipFound && (
+                    <span className="text-[11px] text-red-400">{c.machine.notOnModel}</span>
+                  )}
+                </div>
+              )}
 
               <label className="flex items-center gap-1 rounded-lg border border-line/60 bg-surface px-1.5 py-1 focus-within:border-accent/70">
                 <span className="shrink-0 text-[10px] uppercase tracking-[0.1em] text-ink-muted">

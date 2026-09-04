@@ -270,6 +270,66 @@ export interface SettingsDict {
     switching: string
     footnote: string
   }
+
+  /**
+   * The people you have decided not to hear.
+   *
+   * On the profile tab rather than under the space, for the same reason the
+   * language is: a block follows the account into every space, so putting it
+   * beside one space's settings would suggest it only applied there.
+   */
+  blocked: {
+    title: string
+    body: string
+    /** When nobody is blocked, which is almost everybody, almost always. */
+    none: string
+    /**
+     * `{name}` is the handle, or `user-a1b2c3` when it cannot be resolved.
+     * This is the button's *label*, not its text - see the panel for why the
+     * two differ.
+     */
+    unblock: string
+    /** What the button actually says, beside a row that already names them. */
+    unblockShort: string
+    unblocking: string
+    /** Read out after an unblock, for anyone not watching the list. */
+    unblocked: string
+  }
+
+  /**
+   * Closing the account for good.
+   *
+   * Last on the page and behind two deliberate steps. The copy's whole job is
+   * to make what survives and what does not legible *before* the button, not
+   * after it - see `closeAccount` for why an event log cannot simply be
+   * deleted.
+   */
+  close: {
+    title: string
+    body: string
+    /** The bullets: what goes, what stays, what it costs. */
+    goes: string
+    stays: string
+    final: string
+    /** The way in, and then the confirmation strip it opens. */
+    start: string
+    confirmTitle: string
+    /** `{word}` is the word that has to be typed. */
+    confirmHint: string
+    /** The word itself. Translated, because it is typed by the reader. */
+    confirmWord: string
+    confirmLabel: string
+    confirm: string
+    working: string
+    cancel: string
+    /** Spaces that have to be dealt with first, listed by name. */
+    blockersTitle: string
+    blockersBody: string
+    /** `{name}` is the space. */
+    blockerSpace: string
+    /** Shown when it has happened; the redirect follows immediately. */
+    done: string
+  }
 }
 
 export const SETTINGS_EN: SettingsDict = {
@@ -281,6 +341,37 @@ export const SETTINGS_EN: SettingsDict = {
     switching: 'Switching…',
     footnote:
       'Saved on your account as well as in this browser, so the next device you sign in on is already in it. Not everything is translated yet; anything that is not stays in English.',
+  },
+
+  blocked: {
+    title: 'Blocked people',
+    body: 'Anyone here is silent to you. You stop seeing what they say in every space you share, they are not told, and nothing they can do puts them back.',
+    none: 'You have not blocked anybody. The button is on any chat line, beside Report.',
+    unblock: 'Unblock {name}',
+    unblockShort: 'Unblock',
+    unblocking: 'Unblocking…',
+    unblocked: 'Unblocked. You will see what they say again.',
+  },
+
+  close: {
+    title: 'Close your account',
+    body: 'This ends the account. It cannot be undone and nobody here can undo it for you.',
+    goes: 'Your address, your password, your handle and your avatar are erased, and you are signed out of every device.',
+    stays: 'What you built stays where it is. A room you furnished, a level you wrote and a message you sent belong to the space around them, and they carry no name of yours afterwards.',
+    final: 'The address is released, so you can sign up again with it — as a new person, with nothing of this one.',
+    start: 'Close my account',
+    confirmTitle: 'This is the last step.',
+    confirmHint: 'Type {word} to confirm.',
+    confirmWord: 'CLOSE',
+    confirmLabel: 'Confirmation word',
+    confirm: 'Close it for good',
+    working: 'Closing…',
+    cancel: 'Keep my account',
+    blockersTitle: 'One thing first.',
+    blockersBody:
+      'You are the last owner of a space other people are in. Make somebody else an owner, or archive it, and then come back here — closing your account cannot leave a space with nobody who can run it.',
+    blockerSpace: '{name}',
+    done: 'Closed. Signing you out.',
   },
 
   title: 'Settings',
@@ -539,6 +630,37 @@ export const SETTINGS_DE: SettingsDict = {
     switching: 'Wird umgestellt …',
     footnote:
       'Wird in Ihrem Konto und in diesem Browser gespeichert — das nächste Gerät, auf dem Sie sich anmelden, ist also schon darin. Es ist noch nicht alles übersetzt; was fehlt, bleibt auf Englisch.',
+  },
+
+  blocked: {
+    title: 'Blockierte Personen',
+    body: 'Wer hier steht, ist für Sie stumm. Sie sehen in keinem gemeinsamen Space mehr, was diese Person sagt, sie erfährt nichts davon, und sie kann nichts daran ändern.',
+    none: 'Sie haben niemanden blockiert. Der Knopf steht an jeder Chat-Zeile, neben „Melden“.',
+    unblock: '{name} freigeben',
+    unblockShort: 'Freigeben',
+    unblocking: 'Wird freigegeben …',
+    unblocked: 'Freigegeben. Sie sehen wieder, was diese Person schreibt.',
+  },
+
+  close: {
+    title: 'Konto schließen',
+    body: 'Damit endet das Konto. Das lässt sich nicht rückgängig machen, auch nicht von uns.',
+    goes: 'Adresse, Passwort, Name und Avatar werden gelöscht, und Sie werden auf allen Geräten abgemeldet.',
+    stays: 'Was Sie gebaut haben, bleibt stehen. Ein eingerichteter Raum, ein geschriebenes Level, eine gesendete Nachricht gehören zum Space um sie herum — und tragen danach keinen Namen von Ihnen mehr.',
+    final: 'Die Adresse wird wieder frei, Sie können sich also erneut damit anmelden — als neue Person, ohne etwas von dieser.',
+    start: 'Mein Konto schließen',
+    confirmTitle: 'Das ist der letzte Schritt.',
+    confirmHint: 'Tippen Sie {word}, um zu bestätigen.',
+    confirmWord: 'SCHLIESSEN',
+    confirmLabel: 'Bestätigungswort',
+    confirm: 'Endgültig schließen',
+    working: 'Wird geschlossen …',
+    cancel: 'Konto behalten',
+    blockersTitle: 'Vorher noch eins.',
+    blockersBody:
+      'Sie sind letzte Inhaberin oder letzter Inhaber eines Space, in dem andere sind. Machen Sie jemanden zur Inhaberin oder archivieren Sie ihn, und kommen Sie dann zurück — ein geschlossenes Konto darf keinen Space ohne Verantwortliche zurücklassen.',
+    blockerSpace: '{name}',
+    done: 'Geschlossen. Sie werden abgemeldet.',
   },
 
   title: 'Einstellungen',
@@ -800,6 +922,37 @@ export const SETTINGS_BG: SettingsDict = {
     switching: 'Превключва се…',
     footnote:
       'Запазва се и в акаунта ви, и в този браузър, така че следващото устройство, на което влезете, вече е на него. Още не всичко е преведено; каквото не е, остава на английски.',
+  },
+
+  blocked: {
+    title: 'Блокирани хора',
+    body: 'Който е тук, за вас мълчи. Спирате да виждате какво пише във всеки общ спейс, човекът не разбира и не може да го върне.',
+    none: 'Не сте блокирали никого. Бутонът е на всеки ред в чата, до „Докладвай“.',
+    unblock: 'Отблокирай {name}',
+    unblockShort: 'Отблокирай',
+    unblocking: 'Отблокира се…',
+    unblocked: 'Отблокиран. Пак ще виждате какво пише.',
+  },
+
+  close: {
+    title: 'Закриване на акаунта',
+    body: 'Това слага край на акаунта. Не може да се върне — нито от вас, нито от нас.',
+    goes: 'Адресът, паролата, името и аватарът се изтриват, и излизате от всички устройства.',
+    stays: 'Каквото сте построили, остава. Обзаведена стая, написано ниво, изпратено съобщение принадлежат на спейса около тях — и след това не носят ваше име.',
+    final: 'Адресът се освобождава, така че може да се регистрирате пак с него — като нов човек, без нищо от този.',
+    start: 'Закрий акаунта ми',
+    confirmTitle: 'Това е последната стъпка.',
+    confirmHint: 'Напишете {word}, за да потвърдите.',
+    confirmWord: 'ЗАКРИЙ',
+    confirmLabel: 'Дума за потвърждение',
+    confirm: 'Закрий окончателно',
+    working: 'Закрива се…',
+    cancel: 'Запази акаунта ми',
+    blockersTitle: 'Първо едно нещо.',
+    blockersBody:
+      'Вие сте последният собственик на спейс, в който има други хора. Направете някого собственик или архивирайте спейса и се върнете тук — закрит акаунт не бива да оставя спейс без кой да го води.',
+    blockerSpace: '{name}',
+    done: 'Закрит. Излизате от профила.',
   },
 
   title: 'Настройки',

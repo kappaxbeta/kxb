@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { WORLD_HEIGHT, WORLD_RADIUS } from '@/domain/lounge/events'
 import { MAX_THING_SCALE, MIN_THING_SCALE } from '@/domain/thingiverse/blueprint'
-import type { ThingTuning } from '@/domain/thingiverse/thing-events'
+import {
+  MAX_THING_REACH,
+  MAX_WIRES,
+  MIN_THING_REACH,
+  type ThingTuning,
+} from '@/domain/thingiverse/thing-events'
 import { BODY_LIMITS } from '@kxb/xp/blueprints'
 
 /**
@@ -66,6 +71,49 @@ const level = z
   .min(0)
   .max(WORLD_HEIGHT - 1)
   .refine(onGrid, `A height must be a multiple of ${STEP} cells`)
+
+/**
+ * Put a *measured* place where the log can keep it: on the grid, and inside
+ * the world.
+ *
+ * `toGrid` above is half of this, and shipping only that half left the other
+ * half of the same bug in the room. The argument is identical and worth saying
+ * once more, because it is about who is speaking: a position somebody *typed*
+ * should be refused when it is out of bounds - that is a mistake with a fix.
+ * A position somebody *measured* has no fix. The renderer watched a ball come
+ * to rest and reported where it was; being told the answer is not allowed is a
+ * sentence with nothing anybody can do about it, and it arrives as a red card
+ * over a room where nothing appears to have gone wrong.
+ *
+ * What was actually leaking is worth writing down, because it is not obvious
+ * from the numbers. The ball simulation rests a ball on `floorY + BALL_RADIUS`
+ * - one fixed radius, the sim's own - and the renderer subtracts the *drawn*
+ * half-height of whatever model is rolling. Those two are the same only for a
+ * ball at scale 1. Anything taller than the sim's radius comes to rest at a
+ * negative cell, `level` refuses it, and the room says
+ * "Too small: expected number to be >=0" at somebody who kicked a big ball.
+ *
+ * So the edge clamps as well as rounds. Clamped *after* rounding, and only to
+ * whole-cell bounds, so the result is still on the grid the schema insists on -
+ * which is the property that makes this safe to put in front of every measured
+ * write rather than a second, looser set of rules.
+ */
+export function toPlace(at: { x: number; y: number; z: number }): {
+  x: number
+  y: number
+  z: number
+} {
+  return {
+    x: within(toGrid(at.x), -WORLD_RADIUS, WORLD_RADIUS - 1),
+    y: within(toGrid(at.y), 0, WORLD_HEIGHT - 1),
+    z: within(toGrid(at.z), -WORLD_RADIUS, WORLD_RADIUS - 1),
+  }
+}
+
+/** `Math.max(low, Math.min(high, …))`, named, so the call above reads. */
+function within(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value))
+}
 
 /**
  * Quarter turns, unbounded on the way in and wrapped by the decider.
@@ -157,6 +205,14 @@ export const tuneThingSchema = z.object({
         .strict()
         .nullable()
         .optional(),
+      /*
+        How far its shouts carry, and what they are wired to. Bounded here
+        rather than in the renderer for the reason every bound in this file is
+        written down once: a reach of a million is a signal that is not limited
+        at all with extra steps, and a list of two hundred ids is a packet.
+      */
+      reach: z.number().min(MIN_THING_REACH).max(MAX_THING_REACH).optional(),
+      wires: z.array(z.uuid()).max(MAX_WIRES).optional(),
     })
     .strict(),
 })

@@ -39,20 +39,26 @@ export async function readProfileAvatar(
 }
 
 /**
- * Has this person asked to stand in the dummy rather than their animal?
+ * Is this person asking a world to draw their XP body rather than their peep?
+ *
+ * The mode, and the only control over which of the two bodies you are seen in.
+ * It lives here rather than on `profile_skins` because it has to outlive the
+ * skin: stripping the XP body back to nothing deletes that row, and nothing is
+ * the *dummy* - the body every player is before they are anybody - which is a
+ * thing people want to stand in. See the migration.
  *
  * Its own read rather than a second column on `readProfileAvatar`, and
  * deliberately as forgiving as `readProfileSkin`: any failure is "no", because
- * every caller is about to draw a body and the animal is always drawable. That
+ * every caller is about to draw a body and the peep is always drawable. That
  * also means a box that has not run the migration yet answers "no" and keeps
  * rendering rooms, rather than turning a missing column into a 500 on the
  * lounge - which selecting it alongside `model` would have done.
  *
- * The flag is a fact about the account, not about a space: the dummy is who you
- * are rather than who you are here, exactly like the skin. A space's animal
- * override still applies underneath it, for when you take the dummy off.
+ * The flag is a fact about the account, not about a space, exactly like the
+ * skin. A space's animal override still applies underneath it, for when the
+ * mode is off.
  */
-export async function readAsDummy(
+export async function readShowXp(
   supabase: Client,
   userId: string | null | undefined,
 ): Promise<boolean> {
@@ -60,12 +66,12 @@ export async function readAsDummy(
 
   const { data, error } = await supabase
     .from('profile_avatars')
-    .select('as_dummy')
+    .select('show_xp')
     .eq('user_id', userId)
     .maybeSingle()
 
   if (error || !data) return false
-  return data.as_dummy === true
+  return data.show_xp === true
 }
 
 /**

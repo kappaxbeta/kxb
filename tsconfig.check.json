@@ -16,6 +16,11 @@
   // is not knowable here. A literal `.next/dev` covered the default one and let
   // a deploy fail on a torn read from `.next-guestloop/dev` - a syntax error in
   // generated code belonging to a server this checkout is not even using.
+  // `packages/native` used to be repeated here as well, because `exclude`
+  // replaces the inherited list rather than adding to it, and CI would
+  // otherwise have failed on several hundred unresolved imports for a React
+  // Native bundle it was never asked to build. The phone app has its own
+  // repository now - kxbxo - so there is nothing left to repeat.
   "extends": "./tsconfig.json",
   "exclude": ["node_modules", ".next*/dev"]
 }

@@ -13,7 +13,7 @@ import {
   MAX_HEALTH,
 } from '@/app/world/lounge/_sim/combat'
 import type { Ball } from '@/app/world/lounge/_sim/football'
-import type { PeerTransform } from '@/app/world/lounge/_canvas/multiplayer'
+import type { PeerTransform, PlayerShot } from '@/app/world/lounge/_canvas/multiplayer'
 import type { ShotPose, VrRay } from '@/app/world/lounge/_scene/scene-types'
 import type { LookDelta, MoveInput } from '@/app/world/lounge/_hud/touch-controls'
 import {
@@ -191,6 +191,22 @@ export interface SceneRefs {
   /** Everybody else's speech bubbles, published by <Multiplayer>. Null with no channel. */
   saidsRef: React.RefObject<Map<string, SaidState> | null>
 
+  /**
+   * Where each summoned thing is *drawn*, this frame, by id.
+   *
+   * Published by <LoungeThings> and read by <Usables>, and it exists because the
+   * two disagree: a thing's row carries the cell it was put in, and a ball that
+   * has been kicked is somewhere else entirely until it stops rolling and the
+   * row catches up. Reading the row is how "E to use" stayed behind at the spot
+   * a ball was summoned at while the ball itself was across the room.
+   *
+   * The vectors are the scene graph's own, not copies. Nothing here allocates
+   * per frame, and nothing may write through them: this is the drawn position
+   * being *read*, which is the same rule every other measurement in this scene
+   * follows - see `measure-drawn-position-not-physics`.
+   */
+  thingSpotsRef: React.RefObject<Map<string, THREE.Vector3>>
+
   /** Our own face, drawn over our own body. A ref, so pulling one re-renders nothing. */
   selfEmoteRef: React.RefObject<EmoteState>
 
@@ -206,6 +222,17 @@ export interface SceneRefs {
 
   /** Filled in by <Multiplayer>, which owns the channel. Null without presence. */
   sendEmoteRef: React.RefObject<((id: EmoteId) => void) | null>
+
+  /**
+   * A shot somebody just fired, on the same terms.
+   *
+   * Filled in by <Multiplayer> and called by the scene, which is the one that
+   * knows what is in your hand, whether the cooldown is up and who was in front
+   * of you. Null in a room with no presence - where a gun still fires and still
+   * draws its own bullet, because the tracer that everybody else sees is a
+   * broadcast and the one you see is a local queue. See `tracer-store`.
+   */
+  sendShotRef: React.RefObject<((shot: PlayerShot) => void) | null>
 
   // --- the ball -------------------------------------------------------------
 
@@ -362,10 +389,16 @@ export function useCreateSceneRefs(spawn: [number, number, number]): SceneRefs {
   const invulnerableUntilRef = useRef(0)
 
   const transformsRef = useRef<Map<string, PeerTransform> | null>(null)
+  // Not null, unlike the peers': there is always a map, it is simply empty in a
+  // room with nothing summoned in it. A reader that has to check for null is a
+  // reader that has to decide what null means, and here it would mean the same
+  // as empty.
+  const thingSpotsRef = useRef<Map<string, THREE.Vector3>>(new Map())
   const saidsRef = useRef<Map<string, SaidState> | null>(null)
   const selfEmoteRef = useRef<EmoteState>(noEmote())
   const selfSaidRef = useRef<SaidState>(nothingSaid())
   const sendEmoteRef = useRef<((id: EmoteId) => void) | null>(null)
+  const sendShotRef = useRef<((shot: PlayerShot) => void) | null>(null)
 
   const ballRef = useRef<Ball | null>(null)
   const kickoffRef = useRef(0)
@@ -422,10 +455,12 @@ export function useCreateSceneRefs(spawn: [number, number, number]): SceneRefs {
       kickRef,
       invulnerableUntilRef,
       transformsRef,
+      thingSpotsRef,
       saidsRef,
       selfEmoteRef,
       selfSaidRef,
       sendEmoteRef,
+      sendShotRef,
       ballRef,
       kickoffRef,
       hostStalledRef,

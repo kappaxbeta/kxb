@@ -18,7 +18,14 @@
 import { DEFAULT_LOCALE, type Locale } from '@/domain/i18n/locale'
 
 /** The panels, in order. Ids rather than indices: the order may change. */
-export type TourStepId = 'lounge' | 'build' | 'play' | 'rooms' | 'invite' | 'studio'
+export type TourStepId =
+  | 'coins'
+  | 'lounge'
+  | 'build'
+  | 'play'
+  | 'rooms'
+  | 'invite'
+  | 'studio'
 
 export interface TourStepCopy {
   /** The small line above the title. Names the surface. */
@@ -71,6 +78,12 @@ export const TOUR_EN: TourDict = {
   skip: 'Skip the tour',
   done: 'Done',
   steps: {
+    coins: {
+      kicker: 'Coins',
+      title: 'This space runs on coins.',
+      body: 'A shift in the café makes them, a battle spends them, and a level you build earns them every time somebody plays it. Nothing here is bought with money — you play for it. The number at the top of the rail is yours.',
+      alt: 'A counter in a café, mid-service, with an order waiting.',
+    },
     lounge: {
       kicker: 'The Lounge',
       title: 'A room that is actually there.',
@@ -115,7 +128,7 @@ export const TOUR_EN: TourDict = {
       'A space is your own copy of all of this — its own rooms, its own members, its own log that nobody outside can read. You are its owner. The URL is permanent, so pick one you can say out loud.',
     payTitle: 'One more space, from €5 a month.',
     payBody:
-      'Making a space is free, and yours is made — the next one comes with a plan of its own. xo is €5 and is everything you just saw. xp is €15 and adds the XP suite — your own levels, with your own rules. Each plan carries its own headcount, and being a member of somebody else’s space is always free.',
+      'Making a space is free, and yours is made — the next one comes with a plan of its own. xo is €5 and is everything you just saw. xp is €15 and takes the counting off building — as many levels of your own as you like. Each plan carries its own headcount, and being a member of somebody else’s space is always free.',
   },
 }
 
@@ -129,6 +142,12 @@ export const TOUR_DE: TourDict = {
   skip: 'Tour überspringen',
   done: 'Fertig',
   steps: {
+    coins: {
+      kicker: 'Münzen',
+      title: 'Dieser Space läuft mit Münzen.',
+      body: 'Eine Schicht im Café verdient sie, ein Kampf gibt sie aus, und ein Level, das du baust, verdient jedes Mal mit, wenn es jemand spielt. Nichts davon wird mit Geld gekauft — du spielst dafür. Die Zahl oben in der Leiste ist deine.',
+      alt: 'Ein Tresen im Café, mitten im Betrieb, mit einer wartenden Bestellung.',
+    },
     lounge: {
       kicker: 'Die Lounge',
       title: 'Ein Raum, der wirklich da ist.',
@@ -173,7 +192,7 @@ export const TOUR_DE: TourDict = {
       'Ein Space ist deine eigene Ausgabe von allem hier — eigene Räume, eigene Mitglieder, ein eigenes Log, das von außen niemand lesen kann. Du bist Inhaber. Die URL ist dauerhaft, wähl also eine, die du aussprechen kannst.',
     payTitle: 'Noch ein Space, ab 5 € pro Monat.',
     payBody:
-      'Einen Space zu erstellen ist kostenlos, und deiner steht schon — der nächste bekommt seinen eigenen Plan. xo kostet 5 € und ist alles, was du gerade gesehen hast. xp kostet 15 € und bringt die XP-Suite dazu — eigene Level mit eigenen Regeln. Jeder Plan hat seine eigene Personenzahl, und Mitglied im Space von jemand anderem zu sein, ist immer kostenlos.',
+      'Einen Space zu erstellen ist kostenlos, und deiner steht schon — der nächste bekommt seinen eigenen Plan. xo kostet 5 € und ist alles, was du gerade gesehen hast. xp kostet 15 € und nimmt das Zählen aus dem Bauen — so viele eigene Level, wie du magst. Jeder Plan hat seine eigene Personenzahl, und Mitglied im Space von jemand anderem zu sein, ist immer kostenlos.',
   },
 }
 
@@ -187,6 +206,12 @@ export const TOUR_BG: TourDict = {
   skip: 'Пропусни обиколката',
   done: 'Готово',
   steps: {
+    coins: {
+      kicker: 'Монети',
+      title: 'Това пространство работи с монети.',
+      body: 'Смяна в кафенето ги изкарва, битка ги харчи, а ниво, което построиш, печели всеки път, когато някой го играе. Нищо тук не се купува с пари — играеш за тях. Числото горе в лентата е твоето.',
+      alt: 'Щанд в кафене, по време на работа, с чакаща поръчка.',
+    },
     lounge: {
       kicker: 'Лоунджът',
       title: 'Стая, която наистина я има.',
@@ -231,7 +256,7 @@ export const TOUR_BG: TourDict = {
       'Спейсът е твое собствено копие на всичко това — свои стаи, свои членове, свой лог, който отвън никой не може да чете. Ти си собственикът. Адресът е постоянен, така че избери такъв, който можеш да кажеш на глас.',
     payTitle: 'Още един спейс, от 5 € на месец.',
     payBody:
-      'Създаването на спейс е безплатно и твоят вече е готов — следващият идва със свой план. xo е 5 € и е всичко, което току-що видя. xp е 15 € и добавя XP пакета — собствени нива със собствени правила. Всеки план носи свой брой хора, а да си член в чужд спейс винаги е безплатно.',
+      'Създаването на спейс е безплатно и твоят вече е готов — следващият идва със свой план. xo е 5 € и е всичко, което току-що видя. xp е 15 € и маха броенето от строенето — колкото собствени нива искаш. Всеки план носи свой брой хора, а да си член в чужд спейс винаги е безплатно.',
   },
 }
 

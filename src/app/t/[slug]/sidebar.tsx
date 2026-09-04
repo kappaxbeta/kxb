@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { UniverseGlyph } from '@/app/components/universe-glyph'
 import { usePathname, useRouter } from 'next/navigation'
 import React, {
   useEffect,
@@ -40,7 +41,7 @@ import { pinRoomForMe } from '@/domain/rooms/mark-actions'
 import { orderPlaces, PIN_PENDING, type RoomMarks } from '@/domain/rooms/places'
 import { RoomGlyph, tintClass } from '@/app/t/[slug]/room-icons'
 import { hrefFor } from '@kxb/peepz-world/places'
-import { type Tier, tierAtLeast } from '@/domain/billing/tiers'
+import { type Tier, tierLimit } from '@/domain/billing/tiers'
 import type { TenantRoleName } from '@/lib/supabase/types'
 import { useRefusal } from '@/app/i18n/use-refusal'
 
@@ -174,6 +175,15 @@ export interface SidebarChatAccess {
   initialMessages: ChatLine[]
   /** Null when the viewer may post. A sentence explaining why not, otherwise. */
   blockedReason: string | null
+  /**
+   * Account ids this reader has blocked, for the live socket.
+   *
+   * Only the socket. Everything that reaches the chat through a query is
+   * already filtered by `chat_messages_select_tenant`; a broadcast is the one
+   * path that never touches the table, so the dock re-applies the same rule to
+   * it from this list. Two transports, one arrangement.
+   */
+  blockedPeople: string[]
 }
 
 /**
@@ -474,6 +484,7 @@ export function Sidebar(props: {
           userId={props.chat.userId}
           initialMessages={props.chat.initialMessages}
           blockedReason={props.chat.blockedReason}
+          blockedPeople={props.chat.blockedPeople}
           /**
            * The same list the Room tab draws, so the two cannot disagree about
            * which rooms exist. Read once in the layout and handed to both.
@@ -567,44 +578,6 @@ export function Sidebar(props: {
               column silently squashes its items to fit instead of overflowing,
               and a squashed item whose own contents have a fixed height spills
               out of its box and over the next one. */}
-          {/*
-            The two halves of this panel, as one switch.
-            ---------------------------------------------------------------
-            From a laptop up there are two panels: where to go on the left,
-            who is here and what you can do on the right. Below that there is
-            one, and the right-hand half used to be *appended* to it - so
-            reaching the chat, or the shelf, or the room's switches meant
-            scrolling past the whole of the navigation every time.
-
-            A switch rather than a disclosure that pushes: opening one half
-            hides the other, so neither ever has to be scrolled past to reach
-            the other. It is the same move the account menu at the foot of this
-            panel makes - a control that swaps what the panel is showing - and
-            it is drawn only below `xl`, because above it both halves are
-            already on screen and a switch between two visible things is a
-            control with nothing to do.
-          */}
-          <div className="mt-4 shrink-0 xl:hidden">
-            <button
-              type="button"
-              onClick={() => setShowingPeople((current) => !current)}
-              aria-expanded={showingPeople}
-              className="flex w-full items-center justify-between gap-2 rounded-xl border border-line/60 px-3 py-2 text-left transition hover:border-accent/60 hover:bg-surface-raised"
-            >
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
-                {showingPeople ? t.bands.backToPlaces : t.bands.peopleTools}
-              </span>
-              {/*
-                How many people are in here, on the way *in* only. It is the one
-                thing somebody wants to know before deciding to look, and on the
-                way back the panel they are returning to has nothing to count.
-              */}
-              <span className="font-mono text-[10px] text-ink-muted">
-                {showingPeople ? '←' : here.people.length + 1}
-              </span>
-            </button>
-          </div>
-
           <div className="rail-scroll mt-5 flex min-h-0 flex-1 flex-col gap-5">
             <div className={showingPeople ? 'hidden xl:block' : 'shrink-0'}>
               <Surfaces {...props} />
@@ -630,7 +603,7 @@ export function Sidebar(props: {
                 in both, hidden in one, because the two copies read the same
                 store and neither is the source of truth. */}
             {/*
-              The right-hand half, when the switch above has asked for it.
+              The right-hand half, when the switch at the foot has asked for it.
 
               `flex-1` rather than `shrink-0` now: it is the whole of the panel
               while it is showing, so the tabs below take the height and scroll
@@ -672,6 +645,49 @@ export function Sidebar(props: {
                 fill
               />
             </div>
+          </div>
+
+          {/*
+            The two halves of this panel, as one switch.
+            ---------------------------------------------------------------
+            From a laptop up there are two panels: where to go on the left,
+            who is here and what you can do on the right. Below that there is
+            one, and the right-hand half used to be *appended* to it - so
+            reaching the chat, or the shelf, or the room's switches meant
+            scrolling past the whole of the navigation every time.
+
+            A switch rather than a disclosure that pushes: opening one half
+            hides the other, so neither ever has to be scrolled past to reach
+            the other. It is the same move the account menu below it makes - a
+            control that swaps what the panel is showing - and it is drawn only
+            below `xl`, because above it both halves are already on screen and a
+            switch between two visible things is a control with nothing to do.
+
+            At the foot rather than under the brand, because the hand holding
+            the phone reaches the bottom of the screen and not the top. It sits
+            with the account row for the same reason: the two controls that
+            change what this panel *is* now live together, in the corner a thumb
+            rests in, and the list they switch between takes everything above.
+          */}
+          <div className="mt-3 shrink-0 xl:hidden">
+            <button
+              type="button"
+              onClick={() => setShowingPeople((current) => !current)}
+              aria-expanded={showingPeople}
+              className="flex w-full items-center justify-between gap-2 rounded-xl border border-line/60 px-3 py-2 text-left transition hover:border-accent/60 hover:bg-surface-raised"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+                {showingPeople ? t.bands.backToPlaces : t.bands.peopleTools}
+              </span>
+              {/*
+                How many people are in here, on the way *in* only. It is the one
+                thing somebody wants to know before deciding to look, and on the
+                way back the panel they are returning to has nothing to count.
+              */}
+              <span className="font-mono text-[10px] text-ink-muted">
+                {showingPeople ? '←' : here.people.length + 1}
+              </span>
+            </button>
           </div>
 
           <Account {...props} />
@@ -992,17 +1008,29 @@ function Surfaces({
       page it had.
     */
     /*
-      The tier, not `features.xp`. `/browse` gates on the tier too and answers a
-      space below it with notFound(), so keying this row on the installation
-      flag put a Browse row in the rail of every free space on an installation
-      that *has* the xp product - a link to a 404 - and hid the Worlds page
-      those spaces can actually open. `requireTier`'s own note is the rule this
-      follows: a link is not a permission. The threshold is `xo` because that is
-      where projects begin; it must stay whatever `/browse` asks for. The offer
-      to upgrade lives in the battle wizard, where somebody is standing in front
-      of the thing they would be buying.
+      The plan's project allowance, not `features.xp`, and not the rung either.
+
+      Keying this row on the installation flag put a Browse row in the rail of
+      every free space on an installation that *has* the xp product - a link to
+      a 404 - and hid the Worlds page those spaces can actually open.
+      `requireTier`'s own note is the rule this follows: a link is not a
+      permission.
+
+      It read `tierAtLeast(tier, 'xo')` after that, which was right while
+      `/browse` opened with `requireTier(context, 'xo')`. That page asks
+      `requireProjects` now - a quantity, not a rung - and free holds one, so
+      the rung sent free spaces to Worlds while the page they were being kept
+      off was already open to them by URL. Worse once the thingiverse moved to
+      free: its shelf is the first tab of Browse, so the rail had no way into a
+      feature the space had.
+
+      So the row asks the number `/browse` asks, and must stay whatever that is.
+      `!== 0` rather than `> 0` because `null` there is unlimited - the same
+      shape as `projectsOpen`, which is the server-side spelling of this line.
+      The offer to upgrade lives in the battle wizard, where somebody is
+      standing in front of the thing they would be buying.
     */
-    tierAtLeast(tier, 'xo')
+    tierLimit(tier, 'projects') !== 0
       ? { href: `/t/${slug}/browse`, label: t.surfaces.browse, icon: 'world', show: features.worlds }
       : { href: `/t/${slug}/worlds`, label: t.surfaces.worlds, icon: 'world', show: features.worlds },
     /*
@@ -1913,6 +1941,126 @@ function Peep({
  * column - and a sign-out you have to scroll a nav list to find is a sign-out
  * that is missing.
  */
+/**
+ * The channel's current episode, as a rainbow pill in the account menu.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this asks over the wire
+ * ---------------------------------------------------------------------------
+ * "Which chapter is out" is two database reads, and this file ships to the
+ * public repository - where `src/domain/xo-universe/` and `@kxb/xo-universe`
+ * do not exist, so it may not import either, and `channel.test.ts` fails if it
+ * ever does. The pattern `landing.tsx` uses - plain props from an unsynced
+ * route - is not available here, because the space layout that would pass them
+ * is synced too.
+ *
+ * A URL is not an import. `/api/oasis/current` answers it in the private repo
+ * and does not exist in the public one, where the fetch 404s and this draws
+ * nothing - correct rather than broken.
+ *
+ * Everything about the episode comes from the endpoint, including where it is
+ * read: the pill points at `/xo-universe`, the channel itself, and not at the
+ * copy of the chapter inside this space. The channel is where the story is
+ * published - it has the programme at the top, the running order under it and
+ * the download beside it - and a member who clicks "what is on" wants the
+ * thing that is on rather than a reader with one chapter in it. It also means
+ * the pill needs nothing from the rail at all: no space goes into the href, so
+ * the same link is right in every space and in none.
+ *
+ * ---------------------------------------------------------------------------
+ * A held slot while it is on its way, and nothing once the answer is nothing
+ * ---------------------------------------------------------------------------
+ * The menu is short and opens under the pointer, so a row that appears a beat
+ * later and pushes five others down is a row that moves the thing somebody was
+ * about to click. That argument used to end in "draw nothing until it lands",
+ * which does not fix the push - it schedules it. The fix is the other half: the
+ * slot is the pill's own height from the moment the menu opens, and only the
+ * season, the number and the title are waiting inside it.
+ *
+ * A failed fetch, a channel that is off and a channel with nothing out are
+ * still one outcome, which is silence - the slot closes and the menu is the
+ * menu. That collapse happens once per page load rather than once per open,
+ * because the answer is remembered below.
+ */
+/**
+ * What the last ask came back with, remembered for the life of the page.
+ *
+ * `undefined` is "nobody has asked yet"; `null` is "asked, and there is nothing
+ * on". The menu unmounts every time it closes, so without this every open would
+ * repeat the round trip and, in the public repository or with the channel off,
+ * flash the same empty slot forever. Module scope rather than a context: one
+ * menu exists at a time and the value is a fact about the site, not about a
+ * space.
+ */
+let knownEpisode: { season: number; number: number; title: string } | null | undefined
+
+function EpisodePill() {
+  const [episode, setEpisode] = useState<
+    { season: number; number: number; title: string } | null | undefined
+  >(knownEpisode)
+
+  useEffect(() => {
+    // Answered already, on an earlier open. Nothing to ask and nothing to wait
+    // for - the pill is simply there, or simply not.
+    if (knownEpisode !== undefined) return
+
+    // Aborted on unmount, because the menu closes far faster than a round trip
+    // and setting state afterwards is the warning nobody reads twice.
+    const stop = new AbortController()
+    fetch('/api/oasis/current', { signal: stop.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        knownEpisode = body?.episode ?? null
+        setEpisode(knownEpisode)
+      })
+      .catch(() => {
+        // A nav control never breaks the nav it is in. An aborted fetch is not
+        // an answer, though, so the cache is only written when one arrives -
+        // closing the menu mid-flight must not be remembered as "nothing on".
+        if (!stop.signal.aborted) {
+          knownEpisode = null
+          setEpisode(null)
+        }
+      })
+    return () => stop.abort()
+  }, [])
+
+  // Still asking. The box, at the pill's height, with the words left out.
+  if (episode === undefined) {
+    return (
+      <span className="xo-trigger xo-trigger-waiting my-1 flex w-full" aria-hidden>
+        <span className="shrink-0">
+          <UniverseGlyph />
+        </span>
+        <span className="holo-bar h-2.5 w-8 rounded" />
+        <span className="holo-bar h-2.5 min-w-0 flex-1 rounded" />
+      </span>
+    )
+  }
+
+  if (!episode) return null
+
+  return (
+    <Link
+      href="/xo-universe"
+      role="menuitem"
+      className="xo-trigger my-1 flex w-full"
+      title={episode.title}
+    >
+      <span aria-hidden className="shrink-0">
+        <UniverseGlyph />
+      </span>
+      <span className="tabular-nums">
+        S{episode.season}E{episode.number}
+      </span>
+      {/* The title is the part that cannot fit a narrow rail, so it is the part
+          allowed to disappear. The number identifies the episode on its own;
+          the words are what make somebody want to open it. */}
+      <span className="min-w-0 truncate normal-case opacity-90">{episode.title}</span>
+    </Link>
+  )
+}
+
 function Account({
   slug,
   username,
@@ -1956,24 +2104,6 @@ function Account({
     // the space's. They used to be one column of cards where a member could
     // change the top half and only read the bottom.
     { href: `/t/${slug}/settings/profile`, label: t.account.profile, icon: 'profile', show: role !== 'guest' },
-    /*
-      Your shelf of things, beside your profile rather than only in the nav.
-
-      Browse, whose first tab is the shelf, and this is the only row that names
-      it: what you have *made* is a fact about you, and the menu with your name
-      on it is where somebody looks for their own work. The navigation above
-      answers "what can this space do" and has a Browse row for that; this one
-      answers "where is my stuff" and says the word somebody is thinking.
-
-      Not for a visitor, like the two rows around it: a guest owns no blueprints
-      and the page refuses them at `requireTenant`.
-    */
-    {
-      href: `/t/${slug}/browse`,
-      label: t.surfaces.thingiverse,
-      icon: 'thing',
-      show: features.thingiverse && role !== 'guest',
-    },
     { href: `/t/${slug}/settings/space`, label: t.account.spaceSettings, icon: 'settings', show: role !== 'guest' },
     // Not for a visitor: there is nothing to switch to. A guest belongs to one
     // space, by a link, and the picker on the other end of this row has no list
@@ -2057,6 +2187,22 @@ function Account({
           aria-label={t.account.menu}
           className="rail-scroll max-h-[45vh] pt-1"
         >
+          {/*
+            The channel, where the shelf of things used to be.
+
+            This one row deliberately breaks the rule the list keeps: every
+            other entry is a `.rail-link` so the icon column lines up and four
+            groups read as one list. This is a rainbow pill, because it is not
+            navigation - it is the thing that is *on*, and what it says changes
+            week to week. A row that looked like the others would be read as a
+            place and skipped once.
+
+            `.xo-trigger` is the control the landing header uses, reused rather
+            than reimplemented: one rainbow in the product, and somebody who has
+            seen it on the front page recognises it here.
+          */}
+          <EpisodePill />
+
           {items
             .filter((entry) => entry.show)
             .map((entry) => (

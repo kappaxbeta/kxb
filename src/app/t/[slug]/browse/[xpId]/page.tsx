@@ -5,6 +5,7 @@ import {
   CopyPanel,
   HandOverPanel,
   ReleasePanel,
+  PricePanel,
   RemovePanel,
   SharePanel,
   SubmitPanel,
@@ -345,7 +346,17 @@ export default async function ProjectPage({
 
       {canSubmit && project.state !== 'published' && (
         <Panel title={t.review}>
-          <SubmitPanel slug={slug} xpId={xpId} submitted={project.state === 'submitted'} />
+          {/*
+            `economy` decides whether the fee is drawn, not whether the button
+            works. A price shown in a space that charges nothing would be a
+            threat the product does not carry out.
+          */}
+          <SubmitPanel
+            slug={slug}
+            xpId={xpId}
+            submitted={project.state === 'submitted'}
+            economy={context.features.economy}
+          />
         </Panel>
       )}
 
@@ -386,6 +397,25 @@ export default async function ProjectPage({
               name: displayNameFrom(grantNames, grant.accountId),
             }))}
             members={shareable}
+          />
+        </Panel>
+      )}
+
+      {/*
+        What it costs somebody else, under who can see it.
+
+        That order is the reading order: sharing decides *whether* anybody else
+        can get at this, and a price only means anything once they can. An owner
+        who has kept a level private and priced it has done something with no
+        effect, and putting the price second is the cheapest way to say so.
+      */}
+      {owns && (
+        <Panel title="Prices">
+          <PricePanel
+            slug={slug}
+            xpId={xpId}
+            once={project.priceOnce}
+            remix={project.priceRemix}
           />
         </Panel>
       )}

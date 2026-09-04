@@ -7,7 +7,10 @@ import { ProjectShelf, type ProjectCartridge } from '@/app/t/[slug]/browse/proje
 import { cartridgeOf } from '@/app/t/[slug]/browse/project-cartridge'
 import { ClipsPanel } from '@/app/t/[slug]/thingiverse/clips-panel'
 import { EmoteTreeEditor } from '@/app/t/[slug]/thingiverse/emote-tree-editor'
+import { DOORS } from '@/app/t/[slug]/thingiverse/doors'
 import { Hub } from '@/app/t/[slug]/thingiverse/hub'
+import { RehearsalProvider } from '@/app/t/[slug]/thingiverse/rehearsal'
+import { SetsPanel } from '@/app/t/[slug]/thingiverse/sets-panel'
 import { Shelf } from '@/app/t/[slug]/thingiverse/shelf'
 import { Showcase } from '@/app/t/[slug]/thingiverse/showcase'
 import { PacksPanel } from '@/app/t/[slug]/thingiverse/workbench'
@@ -18,7 +21,16 @@ import { readAvatarHere } from '@/domain/profile/avatar-queries'
 import { readXpBody } from '@/domain/skins/queries'
 import { walk } from '@/domain/thingiverse/emote-tree'
 import { MODEL_COUNT } from '@/domain/thingiverse/models'
-import { listBlueprints, listClips, readEmoteTree } from '@/domain/thingiverse/queries'
+import { STARTER_SETS } from '@/domain/thingiverse/starters'
+import { coinsOf, nextPrice } from '@/domain/bank/next'
+import {
+  countBlueprints,
+  countClips,
+  countVehicles,
+  listBlueprints,
+  listClips,
+  readEmoteTree,
+} from '@/domain/thingiverse/queries'
 import { listSpaceWorlds } from '@/domain/worlds/queries'
 import { xpsProjection } from '@/domain/xps/projection'
 import {
@@ -30,10 +42,10 @@ import {
 } from '@/domain/xps/queries'
 import { runProjection } from '@/es/projection'
 import {
-  hasTier,
   requireFeature,
-  requireTenant,
   requireProjects,
+  requireTenant,
+  thingiverseOpen,
   writeBlockedReason,
   xpOpen,
 } from '@/lib/tenant'
@@ -93,11 +105,18 @@ export default async function SpaceBrowsePage({
    * searched in the browser, so the search is a plain `method="get"` form and
    * the answer has to come back from the server. It lands on the first tab,
    * which is the tab that asked, so the round trip returns where it left.
+   *
+   * `door` is the second, and it is here for the other reason a URL is allowed
+   * to carry state: somebody is being *sent* somewhere. The rail links straight
+   * at the clips, and without a word for which door to open the link lands on
+   * the shelf with the thing it promised one press away. Which door is still
+   * client state once the page is up - see `Hub` - this only says where to
+   * start.
    */
-  searchParams: Promise<{ q?: string; pack?: string }>
+  searchParams: Promise<{ q?: string; pack?: string; door?: string }>
 }) {
   const { slug } = await params
-  const { q, pack } = await searchParams
+  const { q, pack, door } = await searchParams
 
   const context = await requireTenant(slug)
   requireFeature(context, 'worlds')
@@ -159,10 +178,10 @@ export default async function SpaceBrowsePage({
   /**
    * The thingiverse's own shelf, or null when this space has no thingiverse.
    *
-   * Both gates, exactly as the page it came from ran them and as the layout
-   * runs them for the rail: the installation flag *and* `xo`. The tier is the
-   * half worth naming - furnishing a room is world-building, and world-building
-   * is what xo is.
+   * `thingiverseOpen`, exactly as the page it came from ran it and as the
+   * layout runs it for the rail. It used to be two gates spelled here, the
+   * installation flag *and* `xo`; the tier half is gone, and the helper in
+   * `lib/tenant.ts` carries why.
    *
    * Null rather than an empty list, so the tab is absent rather than empty. A
    * tab that exists and says nothing is a promise of a feature this space does
@@ -174,7 +193,7 @@ export default async function SpaceBrowsePage({
    * quietly starts reading a table the other has not finished writing.
    */
   const things =
-    context.features.thingiverse && hasTier(context, 'xo')
+    thingiverseOpen(context)
       ? await (async () => {
           await runProjection(supabase, thingiverseProjection, tenant.id)
 
@@ -188,14 +207,47 @@ export default async function SpaceBrowsePage({
            * `readXpBody` and the note there about why conflating the two put a
            * Knight in the lounge.
            */
-          const [shelf, clips, menu, avatar, body] = await Promise.all([
+          const [shelf, clips, menu, avatar, body, drawn, kept, driven] = await Promise.all([
             listBlueprints(supabase, tenant.id, user.id),
             listClips(supabase, tenant.id, user.id),
             readEmoteTree(supabase, tenant.id),
             readAvatarHere(supabase, user.id, tenant.id),
             readXpBody(supabase, user.id),
+            /*
+              The *space's* counts, which are not `shelf.length` and `clips.length`.
+              Those two are filtered to what this person may see - public, plus
+              their own - and a quota is about what the space holds. Somebody
+              whose colleague keeps ten private blueprints would otherwise be
+              told there is room for ten more than there is, and find out by
+              being charged.
+            */
+            countBlueprints(supabase, tenant.id),
+            countClips(supabase, tenant.id),
+            countVehicles(supabase, tenant.id),
           ])
-          return { shelf, clips, menu, avatar, body }
+
+          // What one more of each costs, from the same helper the two create
+          // actions charge from - so the button and the purse cannot disagree.
+          const prices = {
+            // `drawn` counts every row, vehicles included, because that is
+            // what the platform ceiling wants. The plan wants them apart -
+            // see `priceLine`, which does the same subtraction on the way in.
+            blueprint: coinsOf(
+              await nextPrice(
+                supabase,
+                tenant.id,
+                tenant.tier,
+                'blueprints',
+                Math.max(0, drawn - driven),
+              ),
+            ),
+            vehicle: coinsOf(
+              await nextPrice(supabase, tenant.id, tenant.tier, 'vehicles', driven),
+            ),
+            clip: coinsOf(await nextPrice(supabase, tenant.id, tenant.tier, 'clips', kept)),
+          }
+
+          return { shelf, clips, menu, avatar, body, prices }
         })()
       : null
 
@@ -245,6 +297,19 @@ export default async function SpaceBrowsePage({
                   label: thingWords.heading,
                   count: things.shelf.length,
                   panel: (
+                    /*
+                      Around the pair, so a clip can reach the body.
+
+                      The mirror and the clips list are on two sides of a server
+                      boundary - the panels below are server components this page
+                      renders and hands to the hub - so there is no client
+                      component holding both that could pass a prop between them.
+                      One provider with a `useState` in it is the smallest thing
+                      that lets a play button three doors down drive the canvas at
+                      the top. It draws nothing, so the section keeps its own
+                      spacing. See `RehearsalProvider`.
+                    */
+                    <RehearsalProvider>
                     <section aria-label={thingWords.heading} className="space-y-6">
                       {/*
                         Who you are, above what you make.
@@ -265,9 +330,19 @@ export default async function SpaceBrowsePage({
 
                       <Hub
                         slug={slug}
+                        /*
+                          Where to start, when somebody was sent here. Checked
+                          against the doors that exist rather than cast: `door`
+                          is whatever is in the address bar, and a typo would
+                          otherwise open a door with no panel behind it and draw
+                          an empty section with a heading of `undefined`.
+                        */
+                        initial={DOORS.find((one) => one === door)}
+                        prices={things.prices}
                         t={thingWords}
                         counts={{
                           blueprints: things.shelf.filter((one) => !one.spec.vehicle).length,
+                          sets: STARTER_SETS.length,
                           vehicles: things.shelf.filter((one) => one.spec.vehicle).length,
                           clips: things.clips.length,
                           emotes: walk(things.menu.tree).length,
@@ -292,10 +367,14 @@ export default async function SpaceBrowsePage({
                             <Shelf
                               slug={slug}
                               shelf={things.shelf.filter((one) => !one.spec.vehicle)}
+                              // The names only; the row's clip pickers need no
+                              // samples. See `ClipPick`.
+                              clips={things.clips.map((one) => one.name)}
                               t={thingWords}
                               headed={false}
                             />
                           ),
+                          sets: <SetsPanel slug={slug} t={thingWords} />,
                           /*
                             The same shelf, filtered the other way. A vehicle
                             *is* a blueprint - one row, one spec, with a
@@ -307,12 +386,18 @@ export default async function SpaceBrowsePage({
                             <Shelf
                               slug={slug}
                               shelf={things.shelf.filter((one) => one.spec.vehicle)}
+                              clips={things.clips.map((one) => one.name)}
                               t={thingWords}
                               headed={false}
                             />
                           ),
                           clips: (
-                            <ClipsPanel slug={slug} clips={things.clips} t={thingWords.clips} />
+                            <ClipsPanel
+                              slug={slug}
+                              clips={things.clips}
+                              t={thingWords.clips}
+                              labels={thingWords}
+                            />
                           ),
                           emotes: (
                             <EmoteTreeEditor
@@ -334,6 +419,7 @@ export default async function SpaceBrowsePage({
                         }}
                       />
                     </section>
+                    </RehearsalProvider>
                   ),
                 },
               ]

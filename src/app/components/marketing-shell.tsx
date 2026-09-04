@@ -1,9 +1,18 @@
+import { readLocale } from '@/app/i18n/preference'
+import { resolveFeatures } from '@/domain/flags/queries'
 import Image from 'next/image'
 import Link from 'next/link'
+import { createClient, getUser } from '@/lib/supabase/server'
+import { LanguageMenu } from '@/app/components/language-menu'
 import Logo from '@/app/components/logo'
 import { type MarkName, Mark } from '@/app/components/marketing-icons'
 import { ShootingStars } from '@/app/components/shooting-stars'
+import { XMark, X_HANDLE, X_HREF } from '@/app/components/x-mark'
+import { XoMenu } from '@/app/components/xo-menu'
 import { EN, landingDict } from '@/app/i18n/landing'
+import { contestIsLive } from '@/domain/contest/settings'
+import { readDisplayName } from '@/domain/profile/username-queries'
+import { landingPath } from '@/domain/tenants/last-space'
 import type { Locale } from '@/domain/i18n/locale'
 
 /**
@@ -49,15 +58,11 @@ import type { Locale } from '@/domain/i18n/locale'
  */
 
 /** Where the pill points. The same three the landing page's header carries. */
-const SECTIONS = [
-  { key: 'play', href: '/play' },
-  { key: 'create', href: '/create' },
-  { key: 'share', href: '/share' },
-] as const
+const SECTIONS = [{ key: 'browse', href: '/browse' }] as const
 
-export function MarketingShell({
+export async function MarketingShell({
   active,
-  locale = 'en',
+  locale: given,
   children,
 }: {
   /**
@@ -78,16 +83,100 @@ export function MarketingShell({
    * decision about the nav rather than about the store, and the store is
    * reachable from `/worlds` and `/create/xp` without it.
    */
-  active?: 'play' | 'create' | 'share'
+  /**
+   * Which nav item this page is, so the pill can mark its own.
+   *
+   * Only `browse` now: the three pages this once distinguished are no longer
+   * in the header at all. They still wear this shell - they are still real
+   * pages - they simply have nothing in the nav to light up, which is the
+   * honest state rather than a marker pointing at nothing.
+   */
+  active?: 'browse'
   children: React.ReactNode
 }) {
+  // Read through `domain/flags` rather than `domain/xo-universe`, and that is
+  // a publishing constraint rather than a preference: this file ships to the
+  // public repository and the channel's folder deliberately does not, so an
+  // import of it would compile here and break the tree over there. The flag
+  // registry is synced, so `xo_universe` exists on both sides; the pages,
+  // routes and prose behind it do not.
+  // The reader's own language when the page has not named one.
+  //
+  // This defaulted to `'en'`, and six of the eight pages that wear this shell
+  // do not pass a locale - so somebody could pick Bulgarian in this very menu,
+  // be redirected, click through to any of those six and find the header back
+  // in English with an English flag on it. The cookie was right the whole
+  // time; nothing was reading it.
+  //
+  // A page that *does* pass one still wins, and that order matters: `/de` and
+  // `/de/events` carry their language in the path, and a German URL has to be
+  // German for whoever opens it - including a reader whose cookie says
+  // Bulgarian. Path first, cookie second, English last.
+  const locale = given ?? (await readLocale())
+
+  const supabase = await createClient()
+
+  const { xo_universe: universe, channels } = await resolveFeatures(supabase, null)
+
+  /*
+    Who is reading, if anybody.
+
+    The front page never had to answer this: `/` redirects a signed-in account
+    straight into its space, so the header with "Sign in" on it is only ever
+    seen by somebody who is not. These pages cannot do that - the channel, the
+    contest conditions and the catalogue are things a member reads *while*
+    signed in - so this shell was the one surface in the product that told a
+    logged-in reader they were logged out, and offered them a sign-up.
+
+    Anonymous sessions are deliberately not "somebody". A guest let through a
+    door has a perfectly good session and no account, so naming them would be
+    naming a fallback handle nobody chose, and "Join the beta" is the correct
+    thing to show them - it is exactly what they have not done.
+
+    `landingPath` is the same resolver `/` redirects through, so the pill leads
+    where the front page would have taken them: the space they were last in, or
+    the picker when that question has no safe answer.
+  */
+  const user = await getUser()
+  const you =
+    user && !user.is_anonymous
+      ? { href: await landingPath(supabase, user), name: await readDisplayName(supabase, user.id) }
+      : null
+
+  /*
+    Whether there is a prize draw to point at.
+
+    Its own read rather than a feature flag, for the reason the migration gives:
+    the switch belongs beside the dates, on the screen where somebody can see
+    that the contest they are turning on closed a fortnight ago. Read through
+    the service role, so this costs the footer a query and not a session.
+
+    The link appears only while a contest is running, and that is the whole
+    point of it - a permanent "Prize draw" in the footer of a site with no draw
+    is worse than no link, because somebody clicks it.
+  */
+  const contest = await contestIsLive()
+
   // `EN` stays imported and stays the default, so nothing about the three
   // untranslated pages changes.
   const t = landingDict(locale)
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
       <ShootingStars />
-      <header className="flex items-center justify-between gap-3 py-4 sm:py-6">
+      {/* Sticky, on the pages below the front page only.
+
+          This shell is what those pages wear, and they are the long ones - a
+          chapter of the book, the contest conditions, the catalogue. Scrolling
+          two thousand words to reach the nav is the position somebody is in
+          when they finish reading and want to go somewhere; on the landing
+          page, which has its own header and is a sequence of short sections,
+          there is nothing to scroll back through and a bar pinned over the
+          hero would just be in the way.
+
+          `backdrop-blur` with a translucent ground rather than a solid one:
+          the page has a star field and a grid behind it, and a solid bar would
+          read as a strip cut out of the picture. */}
+      <header className="sticky top-0 z-40 -mx-4 flex items-center justify-between gap-3 bg-[oklch(0.145_0.008_326_/_0.82)] px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 sm:py-6">
         <Link href="/" className="enter-mark flex items-center gap-3">
           <Logo badge />
         </Link>
@@ -105,20 +194,52 @@ export function MarketingShell({
               {t.nav[section.key]}
             </Link>
           ))}
-          <Link href="/#pricing" className="nav-pill-link">
-            {t.nav.pricing}
-          </Link>
           {/* Literal, like the landing header: the word is the same in every
               page language, and the handbook itself handles the locale. */}
           <Link href={locale === 'de' ? '/de/community' : '/community'} className="nav-pill-link">
             Community
           </Link>
-          <Link href="/login" className="nav-pill-link nav-pill-quiet">
-            {t.nav.signIn}
-          </Link>
-          <Link href="/signup" className="nav-pill-cta">
-            {t.nav.join}
-          </Link>
+          {/* The channel, and the one control that survives a phone. It is a
+              menu now rather than a link - the channel and the three pages
+              inside it - so Play, Create and Share are reachable from the
+              chrome again; see `xo-menu.tsx`.
+
+              This shell used to leave the tab out to stay static: reading the
+              flag needs a client, a client reads cookies, and that opts the
+              route into dynamic rendering - which `/play`, `/share` and
+              `/coins` did not otherwise need. That was the right trade when
+              this was a fifth pill.
+
+              It is not any more. Play, Create and Share have moved off the
+              header and into the channel, so XO Universe is now the
+              destination that carries them, and a nav where the main
+              destination is missing on five of six pages is worse than three
+              pages rendering per request. The flag still has to be read,
+              because its whole job is being able to withdraw the channel -
+              a link left pointing at a 404 is not a kill switch. */}
+          {universe ? <XoMenu locale={locale} channels={channels} /> : null}
+          <LanguageMenu locale={locale} />
+          {/* Signed in, the two controls collapse into one: your own name,
+              pointing at your space. Not a second "Sign in" greyed out and not
+              a "Sign out" - the question this row answers for a member is
+              "where is the app from here", and the answer is a door with their
+              handle on it. The handle is what makes it recognisable as *you*
+              rather than as a generic button, which is the whole complaint a
+              signed-in reader has about a header that says Join. */}
+          {you ? (
+            <Link href={you.href} className="nav-pill-cta">
+              <span className="nav-pill-you">{you.name}</span>
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="nav-pill-link nav-pill-quiet">
+                {t.nav.signIn}
+              </Link>
+              <Link href="/signup" className="nav-pill-cta">
+                {t.nav.join}
+              </Link>
+            </>
+          )}
         </nav>
       </header>
 
@@ -130,6 +251,23 @@ export function MarketingShell({
           <Link href="/events" className="nav-link">
             {t.footer.events}
           </Link>
+          {/*
+            First among the legal links rather than last, and only while a draw
+            is running: it is the one thing in this row somebody might want,
+            where the other four are things they go looking for.
+
+            `/gewinnspiel` in every language. The German document is the binding
+            one and the page itself offers the reader their own language in a
+            line at the top - sending an English reader straight to
+            `/gewinnspiel/en` would be friendlier and would also mean the
+            footer, rather than the reader, chose which version of a legal text
+            they saw.
+          */}
+          {contest && (
+            <Link href="/gewinnspiel" className="nav-link">
+              {t.footer.contest}
+            </Link>
+          )}
           <Link href="/impressum/en" className="nav-link">
             {t.footer.impressum}
           </Link>
@@ -142,6 +280,26 @@ export function MarketingShell({
           <Link href="/contact" className="nav-link">
             {EN.footer.contact}
           </Link>
+          {/* The account, as a plain anchor - X is not a route here, so the
+              router has nothing to prefetch. `rel="me"` is what tells the
+              profile at the other end that this site is claiming it, and
+              `noopener` is the usual price of `target="_blank"`.
+
+              No visible label beside the glyph, which is the landing footer's
+              rule and holds for the same reason: the mark is already the
+              letter, so printing "X" next to it says one thing twice. The
+              handle is in the tooltip and in `aria-label`, where somebody
+              looking for the account will find it. */}
+          <a
+            href={X_HREF}
+            target="_blank"
+            rel="me noopener noreferrer"
+            title={`X · ${X_HANDLE}`}
+            aria-label={`X — ${X_HANDLE}`}
+            className="nav-link inline-flex items-center"
+          >
+            <XMark aria-hidden className="size-4" />
+          </a>
         </nav>
       </footer>
     </main>

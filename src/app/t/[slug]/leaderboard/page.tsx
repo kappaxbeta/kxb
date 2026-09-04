@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
+import { readBestList } from '@/domain/bank/best-list'
 import { streaksProjection } from '@/domain/streaks/projection'
 import { type LeaderboardRow, readLeaderboard } from '@/domain/streaks/queries'
 import { avatarShotUrl } from '@/domain/lounge/avatars'
@@ -44,10 +45,20 @@ export default async function LeaderboardPage({
 
   const rows = await readLeaderboard(supabase, tenant.id)
 
+  /*
+    The coins board. Read with the member's own client, which matters: the
+    filter behind it reads `leaderboard_hidden`, a table with RLS on and no
+    policies, so a session sees an empty set and nobody is hidden. That fails in
+    the generous direction - a hidden player appearing, rather than a visible
+    one vanishing - and the strict pass belongs to the backoffice, which reads
+    with the service role.
+  */
+  const best = await readBestList(supabase, tenant.id, user.id, 20)
+
   // Names and animals for everyone on the board, each in one query rather than
   // one per row - the same batched read the dashboard roster makes.
   const t = workspaceDict(await readLocale()).streaks
-  const userIds = rows.map((row) => row.userId)
+  const userIds = [...new Set([...rows.map((row) => row.userId), ...best.map((row) => row.userId)])]
   const [names, avatars] = await Promise.all([
     readUsernames(supabase, userIds),
     readProfileAvatars(supabase, userIds),
@@ -63,6 +74,49 @@ export default async function LeaderboardPage({
           {fill(t.body, { space: tenant.name })}
         </p>
       </header>
+
+      {/*
+        The best list, above the streaks.
+
+        Two boards on one page rather than two pages, because they are one
+        question - "how am I doing here" - asked two ways. Above, because coins
+        are the ranking somebody can be *ahead of you* on, and that is the one
+        people open a leaderboard to check. A streak is the gentle ranking: the
+        number only goes up by being here and there is nobody to beat, so it
+        reads better as the thing underneath.
+
+        Somebody an operator has hidden is missing from everybody's copy of this
+        but their own - see `readBestList`. Nothing here draws that state, and
+        nothing should: a row that looked different to its owner would be a
+        notification.
+      */}
+      {best.length > 0 && (
+        <section className="flex flex-col gap-1.5">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
+            {t.coins}
+          </h2>
+          <ol className="flex flex-col gap-1">
+            {best.map((row, index) => (
+              <li
+                key={row.userId}
+                className={`flex items-baseline gap-3 rounded-lg border px-3 py-1.5 text-sm ${
+                  row.userId === user.id
+                    ? 'border-accent/60 bg-accent/5'
+                    : 'border-line/60'
+                }`}
+              >
+                <span className="w-6 shrink-0 font-mono text-xs text-ink-muted">
+                  {index + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  {displayNameFrom(names, row.userId)}
+                </span>
+                <span className="shrink-0 font-mono tabular-nums">{row.coins}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-line/60 bg-surface-raised/40 px-4 py-8 text-center text-sm text-ink-muted">

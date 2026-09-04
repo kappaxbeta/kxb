@@ -29,8 +29,13 @@ import {
   tuneThing,
   turnThing,
 } from '@/domain/thingiverse/actions'
-import { freshSpec, MAX_THING_SCALE, MIN_THING_SCALE } from '@/domain/thingiverse/blueprint'
-import { toGrid } from '@/domain/thingiverse/thing-commands'
+import {
+  freshSpec,
+  MAX_THING_SCALE,
+  MIN_THING_SCALE,
+  seatClip,
+} from '@/domain/thingiverse/blueprint'
+import { toPlace } from '@/domain/thingiverse/thing-commands'
 import type { BlueprintView, ThingView } from '@/domain/thingiverse/queries'
 import { resolveSummon, type SummonMatch, nameForModel } from '@/domain/thingiverse/summon'
 import { drivable } from '@/domain/thingiverse/vehicle'
@@ -830,11 +835,13 @@ export function useThings({
   const playClip = useCallback(
     (clip: string) => {
       setBodyClip(clip)
-      const loop = thingsRef.current.find((one) => one.id === usingId)?.blueprint?.spec.use
-        ?.loop
-      after(loop ?? null)
+      // Back to what the seat you are in looks like - not the thing's loop,
+      // which is only the answer for a seat that has not said otherwise. See
+      // `seatClip`.
+      const use = thingsRef.current.find((one) => one.id === usingId)?.blueprint?.spec.use
+      after(use ? seatClip(use, usingSeat) : null)
     },
-    [after, usingId],
+    [after, usingId, usingSeat],
   )
 
   /**
@@ -909,9 +916,12 @@ export function useThings({
 
       setUsingId(id)
       setUsingSeat(seat)
-      setBodyClip(spec.use.enter ?? spec.use.loop)
+      // The seat's own clip, or the block's - see `seatClip`. Which seat you got
+      // is decided a line above this in `freeSeat`, so by here it is a fact.
+      const sitting = seatClip(spec.use, seat)
+      setBodyClip(spec.use.enter ?? sitting)
 
-      if (spec.use.enter) after(spec.use.loop)
+      if (spec.use.enter) after(sitting)
     },
     [after],
   )
@@ -930,14 +940,14 @@ export function useThings({
     if (atWheel && thing) {
       const parked = pose()
       if (parked) {
-        void run(thing.id, { x: parked.x, y: parked.y, z: parked.z }, () =>
-          moveThing(slug, {
-            id: thing.id,
-            worldId: worldId ?? undefined,
-            x: parked.x,
-            y: parked.y,
-            z: parked.z,
-          }),
+        // Through the same door a settling ball goes through, and for the same
+        // reason: this is a *measured* place. A kart left on top of the tallest
+        // block anybody may build stands one cell above the last cell the world
+        // has, and being refused for it is a message about somebody's parking.
+        const at = toPlace(parked)
+
+        void run(thing.id, at, () =>
+          moveThing(slug, { id: thing.id, worldId: worldId ?? undefined, ...at }),
         )
         if (parked.facing !== thing.facing) {
           void run(thing.id, { facing: parked.facing }, () =>
@@ -975,8 +985,12 @@ export function useThings({
       setUsingId(thing.id)
       setUsingSeat(0)
       setAtWheel(true)
-      setBodyClip(spec.use?.enter ?? spec.use?.loop ?? null)
-      if (spec.use?.enter) after(spec.use?.loop ?? null)
+      // Always the first seat, which is the rule `drivable` states - so the
+      // clip is the driver's own, and a kart whose driver holds a wheel while
+      // its passengers hold on is two clips rather than one compromise.
+      const driving = spec.use ? seatClip(spec.use, 0) : null
+      setBodyClip(spec.use?.enter ?? driving)
+      if (spec.use?.enter) after(driving)
     },
     [after],
   )
@@ -997,13 +1011,14 @@ export function useThings({
       if (!input) return false
 
       setBodyClip(input.clip)
-      // Back to whatever being in it looks like. The extras are one-shots by
-      // construction: a second animation that also loops would be a thing with
-      // two idle states and no way to tell which one you are in.
-      after(spec?.use?.loop ?? null)
+      // Back to whatever being in it looks like - in *this* seat, which is the
+      // one the body is in. The extras are one-shots by construction: a second
+      // animation that also loops would be a thing with two idle states and no
+      // way to tell which one you are in.
+      after(spec?.use ? seatClip(spec.use, usingSeat) : null)
       return true
     },
-    [after, usingId],
+    [after, usingId, usingSeat],
   )
 
   /**
@@ -1051,15 +1066,18 @@ export function useThings({
   const move = useCallback(
     (id: string, cell: { x: number; y: number; z: number }) => {
       /*
-        Rounded here, once, for everybody who moves a thing.
+        Rounded *and* bounded here, once, for everybody who moves a thing.
 
-        The command refuses a position off the tenth-of-a-cell grid, which is
-        right for one somebody typed and wrong for one that was measured - a
-        kicked ball stops at 1.2493 and there is nothing the person who kicked
-        it could do about being told so. Every caller that measures would
-        otherwise have to remember; this is the door they all go through.
+        The command refuses a position off the tenth-of-a-cell grid, and one
+        outside the world, and both are right for a position somebody typed and
+        wrong for one that was measured - a kicked ball stops at 1.2493 and
+        there is nothing the person who kicked it could do about being told so.
+        A big ball came to rest at a *negative* height for the same reason and
+        said "Too small: expected number to be >=0" over the room. Every caller
+        that measures would otherwise have to remember both; this is the door
+        they all go through. See `toPlace`.
       */
-      const on = { x: toGrid(cell.x), y: toGrid(cell.y), z: toGrid(cell.z) }
+      const on = toPlace(cell)
       void run(id, on, () => moveThing(slug, { id, worldId: worldId ?? undefined, ...on }))
     },
     [run, slug, worldId],
@@ -1380,6 +1398,7 @@ export function useThings({
         things,
         selectedId,
         canBuild: canBuild && !readOnly,
+        clips,
         keepDefault,
         busy,
         error,
@@ -1401,6 +1420,7 @@ export function useThings({
         hand,
         rename,
         retire,
+        playClip,
       },
     )
   })

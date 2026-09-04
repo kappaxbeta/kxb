@@ -606,3 +606,61 @@ describe('another game in the slot', () => {
     ).toThrow(DomainError)
   })
 })
+
+describe('a price on the door', () => {
+  /**
+   * `docs/product/economy.md` §11. A toll, set by the space's owner and paid
+   * into the space's bank. Free is the default, and nothing about the feature
+   * existing changes what an untouched room costs.
+   */
+  test('every room starts free', () => {
+    expect(stateAfter(opened).doorPrice).toBe(0)
+  })
+
+  test('a price can be put on it', () => {
+    const events = decide(stateAfter(opened), {
+      type: 'SetRoomDoorPrice',
+      price: 5,
+    })
+    expect(events).toEqual([{ type: 'RoomDoorPriceSet', data: { price: 5 } }])
+    expect(stateAfter([...opened, ...events]).doorPrice).toBe(5)
+  })
+
+  test('and taken back off', () => {
+    const priced = stateAfter([
+      ...opened,
+      { type: 'RoomDoorPriceSet', data: { price: 5 } },
+    ])
+    expect(decide(priced, { type: 'SetRoomDoorPrice', price: 0 })).toEqual([
+      { type: 'RoomDoorPriceSet', data: { price: 0 } },
+    ])
+  })
+
+  test('setting the same price writes nothing', () => {
+    const priced = stateAfter([
+      ...opened,
+      { type: 'RoomDoorPriceSet', data: { price: 5 } },
+    ])
+    expect(decide(priced, { type: 'SetRoomDoorPrice', price: 5 })).toEqual([])
+  })
+
+  /**
+   * The bound is here rather than at the form because this is the number a
+   * purse is later charged - a stray zero on the end has to be a refusal, not
+   * an emptied purse.
+   */
+  test('a nonsense price is refused', () => {
+    for (const price of [-1, 2.5, 999_999_999, NaN]) {
+      expect(() =>
+        decide(stateAfter(opened), { type: 'SetRoomDoorPrice', price }),
+      ).toThrow(DomainError)
+    }
+  })
+
+  test('a closed room takes no more settings, including this one', () => {
+    const closed = stateAfter([...opened, { type: 'RoomClosed', data: {} }])
+    expect(() =>
+      decide(closed, { type: 'SetRoomDoorPrice', price: 5 }),
+    ).toThrow(DomainError)
+  })
+})

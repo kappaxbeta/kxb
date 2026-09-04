@@ -89,22 +89,65 @@ export interface LimitInput {
    * Applied after the override on purpose - see the note on `resolveLimit`.
    */
   ceiling?: Limit | undefined
+  /**
+   * How many extra a member of this space has *bought with coins*.
+   *
+   * A plain count rather than a `Limit`, and that is the whole difference
+   * between this rung and the two above it: the others say "what the cap is",
+   * and this says "how many more than that". You cannot buy unlimited - there
+   * is no price for it and there should not be, because a single purchase that
+   * lifts a cap forever is a thing somebody clicks by accident.
+   *
+   * `docs/product/economy.md` §8. Defaults to none, so every existing caller
+   * resolves exactly as it did before this rung existed.
+   */
+  bought?: number | undefined
 }
 
 /**
  * The limit in force.
  *
- * The ceiling is applied *last*, after the override, and that ordering is the
- * only interesting decision in this function. It means a platform ceiling
- * clamps a comped space too, which is the point: the ceiling exists because a
- * box has a size, and a customer we were generous to does not make the box
- * bigger. An operator who genuinely needs to exceed it is asking for a capacity
- * change, and should have to notice that.
+ *     effective = min(max(tier, override) + bought, ceiling)
+ *
+ * Four rungs now, and the *order* is the whole of the interesting content.
+ *
+ * **The ceiling is applied last**, after everything else. It means a platform
+ * ceiling clamps a comped space and a paying one alike, which is the point: the
+ * ceiling exists because a box has a size, and a customer we were generous to
+ * does not make the box bigger. An operator who genuinely needs to exceed it is
+ * asking for a capacity change, and should have to notice that.
+ *
+ * **What was bought is added, not maxed.** That is the difference between it
+ * and the override, and it has to be: an override is somebody saying what the
+ * cap *is*, and a purchase is somebody buying one *more*. Maxing would make the
+ * second blueprint somebody paid for do nothing at all on a tier that already
+ * included three, which is a charge for nothing.
+ *
+ * **And it is added before the ceiling, so purchases are clamped too.** This is
+ * the sharp edge and it is deliberate: a space can buy more rooms than the
+ * installation will serve, and the rooms it paid for will not appear. That is
+ * ugly, and it is the right way round - the alternative is coins that can
+ * overwhelm a box, which is a capacity incident rather than a billing
+ * complaint. Anything selling a limit that has a ceiling near it should check
+ * `remaining` before taking the money; see `docs/product/economy.md` §8.6,
+ * which flags rooms as exactly this case.
  */
-export function resolveLimit({ tier, key, override, ceiling }: LimitInput): Limit {
-  const bought = tierLimit(tier, key)
-  const granted = override === undefined ? bought : maxLimit(bought, override)
-  return ceiling === undefined ? granted : minLimit(granted, ceiling)
+export function resolveLimit({ tier, key, override, ceiling, bought }: LimitInput): Limit {
+  const included = tierLimit(tier, key)
+  const granted = override === undefined ? included : maxLimit(included, override)
+
+  /*
+    Unlimited plus anything is unlimited. Spelled out rather than left to
+    arithmetic, because `null + 2` is `2` in JavaScript - a space with no cap at
+    all would silently acquire one the moment somebody bought an extra, and the
+    purchase would *lower* their limit. The exact class of bug the `null`
+    convention exists to make impossible, arriving through the one operation
+    that had not needed it until now.
+  */
+  const withExtras =
+    granted === UNLIMITED || !bought ? granted : granted + Math.max(0, bought)
+
+  return ceiling === undefined ? withExtras : minLimit(withExtras, ceiling)
 }
 
 /**
@@ -163,6 +206,11 @@ export const LIMIT_FLAGS = {
   matches: 'match_limit',
   pages: 'page_limit',
   pictures: 'picture_limit',
+  privateXps: 'private_xp_limit',
+  publicXps: 'public_xp_limit',
+  blueprints: 'blueprint_limit',
+  clips: 'clip_limit',
+  vehicles: 'vehicle_limit',
 } as const satisfies Partial<Record<LimitKey, string>>
 
 /**
@@ -172,5 +220,19 @@ export const LIMIT_FLAGS = {
  * an operator to raise. If free ever gets a magazine - open question 3 in
  * `docs/product/pricing.md` - it becomes unlimited there too, and this stays
  * true. A flag guarding a cap nobody can reach is a control panel for nothing.
+ */
+/**
+ * `vehicle_limit` is the odd one, and it is worth knowing before using it.
+ *
+ * Every other flag here raises a number somebody already has. This one raises a
+ * number that is **zero on every tier** - vehicles are bought with coins, one
+ * at a time, and no plan includes any. So an override on this key is not "more
+ * of what you bought", it is a comp: a space that gets vehicles without paying
+ * coins for them.
+ *
+ * That is a legitimate thing to want - a partner, a demo, an event - and it is
+ * exactly why the flag exists rather than a hardcoded zero. It is just not the
+ * same gesture as the other six, and an operator raising it should know they
+ * are giving something away rather than lifting a ceiling.
  */
 export type FlaggedLimitKey = keyof typeof LIMIT_FLAGS

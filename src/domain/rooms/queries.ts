@@ -26,6 +26,11 @@ export interface RoomView {
   /** May a guest place blocks in here? Only ever narrows the event's answer. */
   guestBuild: boolean
   /**
+   * Coins to walk in. `0` is free, which is every room until an owner says
+   * otherwise. See `RoomDoorPriceSet`.
+   */
+  doorPrice: number
+  /**
    * The level this room is, or null for an ordinary lounge room.
    *
    * Set at creation and never after - see `RoomCreated`. What it changes is
@@ -75,7 +80,7 @@ export interface RoomView {
  * one added would have been added to two of them.
  */
 const ROOM_COLUMNS =
-  'room_id, tenant_id, name, slug, visibility, mode, cap, guest_build, xp_ref, round_started_at, pinned_at, room_group, room_icon, room_tint, created_at'
+  'room_id, tenant_id, name, slug, visibility, mode, cap, guest_build, door_price, xp_ref, round_started_at, pinned_at, room_group, room_icon, room_tint, created_at'
 
 type Row = {
   room_id: string
@@ -86,6 +91,7 @@ type Row = {
   mode: string
   cap: number | null
   guest_build: boolean
+  door_price: number | null
   xp_ref: string | null
   round_started_at: string | null
   pinned_at: string | null
@@ -124,6 +130,9 @@ function toView(row: Row): RoomView {
     // value this build cannot read must not be what silently stops a room
     // full of people building.
     guestBuild: row.guest_build !== false,
+    // Null for a row written before doors could charge. Free, which is what
+    // those rooms were.
+    doorPrice: row.door_price ?? 0,
     createdAt: row.created_at,
   }
 }

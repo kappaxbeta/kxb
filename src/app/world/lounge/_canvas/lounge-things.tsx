@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { useRainbowScenery } from '@/app/world/_canvas/rainbow'
 import { useMediaQuery } from '@/app/world/lounge/_hud/touch-controls'
 import { useSceneRefs } from '@/app/world/lounge/_scene/scene-refs'
-import { cellsIn, type ThingSolids } from '@/app/world/lounge/_sim/thing-solids'
+import { cellsIn, deckCells, type ThingSolids } from '@/app/world/lounge/_sim/thing-solids'
 import {
   BOB_HEIGHT,
   BOB_RATE,
@@ -23,12 +23,15 @@ import { blockKey } from '@/domain/lounge/events'
 import { GRAVITY } from '@/app/world/lounge/_sim/physics'
 import type { BlockMap } from '@/app/world/lounge/_scene/scene-types'
 import { EYE_HEIGHT } from '@/app/world/lounge/_sim/physics'
+import { itemLook, type ItemLook } from '@/domain/thingiverse/craft'
+import { ThingShots } from '@/app/world/lounge/_canvas/thing-shots'
+import { offsetAt } from '@/domain/thingiverse/motion'
 import { lookOf } from '@/domain/thingiverse/states'
 import { useThingLife } from '@/app/world/lounge/_hooks/use-thing-life'
 import { barOver, type Life } from '@/app/world/lounge/_sim/thing-life'
 import { modelUrlFor } from '@/domain/thingiverse/models'
 import { PIECE_ORIGIN, pieceTransform } from '@/domain/thingiverse/placement'
-import { toGrid } from '@/domain/thingiverse/thing-commands'
+import { toPlace } from '@/domain/thingiverse/thing-commands'
 
 /**
  * Forwarded, because this is where it used to live.
@@ -40,7 +43,12 @@ import { toGrid } from '@/domain/thingiverse/thing-commands'
  * take it from the domain, where the composer reads it too.
  */
 export { pieceTransform }
-import type { BlueprintPart, BlueprintSpec } from '@/domain/thingiverse/blueprint'
+import {
+  colliderOf,
+  socketsOf,
+  type BlueprintPart,
+  type BlueprintSpec,
+} from '@/domain/thingiverse/blueprint'
 import { playing, WHOLE } from '@/domain/thingiverse/timeline'
 import type { ThingView } from '@/domain/thingiverse/queries'
 
@@ -108,6 +116,149 @@ function measure(
   return box.isEmpty() ? null : box
 }
 
+/**
+ * One item standing on a thing, already resolved to something drawable.
+ *
+ * The socket is carried through rather than dropped after the position is
+ * worked out, because it is the identity of the *place* - and the place is what
+ * keeps its React key stable while what is on it changes.
+ */
+export interface HeldItem {
+  socket: string
+  model: string
+  /** Where the socket is, in the thing's own frame, in cells. */
+  at: { x: number; y: number; z: number }
+  turn: number
+  scale: number
+}
+
+/** Shared, so a thing holding nothing does not rebuild a memo every render. */
+const NOTHING_HELD: readonly HeldItem[] = []
+
+/**
+ * Scratch, because `worldBox` is now on a frame loop for anything that moves
+ * and a fresh `Group` per thing per frame is garbage nobody needs. Safe as
+ * module state: every caller is synchronous and reads the result before
+ * yielding.
+ */
+const SCRATCH_HOLDER = new THREE.Group()
+const SCRATCH_BOX = new THREE.Box3()
+/**
+ * A second one, for the union a multi-box mover's deck is taken over.
+ *
+ * Its own rather than shared with `SCRATCH_BOX`, which `worldBox` hands back
+ * and which the loop is still reading from when the union is taken.
+ */
+const SCRATCH_DECK = new THREE.Box3()
+
+function worldBox(
+  bounds: THREE.Box3,
+  position: [number, number, number],
+  rotation: [number, number, number],
+  scale: number,
+): THREE.Box3 {
+  SCRATCH_HOLDER.position.set(...position)
+  SCRATCH_HOLDER.rotation.set(...rotation)
+  SCRATCH_HOLDER.scale.setScalar(scale)
+  SCRATCH_HOLDER.updateMatrixWorld(true)
+
+  return SCRATCH_BOX.copy(bounds).applyMatrix4(SCRATCH_HOLDER.matrixWorld)
+}
+
+/**
+ * The boxes this thing is solid in, in its own frame.
+ *
+ * One, and it is the measured bounds, unless somebody drew better ones - see
+ * `BlueprintSpec.collider`, which argues why an arch's measured box is the
+ * worst answer available. The blueprint's boxes are a *replacement* rather than
+ * an addition: a thing blocked out by hand is blocked out by hand, and adding
+ * the measured box back would put the wall straight back across the opening the
+ * boxes were drawn to open.
+ *
+ * Returns empty when there is nothing to be solid in, which is the case for a
+ * model that has not loaded yet - and an empty list stops nobody, which is the
+ * right way round for a thing nobody can see.
+ */
+function solidBoxes(
+  spec: BlueprintSpec,
+  bounds: THREE.Box3 | null,
+): THREE.Box3[] {
+  const drawn = colliderOf(spec)
+  if (drawn === 'none') return []
+  if (drawn !== 'auto') {
+    return drawn.map((box) => {
+      const x = box.x ?? 0
+      const y = box.y ?? 0
+      const z = box.z ?? 0
+      return new THREE.Box3(
+        new THREE.Vector3(x, y, z),
+        new THREE.Vector3(x + box.w, y + box.h, z + box.d),
+      )
+    })
+  }
+  return bounds ? [bounds] : []
+}
+
+/** The cells a world box fills, with a mover's partial top cell left out. */
+function cellsOf(box: THREE.Box3, moving: boolean): string[] {
+  const flat = {
+    minX: box.min.x,
+    minY: box.min.y,
+    minZ: box.min.z,
+    maxX: box.max.x,
+    maxY: box.max.y,
+    maxZ: box.max.z,
+  }
+  return moving ? deckCells(flat) : cellsIn(flat)
+}
+
+/**
+ * The cells a drawn thing covers, in the world.
+ *
+ * Its own function because two callers need the same answer and one of them is
+ * a frame loop: a thing that stands still registers its footprint once, and a
+ * lift re-registers whenever its cells change. A second copy of this arithmetic
+ * is a moving platform whose collision is subtly not where its picture is.
+ *
+ * `applyMatrix4` takes the eight corners rather than the two, which is what
+ * keeps a bench turned across a doorway blocking the doorway rather than the
+ * wall it was modelled facing.
+ */
+function footprint(
+  boxes: readonly THREE.Box3[],
+  position: [number, number, number],
+  rotation: [number, number, number],
+  scale: number,
+  /**
+   * Whether this thing moves, and so must not claim the cell its top sits in.
+   *
+   * A bench may: its top is rounded up to the boundary above it, you stand on
+   * that boundary, and being three centimetres higher than the picture is
+   * something nobody has ever noticed. A lift may not, and the reason is that
+   * the cell it would claim is the cell the *rider* is standing in. Its deck is
+   * at 1.3, the cell from 1 to 2 is claimed, so a body with its feet at 1.3 is
+   * inside solid geometry - which is either a shove out of the platform or a
+   * body frozen on top of it, depending on which rule reaches it first.
+   *
+   * So a moving thing is solid only up to the last whole cell beneath its
+   * surface, and the surface itself is published as a deck instead - see
+   * `ThingSolids.ride`. What this costs is that the top slab of a lift is not a
+   * wall: you can walk into the side of the part of it that pokes above the
+   * last full cell. That is at most one cell of a platform you are meant to be
+   * standing on rather than pressed against, and it is a far smaller lie than
+   * the one it replaces.
+   */
+  moving = false,
+): string[] {
+  const keys: string[] = []
+  // A list because a hand-drawn collider is a list - an arch has two legs. One
+  // box in it is the ordinary case and costs one pass either way; the union is
+  // taken over cells rather than over boxes, which is what lets the air between
+  // the legs stay air.
+  for (const box of boxes) keys.push(...cellsOf(worldBox(box, position, rotation, scale), moving))
+  return keys
+}
+
 function ThingModel({
   spec,
   thing,
@@ -118,6 +269,7 @@ function ThingModel({
   loose,
   onSettled,
   life,
+  holding,
 }: {
   spec: BlueprintSpec
   thing: { id: string; x: number; y: number; z: number; facing: number; scale: number }
@@ -158,6 +310,22 @@ function ThingModel({
    * burger got a fiftieth of a second more cooked. See `useThingLife`.
    */
   life?: (id: string) => Life | undefined
+  /**
+   * What is standing on it right now, already resolved to models.
+   *
+   * The words on a table are the machine's (`Life.slots`) and the models behind
+   * them are the shelf's, and neither is this component's - so the join is done
+   * once, above, and what arrives here is the same shape a `parts` entry has.
+   * That is the whole trick: a bun on a board is drawn by the code that already
+   * draws a crate bolted to a stall, at the socket the slot named.
+   *
+   * Deliberately *not* folded into `spec.parts`. A part is a fact about the
+   * kind of thing - it is in the log, it is on every one of them - and what is
+   * on this table is a fact about this minute. Merging them would put the
+   * burger in the blueprint's own bounds, and a board whose footprint grew when
+   * somebody put a bun on it is a board that pushes people out of the kitchen.
+   */
+  holding?: readonly HeldItem[]
 }) {
   /**
    * Whether this reader has asked for less motion.
@@ -184,21 +352,27 @@ function ThingModel({
    * That is the right way round anyway: half a stall standing in a room is not
    * a loading state anybody can read.
    */
+  const held = holding ?? NOTHING_HELD
   const urls = useMemo(
-    () => [spec.model, ...parts.map((part) => part.model)].map(modelUrlFor),
+    () =>
+      [spec.model, ...parts.map((part) => part.model), ...held.map((one) => one.model)].map(
+        modelUrlFor,
+      ),
     // `parts` is rebuilt when `spec.parts` is, which is what actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [spec.model, spec.parts],
+    [spec.model, spec.parts, held],
   )
   const loaded = useGLTF(urls)
   const animations = loaded[0]?.animations ?? []
   const { position, rotation, scale } = thingTransform(spec, thing)
   const skin = useRainbowScenery()
-  const { playerRef } = useSceneRefs()
+  const { playerRef, thingSpotsRef } = useSceneRefs()
 
   const group = useRef<THREE.Group>(null)
   /** Whether `touch` has already fired for this approach. See `firing`. */
   const latched = useRef(false)
+  /** Which cells the footprint was last registered as. See the frame loop. */
+  const covered = useRef('')
   /** Seconds since the scene started, for `bob`. Its own clock, so a thing
    *  summoned mid-session starts at the bottom of its bob rather than wherever
    *  the world's clock happened to be. */
@@ -286,6 +460,36 @@ function ThingModel({
   }, [loaded, spec.model, spec.scale, spec.parts, ghost, selected, skin])
 
   /**
+   * And what is standing on it, drawn the same way and measured separately.
+   *
+   * Its own memo rather than more entries in `pieces`, because `pieces` is what
+   * `bounds` is the union of - and the bounds are the footprint, the carry box
+   * and where the bar hangs. A burger must not widen the table it is on, must
+   * not be inside the box somebody picks the table up by, and must not push the
+   * health bar into the ceiling.
+   *
+   * The models come after the root and the parts in `urls`, so the offset is
+   * exactly how many of those there are.
+   */
+  const carried = useMemo(() => {
+    const first = 1 + parts.length
+    return held.map((one, index) => {
+      const copy = (loaded[first + index]?.scene ?? new THREE.Group()).clone(true)
+      // No ghosting: an item is only ever drawn on a real thing, and the
+      // preview under the crosshair carries nothing. The world's skin is
+      // applied for the same reason it is above - a rainbow room is a rainbow
+      // room, and a bun that stayed beige would be the one thing in it that
+      // missed the memo.
+      if (skin) {
+        copy.traverse((node) => {
+          if (node instanceof THREE.Mesh) node.material = skin
+        })
+      }
+      return { object: copy, placed: pieceTransform(one.model, one.at, one.turn, one.scale) }
+    })
+  }, [loaded, held, parts.length, skin])
+
+  /**
    * All of it, as one box in the thing's own frame.
    *
    * The union of the pieces rather than the root's own bounds, which is what
@@ -302,6 +506,19 @@ function ThingModel({
   }, [pieces])
 
   /**
+   * And the boxes it is *solid* in, which is the same box unless somebody drew
+   * better ones. See `solidBoxes`.
+   *
+   * Memoised on the drawn list rather than on the spec, so a keystroke in the
+   * composer's clip field does not re-register every footprint in the room.
+   */
+  const solid = useMemo(
+    () => solidBoxes(spec, bounds),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bounds, spec.blocking, spec.collider],
+  )
+
+  /**
    * Report what this fills, once it is drawn.
    *
    * Measured from the *cloned and transformed* object rather than from the
@@ -316,33 +533,19 @@ function ThingModel({
   useEffect(() => {
     if (!solids || ghost || !bounds) return
 
-    const holder = new THREE.Group()
-    holder.position.set(...position)
-    holder.rotation.set(...rotation)
-    holder.scale.setScalar(scale)
-    holder.updateMatrixWorld(true)
-
-    // The local box, turned and dropped where the thing stands. `applyMatrix4`
-    // takes the eight corners rather than the two, which is what keeps a bench
-    // turned across a doorway blocking the doorway rather than the wall it was
-    // modelled facing.
-    const box = bounds.clone().applyMatrix4(holder.matrixWorld)
-
-    solids.set(thing.id, cellsIn({
-      minX: box.min.x,
-      minY: box.min.y,
-      minZ: box.min.z,
-      maxX: box.max.x,
-      maxY: box.max.y,
-      maxZ: box.max.z,
-    }))
+    // At home, which is where a thing with a trip starts and where one without
+    // a trip stays. The frame loop takes it from here for anything that moves,
+    // and `covered` is cleared so its first frame re-registers rather than
+    // inheriting a key from the last blueprint this id wore.
+    covered.current = ''
+    solids.set(thing.id, footprint(solid, position, rotation, scale, !!spec.motion))
 
     return () => solids.drop(thing.id)
     // `position`/`rotation` are fresh arrays every render, so the contents are
     // named instead - the box only has to be recomputed when the thing has
     // actually moved, turned, resized or changed model.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solids, ghost, bounds, thing.id, thing.x, thing.y, thing.z, thing.facing, scale])
+  }, [solids, ghost, solid, thing.id, thing.x, thing.y, thing.z, thing.facing, scale, spec.motion])
 
   /**
    * The clips the *model* carries, for the `play` deed.
@@ -407,6 +610,37 @@ function ThingModel({
    * the scene sixty times a second, which is the trap every ref in this folder
    * exists to avoid.
    */
+  /**
+   * Where this thing is *drawn*, for anybody outside this component.
+   *
+   * The vector itself rather than a copy of it, and once rather than per frame:
+   * three mutates `node.position` in place, so a reader holding this reference
+   * is reading the current position by construction. A per-frame copy would be
+   * the same number one frame later and an allocation sixty times a second.
+   *
+   * It matters because the row and the picture disagree. `thing.x/y/z` is where
+   * this was *put*; a kicked ball is somewhere else entirely until it stops and
+   * writes itself down. See <Usables>, which was measuring the reach to the
+   * former and so kept "E to use" at the spot the ball was summoned at.
+   *
+   * Not for a ghost: the preview under a summon is not a thing anybody can
+   * reach, and publishing it would put a second entry under an id that is about
+   * to belong to the real one.
+   */
+  useEffect(() => {
+    const node = group.current
+    const spots = thingSpotsRef.current
+    if (!node || ghost) return
+
+    spots.set(thing.id, node.position)
+    return () => {
+      // Only if it is still ours: a re-mount installs the new node's vector
+      // before the old one's cleanup runs, and deleting then would leave the
+      // thing unreachable for as long as it stands there.
+      if (spots.get(thing.id) === node.position) spots.delete(thing.id)
+    }
+  }, [thingSpotsRef, thing.id, ghost])
+
   useFrame((_, delta) => {
     const node = group.current
     if (!node || ghost) return
@@ -417,10 +651,19 @@ function ThingModel({
     if (!still) clock.current += delta
 
     const player = playerRef.current
+    /*
+      To where it is, not to where it was put.
+
+      This read `position` - the transform off the row - which is the same bug
+      the prompt had: a ball that has been kicked across the room still fired
+      its `touch` deeds at the cell it was summoned in, and fired nothing where
+      it actually was. `node.position` is the drawn one, which for everything
+      that does not move is the same number.
+    */
     const distance = Math.hypot(
-      position[0] - player.x,
-      position[1] - (player.y - EYE_HEIGHT),
-      position[2] - player.z,
+      node.position.x - player.x,
+      node.position.y - (player.y - EYE_HEIGHT),
+      node.position.z - player.z,
     )
 
     const fired = firing(spec.actions, distance, latched.current)
@@ -524,22 +767,30 @@ function ThingModel({
       // rather than sixty a second while it rolls.
       if (rolling.current && !step.moving) {
         /*
-          On the grid before it is written down.
+          On the grid, and inside the world, before it is written down.
 
           A ball stops wherever it stops - 1.2493 - and the command refuses
           anything that is not a multiple of a tenth, on purpose: the log is
           immutable and a position that arrived as 3.0000000000000004 is in the
           history forever. Refusing is right for a position somebody *typed*
-          and useless for one that was *measured*, so the rounding happens here,
+          and useless for one that was *measured*, so the tidying happens here,
           at the edge that did the measuring. It surfaced as "A height must be a
           multiple of 0.1 cells" over a room, which is a sentence with nothing
           the reader could do about it.
+
+          The height needs the same treatment and did not get it the first time.
+          `stepBall` rests a ball on the sim's one fixed radius; `middle` is the
+          drawn half-height of whichever model is rolling, and those agree only
+          at scale 1. A ball bigger than the sim's radius settles at a negative
+          cell, and the room said "Too small: expected number to be >=0" at
+          somebody who had done nothing but kick it. `toPlace` bounds as well as
+          rounds.
         */
-        const came = {
-          x: toGrid(step.ball.x - 0.5),
-          y: toGrid(step.ball.y - middle),
-          z: toGrid(step.ball.z - 0.5),
-        }
+        const came = toPlace({
+          x: step.ball.x - 0.5,
+          y: step.ball.y - middle,
+          z: step.ball.z - 0.5,
+        })
         if (onSettled && drifted(thing, came)) onSettled(came)
       }
       rolling.current = step.moving
@@ -613,6 +864,102 @@ function ThingModel({
         : fallen.current
     }
 
+    /**
+     * And where its trip has got to.
+     *
+     * Read out of the machine rather than off a local clock, which is the whole
+     * difference between this and `bob`: the phase is the driver's, published
+     * four times a second and run forward locally in between, so a lift is in
+     * the same place on every screen. See `@/domain/thingiverse/motion`.
+     *
+     * Applied *after* the fall, so a crusher with a body still finds the floor
+     * and then rides its own trip up from it.
+     */
+    if (spec.motion) {
+      const shift = offsetAt(spec.motion, life?.(thing.id)?.phase ?? 0)
+      node.position.x = position[0] + shift.x
+      node.position.y += shift.y
+      node.position.z = position[2] + shift.z
+
+      /*
+        The footprint follows, but only when it has actually moved a cell.
+
+        Re-registering is O(everything standing in the room) - `ThingSolids.drop`
+        rebuilds the occupied set from what is left, deliberately, because two
+        things may share a cell. Doing that sixty times a second for one lift
+        would cost more than the rest of this loop put together, and it would
+        buy nothing anybody could see: the collision grid is cells, so a
+        platform that has moved a tenth of a cell covers exactly what it did
+        before.
+      */
+      if (solids && solid.length > 0 && !ghost) {
+        /*
+          Every box it is solid in, at where it has moved to this frame.
+
+          The deck is their union, and that is an approximation with a name: a
+          two-legged thing that also *moves* would offer a rider the air between
+          its legs as a surface. Nothing in the packs is both - a lift is a slab
+          and an arch stands still - and the alternative is a deck per box,
+          which is a second index on `ThingSolids` for a case that does not
+          exist yet. The cells are not approximated: they are taken box by box,
+          so the legs are the only part that stops you.
+        */
+        const at: [number, number, number] = [
+          node.position.x,
+          node.position.y,
+          node.position.z,
+        ]
+        const keys: string[] = []
+        const deck = SCRATCH_DECK.makeEmpty()
+
+        for (const local of solid) {
+          const box = worldBox(local, at, rotation, scale)
+          deck.union(box)
+          keys.push(...cellsOf(box, true))
+        }
+
+        /*
+          The deck, every frame, because this is the number a rider stands on
+          and rounding it is the whole bug: a platform drawn at 1.3 whose
+          surface is reported at 1.0 slides up through your feet and then
+          teleports you a cell when it crosses 1.5. One `Map.set` of six
+          numbers - none of the `drop` rebuild below.
+        */
+        solids.ride(thing.id, {
+          minX: deck.min.x,
+          maxX: deck.max.x,
+          minZ: deck.min.z,
+          maxZ: deck.max.z,
+          top: deck.max.y,
+        })
+
+        /*
+          The footprint follows, but only when the cells have actually changed.
+
+          Re-registering is O(everything standing in the room) - `ThingSolids.drop`
+          rebuilds the occupied set from what is left, deliberately, because two
+          things may share a cell. Doing that sixty times a second for one lift
+          would cost more than the rest of this loop put together.
+
+          Compared against the cells themselves rather than against a rounded
+          offset, which is what this used to do and what left a *descending*
+          lift's collision hanging in the air above it: the cells were last
+          written when the offset crossed a rounding boundary, so for the half
+          cell after that the platform had fallen out from under a set that
+          still claimed the space the rider was standing in. `escapeFrom` then
+          read a rider standing correctly on the deck as a body buried in
+          geometry and shoved it out - which is the second half of "i get lifted
+          but i am not on the object". Computing the keys is a handful of string
+          joins; only `set` is expensive, and it still runs about once a cell.
+        */
+        const cell = keys.join('|')
+        if (cell !== covered.current) {
+          covered.current = cell
+          solids.set(thing.id, keys)
+        }
+      }
+    }
+
     if (!clips) return
 
     /*
@@ -657,6 +1004,22 @@ function ThingModel({
       {pieces.map((piece, index) => (
         <group
           key={index}
+          position={piece.placed.position}
+          rotation={piece.placed.rotation}
+          scale={piece.placed.scale}
+        >
+          <primitive object={piece.object} />
+        </group>
+      ))}
+
+      {/*
+        What is on it. Keyed by socket rather than by index, so taking the bun
+        out of the middle of three does not renumber the two beside it into each
+        other's models - the same argument `Socket` makes at length about names.
+      */}
+      {carried.map((piece, index) => (
+        <group
+          key={held[index]?.socket ?? index}
           position={piece.placed.position}
           rotation={piece.placed.rotation}
           scale={piece.placed.scale}
@@ -1138,6 +1501,10 @@ export function LoungeThings({
   onMoved,
   live,
   fighting = false,
+  onKill,
+  items,
+  onHit,
+  onPush,
 }: {
   things: ThingView[]
   selectedId: string | null
@@ -1188,9 +1555,38 @@ export function LoungeThings({
    * to enforce, kept here because the mode is the room's fact.
    */
   fighting?: boolean
+  /**
+   * We broke something that had health, and it may be worth a coin.
+   *
+   * Handed in rather than called from here, because paying is a space's
+   * business and this component draws things - the same split `onMoved` keeps.
+   * Only reaches the simulation in battle mode: in creative the E that would
+   * swing is the E that picks the crate up, so there is nothing to be paid for.
+   */
+  onKill?: (thingId: string) => void
+  /**
+   * How to draw an item word, out of the shelf.
+   *
+   * Handed in rather than looked up here, because the shelf belongs to
+   * `use-things` outside the Canvas and this is inside one. Absent in a scene
+   * with no shelf to ask - a still, the composer's stage - where a table draws
+   * as a table and whatever is on it is not drawn, which is the same shape
+   * every other missing-source case in this file takes.
+   */
+  items?: ReadonlyMap<string, ItemLook>
+  /**
+   * What a shot costs whoever it was aimed at, when that is us.
+   *
+   * Passed down to `<ThingShots>` rather than applied here: our own health is
+   * `useCombat`'s, which lives outside the Canvas, and the rule that keeps two
+   * browsers agreeing is that only the person who was hit may write to it.
+   */
+  onHit?: (damage: number, from: string) => void
+  /** And what a shove from one does to us. See `WeaponSpec.push`. */
+  onPush?: (x: number, z: number, lift: number) => void
 }) {
   const { playerRef, transformsRef, dashRef, kickRef } = useSceneRefs()
-  const { states, readLife } = useThingLife({
+  const { states, held, readLife, takeShots } = useThingLife({
     things,
     live,
     playerRef,
@@ -1198,10 +1594,32 @@ export function LoungeThings({
     dashRef,
     kickRef,
     fighting,
+    // Battle mode only. A crate knocked over while somebody is decorating is
+    // not a kill, and the room already says so - see `fighting`.
+    onKill: fighting ? onKill : undefined,
   })
 
   return (
     <>
+      {/*
+        Anything in the air. Outside the per-thing map because a bullet outlives
+        the frame it was fired on and belongs to the room rather than to the
+        turret - and because a thing that has since been dismissed should not
+        take its shot out of the sky with it.
+      */}
+      <ThingShots
+        things={things}
+        fired={takeShots}
+        conn={live?.conn ?? 'me'}
+        /*
+          Only where hitting is a thing that happens. In creative mode a turret
+          is a turret you can walk up to, which is the same call the rest of the
+          fight block makes - see `fighting`.
+        */
+        onHit={fighting ? onHit : undefined}
+        onPush={fighting ? onPush : undefined}
+      />
+
       {things.map((thing) => {
         // A row whose blueprint has not projected yet, or whose space's shelf
         // was rebuilt. Skipped rather than drawn as something else: a grass
@@ -1241,10 +1659,33 @@ export function LoungeThings({
             ? base
             : { ...base, model: look.model, clip: look.clip }
 
+        /*
+          What is on it, joined here because this is the one place that has both
+          halves: the machine's slots (`held`, out of the hook) and the shelf's
+          answer to what a word looks like (`items`, out of the scene).
+
+          A word the shelf has never heard of draws nothing rather than a
+          placeholder. That is the same call `resolveSummon` makes and the same
+          one every clip name makes: the fix is to draw a blueprint called
+          "bun", and a stand-in cube would hide the fact that nobody has.
+        */
+        const on = held[thing.id]
+        const holding =
+          on && items && on.length > 0
+            ? on.flatMap(([socket, word]) => {
+                const look = itemLook(items, word)
+                if (!look) return []
+                const at = socketsOf(base).find((one) => one.name === socket)
+                if (!at) return []
+                return [{ socket, model: look.model, at: at.at, turn: at.turn, scale: look.scale }]
+              })
+            : undefined
+
         return (
           <OneThing
             key={thing.id}
             spec={spec}
+            holding={holding}
             life={readLife}
             thing={thing}
             selected={thing.id === selectedId}

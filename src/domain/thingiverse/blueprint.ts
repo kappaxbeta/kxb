@@ -1,6 +1,14 @@
-import { bodyProblems, BODY_LIMITS, type BodySpec } from '@kxb/xp/blueprints'
+import {
+  bodyProblems,
+  BODY_LIMITS,
+  type BodySpec,
+  MAX_COLLIDER_BOXES,
+  type PlacementBox,
+} from '@kxb/xp/blueprints'
 import { craftProblems, MAX_PRICE, type CraftSpec } from '@/domain/thingiverse/craft'
 import { fightProblems, type FightSpec } from '@/domain/thingiverse/fight'
+import { holdProblems, type HoldSpec } from '@/domain/thingiverse/hold'
+import { motionProblems, type MotionSpec } from '@/domain/thingiverse/motion'
 import { knownModel } from '@/domain/thingiverse/models'
 import { statesProblems, type States } from '@/domain/thingiverse/states'
 import { timelineProblems, type Timeline } from '@/domain/thingiverse/timeline'
@@ -289,9 +297,42 @@ export interface UseSpec {
      * is a seat that must be re-measured every time the model changes.
      */
     socket?: string
+    /**
+     * What the body plays while it is in *this* seat. Absent is the block's
+     * `loop`, which is what every seat played before this field existed.
+     *
+     * -------------------------------------------------------------------------
+     * Why a seat and not just the block
+     * -------------------------------------------------------------------------
+     * Because the seats of one thing are rarely the same posture. A kart's
+     * driver holds a wheel and the passenger holds on; a bench seats three
+     * people the same way; a two-person swing has one pushing and one sitting.
+     * One clip for all of them is right for the bench and wrong for the other
+     * two, and the bench is the case that needs no field at all - it inherits.
+     *
+     * Only the loop, deliberately. `enter` and `leave` are *moments* - the
+     * getting in and the getting out - and a moment is the same wherever you
+     * sat: you stand, you turn, you are in it. Making them per-seat would be
+     * three fields on every seat of which two are always the same, which is the
+     * shape a form grows when nobody has decided what the field is for.
+     */
+    clip?: string
   }[]
   /** Extra animations, on keys, while you are in it. See `UseInput`. */
   inputs: readonly UseInput[]
+}
+
+/**
+ * What the body plays while it is in one particular seat.
+ *
+ * The seat's own if it has one, and the block's otherwise - stated once, here,
+ * because four callers ask it and they must agree: getting in, getting behind
+ * the wheel, coming back from a keyed animation, and the composer's preview. A
+ * fifth copy of `?? use.loop` is a seat that looks right in the editor and
+ * stands up in the world.
+ */
+export function seatClip(use: UseSpec, index: number): string | null {
+  return use.seats[index]?.clip ?? use.loop
 }
 
 /** What a fresh `use` block is: you get in, you are in it, you get out. */
@@ -521,14 +562,61 @@ export interface BlueprintSpec {
   /**
    * Whether you can walk through it.
    *
-   * A boolean rather than XP's `ColliderSpec`, and this is the deliberate
-   * narrowing: `auto` and `none` are the only two of that type's three cases a
-   * room can offer, because the third - a hand-written box - is measured
-   * against a model's own bounds in a file only an editor shows you. `true` is
-   * `auto`, `false` is `none`, and `colliderOf` below is the translation for
-   * whoever needs the engine's word for it.
+   * A boolean rather than XP's `ColliderSpec`, and it stays one: `blocking` is
+   * the question somebody standing in the room is asking - *does this stop me*
+   * - and the answer to it is yes or no. Where it stops you is `collider`
+   * below, which is a different question and only worth asking about the
+   * handful of things the measured answer is wrong for. `colliderOf` puts the
+   * two back together in the engine's vocabulary.
    */
   blocking: boolean
+  /**
+   * Where it stops you, when the measured footprint is not what you meant.
+   *
+   * ---------------------------------------------------------------------------
+   * What was wrong with measuring
+   * ---------------------------------------------------------------------------
+   * A blocking thing is solid in the cells its drawn bounds cover - see
+   * `_sim/thing-solids`, which measures the model because the packs ship no
+   * bounds to look up. That is right for a crate and wrong for a surprising
+   * amount of what a room is furnished with, always in the same direction: the
+   * box is the whole model, and a model is rarely a box.
+   *
+   *   - an arch, a gateway, a doorframe: solid across the opening you are meant
+   *     to walk through, because the opening is inside the bounds.
+   *   - a table, a four-poster, a swing: solid from the floor to the top,
+   *     because the legs and the top share one box and the air between them is
+   *     in it too.
+   *   - a lamppost, a parasol, a signpost: a pole two centimetres across
+   *     claiming a whole cell, because the shade at the top is a metre wide.
+   *
+   * None of those is a bug in the measuring. They are the measurement being
+   * asked a question it cannot answer, and the answer it gives is the worst one
+   * available - the invisible wall people report as "the collide box is weird".
+   *
+   * ---------------------------------------------------------------------------
+   * Why a list, and why it is the *same* list an XP placement gets
+   * ---------------------------------------------------------------------------
+   * One box cannot say "solid here and here, air in between", and that gap is
+   * the whole point of drawing one by hand: an arch has two legs. So this is a
+   * list, capped at `MAX_COLLIDER_BOXES`, and it is deliberately `PlacementBox`
+   * rather than a shape of our own - the same corner-and-size convention, the
+   * same cap, the same rotation story - because a person who has drawn a
+   * collider in the XP editor has learned this idea already and must not have to
+   * learn it twice. See `@kxb/xp/blueprints`, which argues the convention out at
+   * length.
+   *
+   * The frame is the thing's own, in cells, before it is turned or dropped into
+   * a cell - so a bench turned across a doorway blocks the doorway, exactly as
+   * its measured box already did.
+   *
+   * Absent is the measured footprint, which is what every blueprint drawn before
+   * this existed already meant and what nearly every one of them still wants.
+   * An empty list means the same as absent rather than "solid nowhere": walking
+   * through it is `blocking: false`, that is the only spelling of it, and two
+   * spellings of one state is how a round trip grows a field nobody wrote.
+   */
+  collider?: readonly PlacementBox[]
   /**
    * How it moves on its own, or null for scenery.
    *
@@ -612,6 +700,26 @@ export interface BlueprintSpec {
    */
   craft?: CraftSpec
   /**
+   * Where it goes on its own, and how long it takes. See `./motion`.
+   *
+   * Optional, like every block after the first. Present makes the thing a lift,
+   * a crusher or a sliding platform - and, unlike `bob` and `spin`, makes where
+   * it is a fact the whole room agrees on rather than a drawing each client
+   * does for itself. That is the difference between decoration and something
+   * you can be standing on.
+   */
+  motion?: MotionSpec
+  /**
+   * How it sits in a hand, when somebody is carrying it. See `./hold`.
+   *
+   * Optional, exactly as every block added after the first is: a blueprint
+   * drawn before grips existed has no such key, and absent means what it has
+   * always meant - this is furniture, and nobody picks it up. Present makes it
+   * a thing that is *drawn* in the hand of whoever has it in their pocket, and
+   * - if it also has a weapon - a thing they can swing or fire.
+   */
+  hold?: HoldSpec
+  /**
    * What summoning one costs, in coins. Absent is free.
    *
    * The play money the homestead runs on - see `MAX_PRICE`. Charged by the
@@ -663,9 +771,82 @@ export function freshSpec(model: string): BlueprintSpec {
   }
 }
 
-/** The engine's word for `blocking`, for whoever is talking to a body sim. */
-export function colliderOf(spec: BlueprintSpec): 'auto' | 'none' {
-  return spec.blocking ? 'auto' : 'none'
+/**
+ * The engine's word for how this thing collides, for whoever is talking to a
+ * body sim.
+ *
+ * Three answers where there were two, and the order they are asked in is the
+ * design: `blocking: false` wins over any boxes somebody drew, because turning
+ * a thing walk-through is how you say "not any more" and having to delete the
+ * boxes first would make the switch a lie half the time.
+ */
+export function colliderOf(
+  spec: BlueprintSpec,
+): 'auto' | 'none' | readonly PlacementBox[] {
+  if (!spec.blocking) return 'none'
+  const drawn = spec.collider ?? []
+  return drawn.length > 0 ? drawn : 'auto'
+}
+
+/**
+ * How far a hand-drawn box may reach, in cells.
+ *
+ * The offsets share `MAX_PART_OFFSET` with the pieces, because a box that
+ * cannot reach a piece is a box that cannot cover it. The size is its own
+ * number and larger than the offset on purpose: the one box everybody draws
+ * first is the one that spans the whole thing, and a market stall three cells
+ * across needs a box three cells across drawn from a corner one and a half out.
+ */
+export const MAX_COLLIDER_SIZE = 16
+
+/**
+ * The smallest a box may be.
+ *
+ * A centimetre, which is the same bite `cellsIn` takes out of the edges - below
+ * that the box rounds away to nothing and is a collider that collides with
+ * nobody, which looks exactly like the field not working.
+ */
+export const MIN_COLLIDER_SIZE = 0.01
+
+/**
+ * Whatever is wrong with the drawn boxes, said in words.
+ *
+ * Its own function for the reason `partProblems` is: the composer draws them as
+ * their own panel and wants to mark that panel, and it is asked on every
+ * keystroke of a half-typed number.
+ */
+export function colliderProblems(spec: {
+  collider?: readonly PlacementBox[]
+}): string[] {
+  const problems: string[] = []
+  const boxes = spec.collider ?? []
+
+  if (boxes.length > MAX_COLLIDER_BOXES) {
+    problems.push(`a thing is blocked out with at most ${MAX_COLLIDER_BOXES} boxes`)
+  }
+
+  for (const box of boxes) {
+    for (const [axis, size] of [
+      ['width', box.w],
+      ['height', box.h],
+      ['depth', box.d],
+    ] as const) {
+      if (!Number.isFinite(size) || size < MIN_COLLIDER_SIZE || size > MAX_COLLIDER_SIZE) {
+        problems.push(
+          `a box's ${axis} is ${MIN_COLLIDER_SIZE}-${MAX_COLLIDER_SIZE} cells`,
+        )
+      }
+    }
+
+    for (const offset of [box.x, box.y, box.z]) {
+      if (offset === undefined) continue
+      if (!Number.isFinite(offset) || Math.abs(offset) > MAX_PART_OFFSET) {
+        problems.push(`a box sits within ${MAX_PART_OFFSET} cells of the thing`)
+      }
+    }
+  }
+
+  return problems
 }
 
 /** Whether this thing is handed to the body simulation at all. */
@@ -771,6 +952,8 @@ export function blueprintProblems(spec: BlueprintSpec): string[] {
 
   problems.push(...partProblems(spec))
 
+  problems.push(...colliderProblems(spec))
+
   if (spec.clip !== null && spec.clip.trim() === '') {
     // Null is "no clip" and is the only spelling of it. An empty string is the
     // second spelling that a round trip grows a field nobody wrote out of.
@@ -839,6 +1022,10 @@ export function blueprintProblems(spec: BlueprintSpec): string[] {
   }
 
   if (spec.craft) problems.push(...craftProblems(spec.craft))
+
+  if (spec.hold) problems.push(...holdProblems(spec.hold))
+
+  if (spec.motion) problems.push(...motionProblems(spec.motion))
 
   if (spec.price !== undefined) {
     if (!Number.isInteger(spec.price) || spec.price < 0 || spec.price > MAX_PRICE) {
@@ -911,6 +1098,15 @@ export function usingProblems(use: UseSpec): string[] {
     if (seat.socket !== undefined && seat.socket.trim() === '') {
       problems.push('a seat sits on a named socket, or on none')
     }
+    // Absent is "whatever the block loops" and is the only spelling of it - the
+    // same rule the three clips above keep, applied to the field that overrides
+    // one of them.
+    if (seat.clip !== undefined && seat.clip.trim() === '') {
+      problems.push('a seat plays a named clip, or inherits')
+    }
+    if (seat.clip !== undefined && seat.clip.length > MAX_CLIP_NAME) {
+      problems.push(`a clip name must be under ${MAX_CLIP_NAME} characters`)
+    }
   }
 
   if (use.inputs.length > MAX_USE_INPUTS) {
@@ -976,6 +1172,32 @@ export function answersUse(spec: {
 /** The deeds that are meaningless without something to name. */
 export function needsValue(deed: ThingDeed): boolean {
   return deed === 'play' || deed === 'emit' || deed === 'become'
+}
+
+/**
+ * Whether this thing ever shouts a word at the room.
+ *
+ * Asked by the rail, which draws the wiring controls only for things that have
+ * something to wire: a bench with a reach and a list of wires would be two
+ * controls about a thing that never says anything, which is the sort of empty
+ * panel that makes people think a feature does not work.
+ *
+ * Three places a word can come from, and all three count - a state on the way
+ * in (`ThingState.emit`), a slot when something lands in it, and a recipe when
+ * it finishes. The `emit` *deed* is the fourth and is included for the same
+ * reason the others are, even though the room does not run it yet: what this
+ * answers is "is this the kind of thing a wire is for", and a blueprint saying
+ * it shouts is exactly that whether or not the runtime has caught up.
+ */
+export function shouts(spec: {
+  actions?: readonly ThingAction[]
+  states?: States
+  craft?: CraftSpec
+}): boolean {
+  if ((spec.actions ?? []).some((action) => action.deed === 'emit')) return true
+  if (spec.states?.states.some((state) => state.emit !== undefined)) return true
+  if (spec.craft?.slots.some((slot) => slot.emit !== undefined)) return true
+  return spec.craft?.recipes.some((recipe) => recipe.emit !== undefined) ?? false
 }
 
 /** Whether this thing has states, a fight in it, or somewhere to put something. */

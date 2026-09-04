@@ -272,6 +272,33 @@ export function RailTabs({
       }`}
     >
       {/*
+        The money, at the top and above everything.
+
+        It lived here, moved into the Thingiverse panel to sit "next to the
+        things it buys", and has come back - because the premise of that move
+        stopped being true. It was right when a coin bought exactly two things:
+        a seat in the cafe and something off the shelf. A coin now pays to enter
+        a battle, opens a door with a toll on it, buys one more blueprint than
+        the plan holds, and puts a level in front of a reviewer. See
+        `docs/product/economy.md`.
+
+        A number that pays for everything does not belong inside one panel. Down
+        there it was invisible until you opened the shelf, which is precisely
+        when you least need telling - you are about to be shown prices anyway.
+        The moment it matters is *before* you commit to something, and that is
+        the glance at the top of the rail.
+
+        Members only, as it always was: a guest has no homestead and so no
+        purse, and a row that always says nothing is a promise of a feature they
+        do not have.
+      */}
+      {member && (
+        <div className="shrink-0 px-2 pb-2">
+          <PurseRail slug={slug} />
+        </div>
+      )}
+
+      {/*
         The door, above the tools and across all of them.
 
         A guest gets it too - `createBattle` admits guests deliberately, and a
@@ -280,19 +307,6 @@ export function RailTabs({
       */}
       {(hasPlay || thingsDoor !== null) && (
         <div className="flex shrink-0 flex-col gap-2 px-2 pb-2">
-          {/*
-            The purse, above the doors.
-
-            Here rather than in a tab because it is a *number you glance at*
-            rather than a tool you switch to - and the two doors under it are
-            both places you spend it, which is the order somebody reads them in.
-
-            Members only, for the reason the shelf is: a guest has no homestead
-            and so no purse, and a row that always says nothing is a promise of
-            a feature they do not have.
-          */}
-          {member && <PurseRail slug={slug} />}
-
           {hasPlay && (
             <button
               type="button"
@@ -337,7 +351,7 @@ export function RailTabs({
           */}
           {thingsInline && (
             <div className="max-h-[26rem] overflow-y-auto overscroll-contain rounded-xl border border-line/60 py-2">
-              <ThingsRail />
+              <ThingsRail slug={slug} />
             </div>
           )}
         </div>
@@ -415,7 +429,7 @@ export function RailTabs({
 
         {/* Only where it takes the panel. On the drawer it has already been
             drawn under its own button - see `thingsInline`. */}
-        {drawer === 'things' && !thingsInline && <ThingsRail />}
+        {drawer === 'things' && !thingsInline && <ThingsRail slug={slug} />}
 
         {tabsOn && at === 'chat' && <ChatRail />}
 
@@ -428,19 +442,6 @@ export function RailTabs({
               not even be standing in.
             */}
             <RoomsRail slug={slug} rooms={rooms} canManage={canManageRooms} />
-            {/*
-              And the shelf, under the places rather than only at the top of the
-              rail.
-
-              The same button, not a second control: it toggles the same
-              `drawer`, so pressing either closes the other. Here because of what
-              this tab is - the room you are standing in and everything that is
-              true of it - and furnishing it is the next thing anybody does after
-              opening it. Somebody halfway down this tab arranging a room should
-              not have to scroll back past the roster to reach the things they
-              are arranging it with.
-            */}
-            {thingsDoor && <div className="px-1">{thingsDoor}</div>}
             {/*
               The radio, directly under the places and above the switches.
 
@@ -459,10 +460,13 @@ export function RailTabs({
               Two different sounds with two different owners: the radio is one
               track playing for everybody in the space, and this is the loop the
               app plays for *you*. They sit together because from where somebody
-              is standing they are both "what am I listening to", and because
-              the button has nowhere else to be in here - it lives in the screen
-              corner everywhere else, and in a world that corner is over the
-              canvas. See `CornerMusic`.
+              is standing they are both "what am I listening to".
+
+              This is now the only place the switch exists. It used to be here
+              *and* in the corner dock on every page, which was one control in
+              two places - and the corner one had the weaker claim: it sat over
+              the canvas in a world, and everywhere else it offered to stop a
+              loop that only plays inside a space anyway.
             */}
             <div className="flex items-center justify-between gap-2 px-1">
               <span className="text-xs text-ink-muted">{t.music}</span>
@@ -518,6 +522,7 @@ export function RailTabs({
           </div>
         )}
       </div>
+
     </div>
   )
 }
@@ -525,11 +530,12 @@ export function RailTabs({
 /**
  * The green door.
  *
- * Its own component because it is drawn twice - at the top of the block with
- * Play, and again inside the Room tab - and the two must stay one control. A
- * second `<button>` written out where it was wanted would be a second thing to
- * remember when the label changes, and the first time somebody forgot, the rail
- * would say "Thingiverse" in one place and "Close" in the other.
+ * Its own component from when it was drawn twice - at the top of the block with
+ * Play, and again inside the Room tab. The second copy is gone: two buttons that
+ * toggled one `drawer` meant a door that opened here and closed there, and in
+ * the Room tab it opened a shelf *over the tab it was sitting in*, so pressing
+ * it made the room's own switches disappear. One control, one place, beside the
+ * other door out.
  *
  * No `text-ink` on the label, and that is not an omission: `.rail-things` is a
  * *painted* button and sets its own ink, dark, against a lit green - and a

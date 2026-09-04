@@ -681,6 +681,11 @@ describe('evolve', () => {
       isPublicLounge: false,
       loungeMode: 'battle',
       chatEnabled: true,
+      // Both off, which is where every space starts and stays until an owner
+      // says otherwise - see `SpaceNeedsSet`. Asserted here rather than left
+      // out, because this is the exhaustive shape test and a default that
+      // drifted would otherwise be invisible.
+      needs: { hunger: false, charged: false },
       // Empty rather than every capability at `true`: the record holds only
       // decisions somebody actually made, and `capabilityOn` supplies the
       // default. A history that never touched a switch must leave no trace.

@@ -28,16 +28,55 @@ import type { StoredEvent } from '@/es/types'
 /**
  * Whose homestead an event belongs to.
  *
- * The event's actor, never the session running the projection. A catch-up run
- * triggered by one member may well be the first to fold a colleague's events,
- * and those rows have to be attributed to whoever actually bought the sofa.
+ * ---------------------------------------------------------------------------
+ * The actor is right for most events and wrong for the ones that matter
+ * ---------------------------------------------------------------------------
+ * For anything somebody does to their *own* homestead, the actor is exactly
+ * right: a catch-up run triggered by one member may well be the first to fold a
+ * colleague's events, and those rows have to be attributed to whoever actually
+ * bought the sofa. That was the whole of this function, and for a stream nobody
+ * else ever writes to it was correct.
  *
- * An event with no actor cannot be placed, so it is skipped rather than written
- * against a null - the same call the avatar projection made. In practice every
- * homestead command carries one, because they all come from a server action
- * with a session behind it.
+ * It stopped being correct the moment one purse could pay another. `events`
+ * forces `actor_id = auth.uid()` in `append_events`, and `metadata.actorId`
+ * does not override it - so the credit half of a transfer, appended to the
+ * *recipient's* stream by the *sender's* session, carries the sender as its
+ * actor. Reading the actor there moved the wrong purse.
+ *
+ * It moved it badly, too, and the way it failed is worth knowing because it is
+ * silent: `bumpPurse` compares the row's `version` against the event's, and the
+ * event's version came from a different stream. The sender's row is usually
+ * further along, so the credit was not merely misattributed - it was skipped by
+ * the replay guard. Sender debited, nobody credited.
+ *
+ * So an event that lands on somebody else's stream carries `owner`, and that
+ * wins. The stream id cannot stand in for it: it is a `uuidv5` hash of
+ * `tenant:user` and does not come apart.
+ *
+ * ---------------------------------------------------------------------------
+ * What this does not fix
+ * ---------------------------------------------------------------------------
+ * `CoinsReceived` events written before `owner` existed do not have one, and
+ * history is immutable. They were misattributed when they were written and a
+ * rebuild reproduces that faithfully. The coins are in the log and can be found
+ * by their `transfer` id; putting them back is a one-off correction somebody
+ * has to decide to make, not something a projection may do on its own.
+ *
+ * An event with no owner and no actor cannot be placed at all, so it is skipped
+ * rather than written against a null - the same call the avatar projection made.
+ *
+ * Exported only so `projection.test.ts` can pin this, and it is worth the
+ * exception: this one function is where a transfer silently stopped arriving,
+ * and the rest of the projection needs a database to exercise at all.
  */
-function ownerOf(event: StoredEvent<HomesteadEvent>): string | null {
+export function ownerOf(event: StoredEvent<HomesteadEvent>): string | null {
+  // Not `'owner' in event.data`: the union has members without the key, and a
+  // narrow here would have to name every one of them and be updated whenever a
+  // new event joins. The question is only ever "did this event say whose purse
+  // it is", and one lookup answers it for the whole union.
+  const owner = (event.data as { owner?: unknown }).owner
+  if (typeof owner === 'string' && owner !== '') return owner
+
   return event.actorId
 }
 
@@ -330,8 +369,19 @@ export const homesteadProjection: Projection<HomesteadEvent> = {
         return
 
       case 'CoinsReceived':
-        // On the recipient's own stream, so `ownerOf` already points at the
-        // right purse - the same scoping every other case here relies on.
+        // The recipient's stream, and `owner` on the event is what says so -
+        // the actor here is the *sender*. See `ownerOf`.
+        await bumpPurse(supabase, event, { coins: event.data.amount })
+        return
+
+      /**
+       * Coins from outside: a won battle, a knockout, a remix, a voucher.
+       *
+       * Moves `coins` alone. Deliberately not `earned`, which is the café's
+       * takings and is what the homestead leaderboard ranks on - a player who
+       * won ten battles has not served anybody.
+       */
+      case 'CoinsEarned':
         await bumpPurse(supabase, event, { coins: event.data.amount })
         return
 

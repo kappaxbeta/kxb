@@ -103,6 +103,16 @@ export async function redeemPromoCode(
       until,
       days: Math.max(1, Math.round((new Date(until).getTime() - Date.now()) / 86_400_000)),
       tier: asTier(row.granted_tier) ?? DEFAULT_TIER,
+      /*
+        The bucks and the codes were written by the same transaction that wrote
+        the month - see the migration for why they could not be written here -
+        so this is a report of what happened rather than a promise to do
+        something next. A code with none answers 0, and every surface that shows
+        this treats 0 as "say nothing about bucks" rather than as "you got none".
+      */
+      bucks: typeof row.granted_bucks === 'number' ? row.granted_bucks : 0,
+      coins: typeof row.granted_coins === 'number' ? row.granted_coins : 0,
+      voucherCodes: Array.isArray(row.voucher_codes) ? row.voucher_codes : [],
     },
   }
 }

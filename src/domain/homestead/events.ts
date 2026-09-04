@@ -1,3 +1,4 @@
+import type { EarnReason, SpendReason } from '@/domain/bank/reasons'
 import type { DomainEvent } from '@/es/types'
 
 /**
@@ -227,13 +228,100 @@ export type HomesteadAccessSet = DomainEvent<
 export type CoinsSpent = DomainEvent<
   'CoinsSpent',
   {
-    /** Summoning a thing, or taking an item off one. */
-    on: 'thing' | 'item'
-    /** What it was: a blueprint's name, or an item's word. */
+    /**
+     * Summoning a thing, or taking an item off one.
+     *
+     * Optional since the economy, because the economy spends this purse on
+     * things that are neither: a battle stake, an extra blueprint, a
+     * submission. Absent means "not a purchase in a room", and every event
+     * written before this was widened has it - so nothing in the log became
+     * ambiguous when it did.
+     */
+    on?: 'thing' | 'item'
+    /** What it was: a blueprint's name, an item's word, or what was paid for. */
     what: string
     cost: number
+    /**
+     * Why the coins left, from the closed set in `bank/reasons.ts`.
+     *
+     * Optional, and the absence is not laziness - it is what makes this a
+     * widening rather than a rewrite. Every `CoinsSpent` in the log predates
+     * the economy and was a homestead purchase, so an event with no reason
+     * *is* `homestead` and is read as one (see `spendReasonOf`). Backfilling
+     * the column would mean rewriting immutable history to record something
+     * already implied by it.
+     */
+    reason?: SpendReason
+    /**
+     * What could not be taken, because the purse was short.
+     *
+     * Only ever set by a battle loss, and it is the whole of how §7.5 handles
+     * going broke: a player at zero who loses is charged what they have and no
+     * more. Recording the gap keeps the *fact* without keeping the *debt* - a
+     * balance that has to be paid off before the game is fun again turns one
+     * bad round into a punishment that lasts.
+     */
+    shortfall?: number
   }
 >
+
+/**
+ * Coins arriving from outside the homestead.
+ *
+ * The counterpart to the widened `CoinsSpent`, and the reason it is a new event
+ * rather than a reuse of `CustomerServed`: that one is a café's till and folds
+ * into `served` and `earned` as well as the balance. A won battle is not a
+ * customer, and counting it as one would put battle winnings in the number a
+ * café's leaderboard is ranked on.
+ *
+ * ---------------------------------------------------------------------------
+ * `from` is what says whether this was minted
+ * ---------------------------------------------------------------------------
+ * Absent means the coins were created - a win, a knockout, a voucher, a
+ * catalogue acceptance. Present means somebody paid, and their purse has the
+ * matching `CoinsSpent`. That distinction is the only way to answer "is this
+ * space printing money", which is the question `docs/product/economy.md` §13
+ * builds a whole backoffice view around.
+ *
+ * It is deliberately *not* `CoinsReceived` with a new reason. That event is one
+ * half of a member-to-member transfer and its `from` is always another member;
+ * widening it would make `from` mean two things and would put every battle
+ * payout into the list a person reads as "gifts".
+ */
+export type CoinsEarned = DomainEvent<
+  'CoinsEarned',
+  {
+    amount: number
+    reason: EarnReason
+    /** What it was for: a level's name, a match. Shown on a statement. */
+    what?: string
+    /** Who paid, when anybody did. Absent means minted - see above. */
+    from?: string
+    /**
+     * Whose purse this is.
+     *
+     * Required, unlike `CoinsReceived.owner`, because this event has no history
+     * to be compatible with. See that field for the full argument: the actor on
+     * a cross-stream append is whoever was signed in, not whose stream it is,
+     * and almost every `CoinsEarned` is written by somebody else's session -
+     * a battle payout is appended by whichever client reported the result.
+     */
+    owner: string
+  }
+>
+
+/**
+ * What a `CoinsSpent` was for, including the ones written before reasons.
+ *
+ * One function rather than `event.data.reason ?? 'homestead'` at each call
+ * site, because that default is a *fact about the log* - every event without a
+ * reason is a homestead purchase, because reasons arrived at the same moment
+ * the purse started paying for anything else - and a fact about the log should
+ * be written down once, next to the field it explains.
+ */
+export function spendReasonOf(data: CoinsSpent['data']): SpendReason {
+  return data.reason ?? 'homestead'
+}
 
 /**
  * How much one person may hand another at once.
@@ -273,7 +361,33 @@ export type CoinsSent = DomainEvent<
 
 export type CoinsReceived = DomainEvent<
   'CoinsReceived',
-  { from: string; amount: number; transfer: string }
+  {
+    from: string
+    amount: number
+    transfer: string
+    /**
+     * Whose purse this is - the recipient, and the owner of the stream this
+     * event sits on.
+     *
+     * It looks redundant next to `from` and it is the opposite: it is the only
+     * thing that makes this event attributable at all. `events.actor_id` is
+     * `auth.uid()`, forced by RLS in `append_events`, so on the credit half of
+     * a transfer the actor is the **sender** - they are the one signed in, even
+     * though the write lands on somebody else's stream. A projection reading
+     * the actor to decide whose purse to move therefore moved the wrong one.
+     *
+     * The stream id cannot be used instead: it is `uuidv5(tenant:user)`, which
+     * is a hash and does not come apart. So the owner travels in the data, the
+     * way every cross-stream append in this codebase has to.
+     *
+     * Optional because events written before this was understood do not have
+     * it, and history is immutable. Those transfers were misattributed when
+     * they were written and stay misattributed on a replay - see the note in
+     * `projection.ts`. Nothing can be done about that from here; what matters
+     * is that no new one joins them.
+     */
+    owner?: string
+  }
 >
 
 export type HomesteadEvent =
@@ -286,6 +400,7 @@ export type HomesteadEvent =
   | CustomerServed
   | HomesteadAccessSet
   | CoinsSpent
+  | CoinsEarned
   | CoinsSent
   | CoinsReceived
 
@@ -298,6 +413,7 @@ export const HOMESTEAD_EVENT_LABELS: Record<HomesteadEvent['type'], string> = {
   GroundSold: 'ground sold',
   CustomerServed: 'customer served',
   CoinsSpent: 'coins spent',
+  CoinsEarned: 'coins earned',
   CoinsSent: 'coins sent',
   CoinsReceived: 'coins received',
   HomesteadAccessSet: 'door setting changed',

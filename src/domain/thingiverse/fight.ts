@@ -140,6 +140,14 @@ export const WEAPON_LIMITS = {
   every: { min: 0.1, max: 60 },
   /** How fast a bullet travels, in cells a second. */
   speed: { min: 2, max: 80 },
+  /**
+   * How hard a hit shoves, in cells a second.
+   *
+   * Zero is allowed and is what absence means. The ceiling is a little over
+   * twice a kick (`KICK_IMPULSE` is 15), which is a spring that puts somebody
+   * on a roof and is already past the point where being shoved is fun.
+   */
+  push: { min: 0, max: 34 },
 } as const
 
 /**
@@ -190,6 +198,29 @@ export interface WeaponSpec {
   at: 'people' | 'things' | 'all'
   /** What it fires. Absent is a swing rather than a shot. See the note above. */
   shot?: ShotSpec
+  /**
+   * How hard it shoves whoever it lands on, in cells a second. Absent is not at
+   * all.
+   *
+   * ---------------------------------------------------------------------------
+   * Why a shove is a property of a hit and not a verb of its own
+   * ---------------------------------------------------------------------------
+   * Because the room already prices one: a kick takes nothing off you and moves
+   * you, and `KICK_IMPULSE` is the number that says how far. A separate `push`
+   * deed would need its own reach, its own cooldown and its own arithmetic
+   * about who is in front of what - which is the whole of `WeaponSpec`, written
+   * twice.
+   *
+   * So a spring is a weapon with no damage and a big shove, a bumper is a
+   * little of both, and a spike plate is all damage and none. One block, three
+   * objects, and the same sentence describes each of them.
+   *
+   * The shove is applied *by the person being shoved*, away from the thing that
+   * did it, on the same rule everything else here keeps: the attacker says a
+   * hit happened and the victim decides what it does to them. See
+   * `PushMessage`, which says the same thing about a boot.
+   */
+  push?: number
 }
 
 /**
@@ -280,6 +311,16 @@ export function fightProblems(fight: FightSpec, deeds: readonly string[] = []): 
     }
     if (!['people', 'things', 'all'].includes(at)) {
       problems.push(`${at} is not something a thing can aim at`)
+    }
+    if (fight.weapon.push !== undefined) {
+      const shove = WEAPON_LIMITS.push
+      if (
+        !Number.isFinite(fight.weapon.push) ||
+        fight.weapon.push < shove.min ||
+        fight.weapon.push > shove.max
+      ) {
+        problems.push(`a shove is ${shove.min}-${shove.max} cells a second`)
+      }
     }
     if (shot) {
       if (!knownModel(shot.model)) {

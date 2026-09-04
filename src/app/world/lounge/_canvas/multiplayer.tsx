@@ -19,6 +19,10 @@ import {
   sanitiseDamage,
   sanitiseImpulse,
 } from '@/app/world/lounge/_sim/combat'
+import { heldNow } from '@/app/world/_stores/pocket-store'
+import { fireTracer } from '@/app/world/_stores/tracer-store'
+import { HeldThing } from '@/app/world/lounge/_canvas/held-thing'
+import { itemLook, type ItemLook } from '@/domain/thingiverse/craft'
 import {
   type Ball,
   ballAcked,
@@ -82,6 +86,7 @@ import {
   noEmote,
   nothingSaid,
   type SaidState,
+  sendIntervalFor,
   showEmote,
 } from '@/app/world/_presence/presence-core'
 import {
@@ -91,7 +96,12 @@ import {
   record,
   sample,
 } from '@/app/world/_presence/peer-motion'
-import { type AvatarClip, DEFAULT_AVATAR, isKnownLook } from '@/domain/lounge/avatars'
+import {
+  asAvatarClip,
+  type AvatarClip,
+  DEFAULT_AVATAR,
+  isKnownLook,
+} from '@/domain/lounge/avatars'
 import { type EmoteId, isEmote } from '@/domain/world/emotes'
 import {
   createInbox,
@@ -128,15 +138,20 @@ import { PERF_ECHO, PERF_PING, type PerfEcho, type PerfPing } from '@/app/world/
  *   whole scene continuously - the same reason <Targeting> only reports changes.
  */
 
-/** Movement updates per second. Twelve is enough to interpolate from smoothly. */
 /**
- * Movement updates per second.
+ * The slowest we ever send, and how long that is between packets.
  *
- * Eight rather than twelve because every frame is fanned out to everyone in the
- * room, so the room's traffic grows with the *square* of its size - a 20-player
- * room at 12Hz is 4 800 messages a second leaving the server. Interpolation on
- * the receiving side is what actually makes movement look smooth, and it does
- * that just as well from eight samples as from twelve; see performancestudy/.
+ * Eight, because every frame is fanned out to everyone in the room, so the
+ * room's traffic grows with the *square* of its size - a 20-player room at 12Hz
+ * is 4 800 messages a second leaving the server. Interpolation on the receiving
+ * side is what actually makes movement look smooth, and it does that just as
+ * well from eight samples as from twelve; see performancestudy/.
+ *
+ * It is the *floor* now rather than the rate: a room with three people in it
+ * has none of the fan-out this number is afraid of and sends faster, which is
+ * `sendHzFor`'s whole argument. What is left here is the worst case, which is
+ * the case the constants below want - a hold long enough to cover the slowest
+ * room is long enough to cover every other one.
  */
 const SEND_HZ = 8
 const SEND_INTERVAL = 1000 / SEND_HZ
@@ -172,6 +187,30 @@ interface MoveMessage {
   r: number
   d: boolean
   /**
+   * A clip their body is playing, if it is not just walking about.
+   *
+   * ---------------------------------------------------------------------------
+   * Why this is on the wire at all
+   * ---------------------------------------------------------------------------
+   * Sitting down used to be a fact about your own screen. `use-things` set the
+   * body clip locally and said so in its own comment - nothing is written down,
+   * nobody else's client is told - on the argument that presence already
+   * carries where your body is. That is true and it is not enough: everyone
+   * else saw you standing *at* the bench rather than sitting on it, so the clip
+   * somebody chose for a seat was a clip only they ever saw.
+   *
+   * One short name, sent only while a body is doing something other than the
+   * gait, is a small price for the difference between "I am sitting" and
+   * "everyone can see I am sitting". It rides with movement rather than getting
+   * its own event, for the same reason `h` does: it is a state rather than a
+   * moment, so a client that missed a packet learns it from the next one
+   * instead of being wrong until the pose ends.
+   *
+   * An emote is still its own event and still should be - see `EmoteMessage`.
+   * That is a thing that *happened*; this is a thing that *is*.
+   */
+  c?: string
+  /**
    * When this pose was true, on the *sender's* `performance.now()`.
    *
    * Optional, and the epoch is meaningless across machines - which is fine,
@@ -191,6 +230,20 @@ interface MoveMessage {
    * last legs. One extra small integer at 12Hz is not worth a second channel.
    */
   h: number
+  /**
+   * The word for whatever is in their hand, if anything.
+   *
+   * A word rather than a model path, because that is what a pocket holds (see
+   * `./hold` and `@/domain/thingiverse/pocket`) and because the receiver has to
+   * resolve it against the shelf anyway to find out *how* it is held - the grip
+   * is on the blueprint, and the blueprint is a row every client in the room
+   * already has. Sending the model would send half the answer.
+   *
+   * Rides with movement for the same self-healing reason health and the kart
+   * do: somebody who joins mid-game learns what everybody is carrying from the
+   * next packet rather than from a one-shot they were not there for.
+   */
+  w?: string
   /**
    * The thing being driven, if any.
    *
@@ -229,6 +282,61 @@ interface HitMessage {
   t: string
   /** Rolled by the attacker, clamped by the victim. */
   d: number
+}
+
+/**
+ * "I fired this, from here, that way." Broadcast to the room.
+ *
+ * ---------------------------------------------------------------------------
+ * The drawing and the damage are two messages on purpose
+ * ---------------------------------------------------------------------------
+ * This one is seen by everybody and costs nobody anything: it is a bullet
+ * crossing a room, and every client draws it so that a fight looks like a fight
+ * from the side. Whether it *hit* is a `HitMessage`, addressed to one person,
+ * decided by the shooter exactly as a dash is - which keeps the rule this room
+ * runs on intact (`_sim/combat.ts`: the victim owns their own health) and keeps
+ * a bystander from doing arithmetic about somebody else's bar.
+ *
+ * Splitting them also makes a miss drawable, which is most of what makes aiming
+ * feel like anything: a shot that only existed when it landed would be a room
+ * where nobody ever sees a near miss.
+ */
+interface ShotMessage {
+  /** Who fired. */
+  f: string
+  /** Where it left, in world units. */
+  x: number
+  y: number
+  z: number
+  /** Where it is going - the end of the flight, hit or miss. */
+  tx: number
+  ty: number
+  tz: number
+  /** What it looks like: a model id, and how big. */
+  m: string
+  c: number
+  /** How fast, in cells a second. */
+  s: number
+}
+
+/**
+ * A shot somebody has just taken, as the scene hands it over.
+ *
+ * The scene decides *everything* about it - what is in your hand, whether the
+ * cooldown is up, which way you are pointing, who is in the cone - because all
+ * four of those are the scene's to know. What it cannot do is talk to the
+ * socket, which is what this crosses. See `sendShotRef`.
+ */
+export interface PlayerShot {
+  from: { x: number; y: number; z: number }
+  to: { x: number; y: number; z: number }
+  /** A model id, or absent for a swing - which has nothing to draw flying. */
+  model?: string
+  scale: number
+  speed: number
+  /** Who it landed on, by user id, or null for a miss. */
+  hit: string | null
+  damage: number
 }
 
 /**
@@ -431,6 +539,18 @@ export interface PeerTransform {
   seat: number
   /** Last health we were told about. Drives their bar and whether they can be hit. */
   health: number
+  /** The word for what is in their hand, or null. See `MoveMessage.w`. */
+  held: string | null
+  /**
+   * A clip something is making their body play, or null for the gait.
+   *
+   * A *name*, not a clip: which animations exist is the scene's knowledge -
+   * the pack's four plus whatever this space animated - and every client in the
+   * room loaded the same list when it loaded the world. So the name goes on the
+   * wire and each client resolves it against its own, exactly as the local body
+   * already does. See `MoveMessage.c`.
+   */
+  pose: string | null
   /** Set on the first packet, so a joiner appears where they are, not at origin. */
   seeded: boolean
   /**
@@ -526,6 +646,8 @@ export function Multiplayer({
   name,
   avatar,
   dancing,
+  posing = null,
+  poseFor,
   aboard = null,
   onDriving,
   health,
@@ -544,6 +666,7 @@ export function Multiplayer({
   partyHost,
   perf,
   faces = false,
+  items,
 }: {
   topic: ChannelTopic
   userId: string
@@ -566,6 +689,28 @@ export function Multiplayer({
   party?: boolean
   partyHost?: string | null
   dancing: boolean
+  /**
+   * A clip a thing is making this body play, or null while it is just walking
+   * about.
+   *
+   * Broadcast, which sitting down never used to be - see `MoveMessage.c` for
+   * why that was half a feature. Defaulted rather than required, because two
+   * other rooms mount this component and neither has anything to sit on yet.
+   */
+  posing?: string | null
+  /**
+   * A clip name, turned into something a body can play.
+   *
+   * Handed in rather than resolved here, because which clips a space has made
+   * is the *scene's* knowledge - it is loaded with the world - and this
+   * component has no business fetching one. The same argument `BodyModel.pose`
+   * makes about being handed what to play rather than sent looking for it.
+   *
+   * Absent means the space made none, which is most rooms: a name that is not
+   * one of the pack's own four then simply leaves the body standing, exactly as
+   * it does for our own.
+   */
+  poseFor?: (clip: string) => THREE.AnimationClip | null
   /**
    * The vehicle seat we are in, or null on foot.
    *
@@ -665,6 +810,11 @@ export function Multiplayer({
    * everything else in this file sits on.
    */
   faces?: boolean
+  /**
+   * The shelf, as "what does this word look like", for drawing what people are
+   * carrying. Passed straight through to the bodies - see `RemoteAvatar`.
+   */
+  items?: ReadonlyMap<string, ItemLook>
 }) {
   /**
    * The eight refs this used to be handed, now asked for.
@@ -687,6 +837,7 @@ export function Multiplayer({
     kickRef,
     invulnerableUntilRef,
     sendEmoteRef,
+    sendShotRef,
     resetBallRef,
     saidsRef,
     transformsRef,
@@ -716,6 +867,18 @@ export function Multiplayer({
   useEffect(() => {
     dancingRef.current = dancing
   }, [dancing])
+
+  /**
+   * The same trick for whatever a thing is making the body play.
+   *
+   * It changes when somebody sits down and again when they stand up, which is
+   * often, and a socket that reopened on each would be a socket that reopened
+   * every time anybody used a bench.
+   */
+  const posingRef = useRef(posing)
+  useEffect(() => {
+    posingRef.current = posing
+  }, [posing])
 
   /** Same trick for health: it changes mid-fight and must not reopen the channel. */
   const healthRef = useRef(health)
@@ -1384,6 +1547,8 @@ export function Multiplayer({
           existing.driving = wheeled
           existing.seat = seat
           existing.health = health
+          existing.held = message.w ?? null
+          existing.pose = message.c ?? null
           record(existing.motion, target, message.t ?? null, arrived)
         } else {
           const motion = newMotionBuffer()
@@ -1397,11 +1562,34 @@ export function Multiplayer({
             driving: wheeled,
             seat,
             health,
+            held: message.w ?? null,
+            pose: message.c ?? null,
             seeded: true,
             motion,
           })
           if (drives) onDrivingRef.current?.(message.u, drives)
         }
+      })
+      /*
+        Somebody else's bullet, drawn and nothing else.
+
+        Not sequenced and not deduplicated, unlike a hit: a tracer that arrives
+        twice is one extra bullet drawn for half a second, and one that never
+        arrives is a shot you did not see. Neither is worth an ack, and the
+        thing that *does* need exactly-once - what it cost the person it hit -
+        travels as its own addressed message.
+      */
+      .on('broadcast', { event: 'shot' }, ({ payload }) => {
+        countReceived('shot', performance.now())
+        const message = payload as ShotMessage
+        if (!message?.m || message.f === userId) return
+        fireTracer({
+          model: message.m,
+          scale: message.c,
+          speed: message.s,
+          from: { x: message.x, y: message.y, z: message.z },
+          to: { x: message.tx, y: message.ty, z: message.tz },
+        })
       })
       .on('broadcast', { event: 'hit' }, ({ payload }) => {
         countReceived('hit', performance.now())
@@ -1645,6 +1833,50 @@ export function Multiplayer({
       sendReliable('ball-reset', { u: userId } satisfies BallResetMessage)
     }
 
+    /**
+     * A shot somebody just fired: drawn for the room, charged to one person.
+     *
+     * Both halves go out from here because both need the socket, and they are
+     * deliberately two messages - see `ShotMessage`. The victim's bar is
+     * dropped locally on the way past for the same reason `judgeDash` does it:
+     * waiting for their next packet puts a round trip between the impact and
+     * the feedback, and at that distance a hit reads as not having registered.
+     */
+    sendShotRef.current = (shot: PlayerShot) => {
+      if (shot.model) {
+        countSent('shot')
+        void channel.send({
+          type: 'broadcast',
+          event: 'shot',
+          payload: {
+            f: userId,
+            x: +shot.from.x.toFixed(2),
+            y: +shot.from.y.toFixed(2),
+            z: +shot.from.z.toFixed(2),
+            tx: +shot.to.x.toFixed(2),
+            ty: +shot.to.y.toFixed(2),
+            tz: +shot.to.z.toFixed(2),
+            m: shot.model,
+            c: shot.scale,
+            s: shot.speed,
+          } satisfies ShotMessage,
+        })
+      }
+
+      if (!shot.hit) return
+
+      sendReliable('hit', {
+        i: crypto.randomUUID(),
+        f: userId,
+        t: shot.hit,
+        d: shot.damage,
+      } satisfies HitMessage)
+
+      const state = transforms.current.get(shot.hit)
+      if (state) state.health = Math.max(0, state.health - shot.damage)
+      handlers.current.onHitLanded(shot.damage, names.current.get(shot.hit) ?? 'them')
+    }
+
     sendEmoteRef.current = (id: EmoteId) => {
       if (!isEmote(id)) return
       countSent('emote')
@@ -1660,6 +1892,7 @@ export function Multiplayer({
       // Cleared alongside the channel, so a picker click during teardown cannot
       // reach a socket that is on its way out.
       sendEmoteRef.current = null
+      sendShotRef.current = null
       resetBallRef.current = null
       if (roomRef) roomRef.current = null
       channelRef.current = null
@@ -1683,6 +1916,7 @@ export function Multiplayer({
     avatar,
     invulnerableUntilRef,
     sendEmoteRef,
+    sendShotRef,
     resetBallRef,
     roomRef,
     onStatus,
@@ -1831,6 +2065,8 @@ export function Multiplayer({
     driving: string | null
     seat: number
     health: number
+    held: string | null
+    pose: string | null
   }>({
     at: 0,
     x: NaN,
@@ -1841,6 +2077,8 @@ export function Multiplayer({
     driving: null,
     seat: 0,
     health: NaN,
+    held: null,
+    pose: null,
   })
 
   /** When the owner last broadcast the ball. Its own budget, like `lastSent`. */
@@ -1900,7 +2138,20 @@ export function Multiplayer({
 
     const now = performance.now()
     const since = now - lastSent.current.at
-    if (since < SEND_INTERVAL) return
+    /*
+      How often we send follows how many people are listening.
+
+      `transforms` is the room, one entry per peer we have heard from, and it is
+      the cheapest honest count there is - the roster is React state that a
+      frame loop has no business reading, and the presence map is keyed by user
+      rather than by connection. It is read fresh every frame rather than
+      cached, so somebody arriving steps the rate down on their first packet
+      rather than at the next resubscribe.
+
+      Nothing is announced. The receiver measures what it is being sent - see
+      `sendHzFor` and the header of `peer-motion.ts`.
+    */
+    if (since < sendIntervalFor(transforms.current.size)) return
 
     const player = playerRef.current
     // Heading, not pitch. Nobody needs to know we are looking at our shoes.
@@ -1916,10 +2167,19 @@ export function Multiplayer({
       // appeared or went away, and the keepalive is two seconds of ghost car.
       lastSent.current.driving !== (aboardRef.current?.thing ?? null) ||
       lastSent.current.seat !== (aboardRef.current?.seat ?? 0) ||
+      // Taking a pistol out of your pocket is worth a packet for the same
+      // reason getting into a kart is: until one goes out, the room draws you
+      // empty-handed - and the keepalive is two seconds of invisible gun.
+      lastSent.current.held !== (heldNow() ?? null) ||
       // Health counts as movement for the purposes of "is this worth a packet".
       // Waiting out the keepalive would leave a bar two seconds stale, which in
       // a fight that lasts four hits is most of the fight.
-      lastSent.current.health !== healthRef.current
+      lastSent.current.health !== healthRef.current ||
+      // And so does sitting down. Two seconds of standing at a bench you are
+      // already on is exactly as wrong as two seconds of an empty hand holding
+      // a pistol, and for the same reason: the keepalive is the floor, not the
+      // answer.
+      lastSent.current.pose !== (posingRef.current ?? null)
 
     if (!moved && since < KEEPALIVE_MS) return
 
@@ -1933,6 +2193,8 @@ export function Multiplayer({
       driving: aboardRef.current?.thing ?? null,
       seat: aboardRef.current?.seat ?? 0,
       health: healthRef.current,
+      held: heldNow() ?? null,
+      pose: posingRef.current ?? null,
     }
 
     countSent('move')
@@ -1951,10 +2213,14 @@ export function Multiplayer({
         h: healthRef.current,
         // Absent rather than null on foot, and the seat absent at the wheel -
         // the fields cost nothing until somebody is actually aboard something.
+        // Absent when your hands are empty, and when the body is just walking
+        // about, which is most of the time for both.
+        ...(heldNow() ? { w: heldNow() } : {}),
         ...(aboardRef.current ? { v: aboardRef.current.thing } : {}),
         ...(aboardRef.current && aboardRef.current.seat !== 0
           ? { s: aboardRef.current.seat }
           : {}),
+        ...(posingRef.current ? { c: posingRef.current } : {}),
         // Whole milliseconds: the receiver interpolates over ~125ms spans, so a
         // fractional millisecond is below anything it could draw.
         t: Math.round(now),
@@ -2035,6 +2301,8 @@ export function Multiplayer({
           tone={toneOf?.(peer.userId)}
           party={party}
           partyHost={partyHost === peer.userId}
+          items={items}
+          poseFor={poseFor}
         />
       ))}
       {/*
@@ -2829,6 +3097,8 @@ function RemoteAvatar({
   tone,
   party,
   partyHost,
+  items,
+  poseFor,
 }: {
   peer: Peer
   transforms: React.RefObject<Map<string, PeerTransform>>
@@ -2847,6 +3117,17 @@ function RemoteAvatar({
   party?: boolean
   /** This is whoever started it, so they cycle instead of sitting on one hue. */
   partyHost?: boolean
+  /**
+   * The shelf, as "what does this word look like".
+   *
+   * One map for the whole room rather than a lookup per body: it is built once
+   * where the shelf lives and read here to turn `MoveMessage.w` into something
+   * drawable. Absent in a scene with no shelf, where nobody is drawn holding
+   * anything - which is what a room with no thingiverse in it looks like.
+   */
+  items?: ReadonlyMap<string, ItemLook>
+  /** A clip name, made playable. See `Multiplayer.poseFor`. */
+  poseFor?: (clip: string) => THREE.AnimationClip | null
 }) {
   const group = useRef<THREE.Group>(null)
   const body = useRef<THREE.Group>(null)
@@ -2876,6 +3157,16 @@ function RemoteAvatar({
   const [clip, setClip] = useState<AvatarClip>('idle')
 
   /**
+   * A clip a thing is making them play, or null while they are walking about.
+   *
+   * State rather than a per-frame read for the same reason `clip` is: changing
+   * it swaps an animation, which is a render, and it changes at the moment
+   * somebody sits down rather than sixty times a second. The frame loop below
+   * spots the change exactly as it spots a gait change.
+   */
+  const [posed, setPosed] = useState<string | null>(null)
+
+  /**
    * What they are driving, mirrored out of the frame loop.
    *
    * State rather than a per-frame read because mounting a vehicle model is a
@@ -2895,6 +3186,21 @@ function RemoteAvatar({
   const [peerRiding, setPeerRiding] = useState<{ thing: string; seat: number } | null>(
     null,
   )
+
+  /**
+   * And what is in their hand, mirrored out of the frame loop the same way.
+   *
+   * The word rather than the model: what it looks like is the shelf's answer,
+   * and the shelf is handed down as `items` so that one lookup serves every
+   * body in the room. Somebody holding something the shelf has never heard of
+   * draws nothing, which is the same silence a slot on a table keeps.
+   */
+  const [peerHeld, setPeerHeld] = useState<string | null>(null)
+  /** The published copy, so the frame loop can spot a change without reading state. */
+  const peerHeldRef = useRef<string | null>(null)
+
+  /** What that word looks like, or nothing if the shelf cannot say. */
+  const heldLook = peerHeld && items ? itemLook(items, peerHeld) : undefined
 
   /**
    * How fast their kart is going, for its wheels.
@@ -3004,6 +3310,11 @@ function RemoteAvatar({
 
     const down = isDown(state.health)
 
+    if (peerHeldRef.current !== state.held) {
+      peerHeldRef.current = state.held
+      setPeerHeld(state.held)
+    }
+
     const drives = state.driving && state.seat === 0 ? state.driving : null
     if (drives !== peerDriving) setPeerDriving(drives)
 
@@ -3074,6 +3385,17 @@ function RemoteAvatar({
     if (next !== clip) setClip(next)
 
     /**
+     * And whatever they are sitting in, which outranks the gait.
+     *
+     * Not while they are down: a body knocked over is lying on the floor, and a
+     * corpse still playing the sit it was in when it was hit is the one drawing
+     * worse than no clip at all. Everything else is theirs to decide - they are
+     * the client that knows what they pressed E on.
+     */
+    const pose = down ? null : (state.pose ?? null)
+    if (pose !== posed) setPosed(pose)
+
+    /**
      * Health, drawn straight from the ref rather than through state.
      *
      * A bar is a number scaled into a mesh, and doing that imperatively costs
@@ -3104,11 +3426,35 @@ function RemoteAvatar({
                 a worse problem than clipping through each other. */}
             <BodyModel
               look={peer.avatar}
-              clip={clip}
+              /*
+                What they are doing, in the two vocabularies a body has. A pose
+                the pack itself carries is one of `AVATAR_CLIPS` and goes in as
+                a name; one this space animated arrives as a built clip and
+                wins over the gait - which is the same pair `<SelfAvatar>` is
+                handed, so a body looks the same to the person in it and to
+                everybody else. See `asAvatarClip` and `BodyModel.pose`.
+              */
+              clip={(posed && asAvatarClip(posed)) || clip}
+              pose={posed ? (poseFor?.(posed) ?? null) : null}
               ignoreRay
               rim={party ? partyColour : null}
             />
           </Suspense>
+        )}
+
+        {/*
+          Whatever they are carrying, on their body rather than in their pocket.
+
+          Inside <body> with the model it hangs off, so a knocked-down player
+          drops to the floor still holding it - the alternative is a pistol
+          hovering upright over somebody lying on their back.
+        */}
+        {heldLook?.hold && (
+          <HeldThing
+            model={heldLook.model}
+            hold={heldLook.hold}
+            scale={heldLook.scale}
+          />
         )}
       </group>
 

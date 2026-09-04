@@ -7,6 +7,8 @@ import {
   craftProblems,
   freshBurger,
   freshCraft,
+  itemLook,
+  itemLooks,
   landsAt,
   matchRecipe,
   MAX_RECIPE_ITEMS,
@@ -206,5 +208,43 @@ describe('what one press of G does', () => {
     // A full pan you are holding a second patty for, too: nowhere to put it,
     // but there is something to take.
     expect(reachFor(pan, new Map([['hob', 'patty']]), 'patty').do).toBe('take')
+  })
+})
+
+describe('what a word looks like', () => {
+  const shelf = [
+    { name: 'Bun', model: 'restaurant/food_ingredient_bun', scale: 1 },
+    { name: 'Grilled patty', model: 'restaurant/food_ingredient_burger_cooked', scale: 1 },
+    { name: 'bun', model: 'somebody/else', scale: 3 },
+  ]
+
+  test('a word finds the blueprint the space called that', () => {
+    const looks = itemLooks(shelf)
+    expect(itemLook(looks, 'bun')?.model).toBe('restaurant/food_ingredient_bun')
+  })
+
+  test('spelled the way a recipe would spell it', () => {
+    const looks = itemLooks(shelf)
+    // The shelf's own rule: lowercase, and spaces and underscores are the same
+    // character. A recipe saying `grilled_patty` and a blueprint called
+    // "Grilled patty" are one item.
+    expect(itemLook(looks, 'grilled_patty')?.model).toBe(
+      'restaurant/food_ingredient_burger_cooked',
+    )
+    expect(itemLook(looks, '  GRILLED PATTY ')?.model).toBe(
+      'restaurant/food_ingredient_burger_cooked',
+    )
+  })
+
+  test('two of the same name: the older one wins, every time', () => {
+    // The shelf arrives oldest first, so a duplicate drawn later is invisible
+    // rather than intermittently visible - which is the failure somebody can
+    // actually diagnose. See `itemLooks`.
+    const looks = itemLooks(shelf)
+    expect(itemLook(looks, 'Bun')?.scale).toBe(1)
+  })
+
+  test('and a word nothing is called finds nothing', () => {
+    expect(itemLook(itemLooks(shelf), 'pickle')).toBeUndefined()
   })
 })

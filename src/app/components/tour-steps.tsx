@@ -41,9 +41,25 @@ export interface TourStep {
 }
 
 export const TOUR_STEPS: TourStep[] = [
-  // The lounge first, and with no flag on it in practice: `lounge` is the one
-  // surface every space opens into, and a tour that can begin somewhere else
-  // would begin somewhere most people never go.
+  /*
+    Money first, in a space that has any.
+
+    This displaces the lounge, whose own note argued for going first because it
+    is the one surface every space opens into - and that argument still holds
+    for every space where this panel does not appear. `economy` is off by
+    default, so the ordinary tour is unchanged and still opens on the room.
+
+    Where it *is* on, coins come first because they are not a feature sitting
+    alongside the others - they are a fact about how all of them behave. Somebody
+    who learns about the lounge, the pitch and the workshop and *then* finds out
+    that entering a battle costs something has been told the rules in the wrong
+    order. This is the shortest panel in the tour for the same reason: it is
+    context, not a destination.
+  */
+  { id: 'coins', feature: 'economy', scene: 'summon', width: 1280, height: 720, hue: 45 },
+  // The lounge, and with no flag on it in practice: `lounge` is the one surface
+  // every space opens into, and a tour that can begin somewhere else would
+  // begin somewhere most people never go.
   { id: 'lounge', feature: 'lounge', scene: 'crew', width: 1600, height: 900, hue: 285 },
   {
     id: 'build',
@@ -129,6 +145,21 @@ const ICON = {
 } as const
 
 export const TOUR_ICONS: Record<TourStepId, React.ReactElement> = {
+  /**
+   * A coin, three-quarters on, with a second behind it.
+   *
+   * Two rather than one, because a single circle at this size reads as a dot or
+   * a clock face - and because the panel is about a currency rather than about
+   * a coin. The offset is what makes it legible as money at 24px.
+   */
+  coins: (
+    <svg {...ICON}>
+      <ellipse cx="10.5" cy="14" rx="6.5" ry="4" />
+      <path d="M4 14v2.6c0 2.2 2.9 4 6.5 4s6.5-1.8 6.5-4V14" />
+      <path d="M13.5 10.4c1-.5 1.6-1.3 1.6-2.2 0-1.8-2.4-3.2-5.3-3.2-1.3 0-2.5.3-3.4.8" />
+    </svg>
+  ),
+
   /** A couch, seen head on - the same drawing as the rail's, redrawn larger. */
   lounge: (
     <svg {...ICON}>

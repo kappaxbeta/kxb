@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MAX_MESSAGE_LENGTH } from '@/domain/chat/events'
 import { reportChatMessage } from '@/domain/moderation/actions'
+import { fill } from '@/app/i18n/fill'
 import { useLocale } from '@/app/i18n/locale-context'
 import { railDict } from '@/app/i18n/rail'
 import { useRefusal } from '@/app/i18n/use-refusal'
@@ -53,6 +54,7 @@ export function ChatPanel({
   lines,
   selfId,
   onSend,
+  onBlock,
   /** Null when the viewer may post. A sentence explaining why not, otherwise. */
   blockedReason,
 }: {
@@ -60,6 +62,12 @@ export function ChatPanel({
   lines: ChatLine[]
   selfId: string
   onSend: (body: string) => void
+  /**
+   * Stop hearing whoever said a line. Belongs to the dock, not to this panel -
+   * see `onBlock` in `chat-store` for why the list's owner has to be the one
+   * that does it.
+   */
+  onBlock: (userId: string) => void
   blockedReason: string | null
 }) {
   const t = railDict(useLocale()).chat
@@ -154,7 +162,13 @@ export function ChatPanel({
           </p>
         ) : (
           lines.map((line) => (
-            <Line key={line.key} slug={slug} line={line} mine={line.authorId === selfId} />
+            <Line
+              key={line.key}
+              slug={slug}
+              line={line}
+              mine={line.authorId === selfId}
+              onBlock={onBlock}
+            />
           ))
         )}
       </div>
@@ -208,13 +222,25 @@ function Line({
   slug,
   line,
   mine,
+  onBlock,
 }: {
   slug: string
   line: ChatLine
   mine: boolean
+  onBlock: (userId: string) => void
 }) {
   const t = railDict(useLocale()).chat
   const [reporting, setReporting] = useState(false)
+  /**
+   * Whether the confirm strip is open under this line.
+   *
+   * A block is one tap away and takes effect immediately, which is exactly why
+   * it asks first: everything the person has already said leaves the panel the
+   * moment it is confirmed, and a mis-tap that silently empties part of a
+   * conversation is indistinguishable from the chat losing messages. The
+   * confirm names them, so the answer to "which line was that" is on screen.
+   */
+  const [blocking, setBlocking] = useState(false)
 
   return (
     <div className="group rounded-xl px-2 py-1.5 transition-colors hover:bg-surface-raised/50">
@@ -243,20 +269,75 @@ function Line({
 
           Nor is it offered before the line has an id: see the note on ChatLine.
         */}
-        {!mine && line.id && !reporting && (
-          <button
-            type="button"
-            onClick={() => setReporting(true)}
-            className="ml-auto text-[10px] text-ink-muted/60 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500"
-          >
-            {t.report}
-          </button>
+        {!mine && line.id && !reporting && !blocking && (
+          <span className="ml-auto flex items-center gap-2 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+            {/*
+              Block before report, left to right, because it is the one that
+              helps immediately. Reporting is a request that waits for somebody
+              else; blocking is the thing you can do about it now.
+
+              `authorId` is checked as well as `id`: a line whose author is
+              unknown - one written before the column existed, or by an account
+              that has since gone - has nobody to block, and a button that
+              cannot work should not be drawn.
+            */}
+            {line.authorId && (
+              <button
+                type="button"
+                onClick={() => setBlocking(true)}
+                className="text-[10px] text-ink-muted/60 transition hover:text-ink"
+              >
+                {t.block}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setReporting(true)}
+              className="text-[10px] text-ink-muted/60 transition hover:text-red-500"
+            >
+              {t.report}
+            </button>
+          </span>
         )}
       </div>
 
       <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-snug text-ink">
         {line.body}
       </p>
+
+      {blocking && line.authorId && (
+        <div className="mt-2 space-y-2 rounded-lg border border-line bg-surface-raised/60 p-2">
+          <p className="text-[11px] leading-snug text-ink-muted">
+            {fill(t.blockConfirm, { name: line.authorName })}
+          </p>
+          <p className="text-[10px] leading-snug text-ink-muted/70">{t.blockUndo}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setBlocking(false)
+                /*
+                 * Not awaited and nothing to wait for: the dock takes their
+                 * lines out of the list synchronously, so the panel's own
+                 * answer is that they are gone. A spinner here would be a
+                 * spinner over an empty space.
+                 */
+                if (line.authorId) onBlock(line.authorId)
+              }}
+              className="rounded bg-red-500/90 px-2 py-1 text-[11px] font-medium text-white transition hover:bg-red-500"
+            >
+              {t.blockYes}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBlocking(false)}
+              className="rounded px-2 py-1 text-[11px] text-ink-muted transition hover:text-ink"
+            >
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      )}
 
       {reporting && line.id && (
         <ReportForm

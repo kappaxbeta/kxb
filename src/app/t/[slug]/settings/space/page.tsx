@@ -3,6 +3,8 @@ import { EventBannerForm } from '@/app/t/[slug]/settings/event-banner-form'
 import { EventDesk } from '@/app/t/[slug]/settings/event-desk'
 import { EventHeaderForm } from '@/app/t/[slug]/settings/event-header-form'
 import { SettingsForm } from '@/app/t/[slug]/settings/settings-form'
+import { BankCard } from '@/app/t/[slug]/settings/space/bank-card'
+import { ExtrasCard } from '@/app/t/[slug]/settings/space/extras-card'
 import { StorageCard } from '@/app/t/[slug]/settings/space/storage-card'
 import { listBanners } from '@/domain/events/banners'
 import { linkProblem } from '@/domain/guests/application'
@@ -216,6 +218,26 @@ export default async function SpaceSettingsPage({
         card is a control — it is the space read back to whoever runs it, and a
         page reads better when what you can do comes before what is true.
       */}
+      {/*
+        What this space may have one more of, and what one costs.
+
+        Above the storage card and below the controls, which is where it
+        belongs: buying a slot *is* a control - it changes what the space can
+        hold - but it is the only one on this page that costs somebody
+        something, so it sits at the end of the things you can do rather than
+        among them.
+
+        Draws nothing when the space is not running the economy. See
+        <ExtrasCard>.
+      */}
+      {/*
+        The space's own till, above the shelf of things to buy - money the space
+        has *taken* reads before money a member might spend. See <BankCard>.
+      */}
+      <BankCard slug={slug} />
+
+      <ExtrasCard slug={slug} />
+
       {storage && (
         <StorageCard
           slug={slug}

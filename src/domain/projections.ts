@@ -4,6 +4,7 @@ import type { DomainEvent } from '@/es/types'
 
 import { agentsProjection } from '@/domain/agents/projection'
 import { battlefieldsProjection } from '@/domain/battlefields/projection'
+import { bankProjection } from '@/domain/bank/projection'
 import { battlesProjection } from '@/domain/battle/projection'
 import { billingProjection } from '@/domain/billing/projection'
 import { boardProjection } from '@/domain/board/projection'
@@ -57,6 +58,7 @@ function erase<T extends DomainEvent>(projection: Projection<T>): Projection<Dom
 
 export const ALL_PROJECTIONS: readonly Projection<DomainEvent>[] = [
   erase(agentsProjection),
+  erase(bankProjection),
   erase(battlefieldsProjection),
   erase(battlesProjection),
   erase(billingProjection),

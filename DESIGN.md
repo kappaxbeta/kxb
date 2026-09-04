@@ -20,6 +20,12 @@ typography:
     fontWeight: 400
     lineHeight: 1.18
     letterSpacing: "normal"
+  doc-title:
+    fontFamily: "ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.75rem"
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: "-0.01em"
   heading:
     fontFamily: "ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.05rem"
@@ -162,6 +168,7 @@ Body and UI are the system sans. There is no third face.
 | Role | Face | Size |
 |---|---|---|
 | Page display | pixel, caps | `clamp(1.5rem, 5.2vw, 2.75rem)` |
+| Document title | sans, 600 | `1.75rem`, tracking `-0.01em` |
 | Section display | pixel, caps | `1.5rem`–`2rem` |
 | Heading | sans, 500 | `1.05rem`–`1.25rem` |
 | Body | sans, 400 | `0.875rem`, line-height 1.65 |
@@ -171,6 +178,13 @@ Body and UI are the system sans. There is no third face.
 
 ### Named Rules
 
+- **A document's own title is the one sans step above heading.** `doc-title`
+  exists for surfaces where a person *types* the title - the workspace page
+  editor is the first, and there will be others. It is not a page heading and
+  it is never the pixel face: that face is caps-only display at one weight, and
+  an editable field set in it cannot show what somebody actually typed. Use
+  `heading` for a section, the pixel face for a page's display line, and this
+  only for a field whose value is the document's name.
 - **The pixel face is wide.** It eats about a third more width than its size
   suggests. Size it fluid, and check it at 360px before shipping.
 - **Tracked labels tighten on phones.** Below 480px, `0.18em` drops to `0.11em`;

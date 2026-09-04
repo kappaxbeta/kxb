@@ -238,6 +238,45 @@ describe('talking', () => {
   test('gives a longer line a longer default beat', () => {
     expect(talkDuration('Hi!')).toBeLessThan(talkDuration(line))
   })
+
+  /**
+   * The bubble's own two numbers, and the one thing that must not have changed:
+   * a shot composed before they existed drew its sentence at the emote's height
+   * and half the emote's size, and it still has to.
+   */
+  test('a bubble arranged where the face is stays arranged there', () => {
+    const actor = parseShot({
+      cast: [{ avatar: 'fox', emoteHeight: 5.5, emoteSize: 1.4 }],
+    }).cast[0]
+
+    expect(actor.sayHeight).toBe(5.5)
+    expect(actor.saySize).toBeCloseTo(0.7)
+  })
+
+  test('and one that says where its bubble goes is believed', () => {
+    const actor = parseShot({
+      cast: [{ avatar: 'fox', emoteHeight: 5.5, emoteSize: 1.4, sayHeight: 2, saySize: 1 }],
+    }).cast[0]
+
+    expect(actor.sayHeight).toBe(2)
+    expect(actor.saySize).toBe(1)
+  })
+
+  test('the bubble is keyable, like the face above it', () => {
+    const shot: ShotSpec = {
+      ...DEFAULT_SHOT,
+      cast: [
+        {
+          ...DEFAULT_ACTOR,
+          sayHeight: 3,
+          tracks: { sayHeight: [{ t: 1, value: 3, ease: 'linear' }, { t: 2, value: 5, ease: 'linear' }] },
+        },
+      ],
+    }
+
+    expect(only(shot, 1).sayHeight).toBe(3)
+    expect(only(shot, 2).sayHeight).toBe(5)
+  })
 })
 
 describe('the voice, which is a schedule and not a sound', () => {

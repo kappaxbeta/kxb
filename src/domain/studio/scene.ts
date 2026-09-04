@@ -98,6 +98,38 @@ export interface PeepSpec {
   /** How high the bubble floats above the ground. */
   emoteHeight: number
   emoteSize: number
+  /**
+   * And the same two, for the bubble a `talk` beat puts up.
+   *
+   * -------------------------------------------------------------------------
+   * Why the sentence stopped borrowing the face's numbers
+   * -------------------------------------------------------------------------
+   * It was drawn at `emoteHeight` and at half `emoteSize`, which is to say it
+   * had no numbers of its own at all. Two things follow from that and both are
+   * wrong. Moving a line of dialogue up off a tall animal's head moved the
+   * emote with it, so the two could never be arranged; and the sentence could
+   * only ever be exactly half the size of a face, which is a ratio nobody
+   * chose - it is what the value happened to be when the bubble was written.
+   *
+   * They are also not the same object. A face is one tile at one size and a
+   * sentence is a box that grows with the words in it, so the height that suits
+   * one is not the height that suits the other, and a shot with a long line in
+   * it wants the box further up than a shot with "Oi." does.
+   *
+   * Defaulted off the emote's pair when a document does not carry them (see
+   * `parsePeep`), so every scene and every shot composed before this draws
+   * exactly what it drew.
+   */
+  sayHeight: number
+  /**
+   * Height of one line of the bubble's text, in blocks.
+   *
+   * The bubble is drawn around it - the padding, the tail and the corner all
+   * scale with this - so it is the one number that changes how big a sentence
+   * is, and the box growing taller for a second line is not this number
+   * changing.
+   */
+  saySize: number
   /** A coloured lamp at their chest, or null for an animal that does not glow. */
   glow: GlowSpec | null
   /**
@@ -428,6 +460,9 @@ export const DEFAULT_PEEP: PeepSpec = {
   emote: 2,
   emoteHeight: 2.9,
   emoteSize: 0.9,
+  // Where a sentence used to land: the emote's height, and half its size.
+  sayHeight: 2.9,
+  saySize: 0.45,
   glow: null,
   say: null,
 }
@@ -467,6 +502,26 @@ export const DEFAULT_SCENE: StudioScene = {
   balls: [],
   light: DEFAULT_LIGHT,
   rainbow: null,
+}
+
+/**
+ * The same scene with nobody's words drawn over them.
+ *
+ * A bubble is the only part of a composition that is *writing*, and writing is
+ * the one thing a picture is bad at carrying: it is baked into the pixels at
+ * whatever size the camera happened to be, it cannot be translated afterwards,
+ * and a burned-in line and a subtitle track on top of each other is the same
+ * sentence twice. So the words come out of the frame here and arrive as a file
+ * instead - see `transcribe` in `@/domain/studio/transcript`, which is the
+ * other half of this decision and the reason it is worth having.
+ *
+ * Only `say` goes. An emote stays, because a face over a head is a picture and
+ * survives being one; and the line is not deleted from the document, only from
+ * this reading of it, so the voice still speaks it and the transcript still
+ * lists it. Off is a choice about the render, not about the shot.
+ */
+export function hush(scene: StudioScene): StudioScene {
+  return { ...scene, peeps: scene.peeps.map((peep) => (peep.say === null ? peep : { ...peep, say: null })) }
 }
 
 // ---------------------------------------------------------------------------
@@ -533,6 +588,18 @@ function peep(value: unknown): PeepSpec {
     emote,
     emoteHeight: number(raw.emoteHeight, DEFAULT_PEEP.emoteHeight, 0, 12),
     emoteSize: number(raw.emoteSize, DEFAULT_PEEP.emoteSize, 0.2, 3),
+    // Fallen back to what the sentence was drawn at before it had numbers of
+    // its own - this peep's emote height, and half its emote size - rather than
+    // to the constants above. A scene that moved its bubble up to clear a tall
+    // animal moved the sentence with it, and defaulting to 2.9 here would drop
+    // that sentence back onto the animal's forehead on the next load.
+    sayHeight: number(raw.sayHeight, number(raw.emoteHeight, DEFAULT_PEEP.emoteHeight, 0, 12), 0, 12),
+    saySize: number(
+      raw.saySize,
+      number(raw.emoteSize, DEFAULT_PEEP.emoteSize, 0.2, 3) * 0.5,
+      0.1,
+      3,
+    ),
     glow: glow(raw.glow),
     // Trimmed rather than rejected on length: a line that arrives too long came
     // from a hand-edited link, and a truncated bubble is a better answer than a

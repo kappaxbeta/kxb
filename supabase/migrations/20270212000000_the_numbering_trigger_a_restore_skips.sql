@@ -1,0 +1,49 @@
+-- ============================================================================
+-- The one trigger a dump restore must not skip
+-- ----------------------------------------------------------------------------
+-- `bun run db:reset` has been failing at the seed, on every branch:
+--
+--   null value in column "tenant_seq" of relation "events"
+--
+-- and the cause is two correct decisions meeting. `seed.sql` is a pg_dump, and
+-- line 7 of every pg_dump sets `session_replication_role = replica` so that a
+-- restore does not re-run triggers whose effects are already in the dump. That
+-- is right: the fold triggers on `events` maintain read models, and the dump
+-- contains those read models, so firing them again would be doing the work
+-- twice.
+--
+-- `events_assign_tenant_seq` is not one of those. It does not maintain
+-- anything - it *allocates* the number, and the column it allocates into is
+-- `not null`. Skipping it does not leave a stale read model to be rebuilt
+-- later; it makes the insert impossible.
+--
+-- `ENABLE ALWAYS` is the narrow fix: this one trigger fires under replica
+-- mode, and every other trigger on the table keeps the behaviour a restore
+-- wants. It is also what 20261120's own comment asked for, in the paragraph
+-- explaining why the numbering lives in a trigger rather than in
+-- `append_events`:
+--
+--   > a numbering scheme with a door that skips it is a numbering scheme with
+--   > holes in it. This way every path is numbered, including any added later
+--   > by somebody who never read this file.
+--
+-- A dump restore is precisely such a path, and it was skipping it.
+--
+-- ---------------------------------------------------------------------------
+-- Why this cannot renumber a dump that already carries the column
+-- ---------------------------------------------------------------------------
+-- The trigger's first statement is `if new.tenant_seq is not null then return
+-- new`. A dump taken after this migration includes `tenant_seq`, so the
+-- restore keeps the numbers it was given and the trigger stands aside. Only a
+-- dump that omits the column - like the one in the repository now - gets
+-- numbered on the way in, which is the behaviour that makes the seed work at
+-- all.
+--
+-- The numbers such a restore allocates are contiguous per tenant and follow
+-- the dump's own insert order, which for a single-statement `VALUES` list is
+-- the order the rows were written. That is the same guarantee the trigger
+-- gives in production, so a reseeded local database is numbered the way a real
+-- one is rather than in some order of its own.
+-- ============================================================================
+
+alter table public.events enable always trigger events_assign_tenant_seq;

@@ -81,16 +81,6 @@ export function EmotePicker({
     current: string
     onChange: (avatar: string) => void
     /**
-     * The peep's other face: the plain mannequin, as a switch beside the
-     * animals rather than a twenty-fifth animal in the grid.
-     *
-     * A switch because the animal is kept underneath it - taking the dummy off
-     * hands back the one you already had, and the grid goes on showing which.
-     * The locker says it the same way; the two wardrobes should not disagree
-     * about what the plain body is.
-     */
-    dummy?: { on: boolean; onToggle: (next: boolean) => void }
-    /**
      * The other body, and which of the two this world is drawing.
      *
      * Two questions, kept apart, because conflating them is what put a bought
@@ -255,9 +245,7 @@ export function EmotePicker({
                           src={
                             peep.xp?.showing
                               ? skinThumbUrl(peep.xp.wearing ?? DUMMY_LOOK)
-                              : peep.dummy?.on
-                                ? skinThumbUrl(DUMMY_LOOK)
-                                : avatarShotUrl(peep.current)
+                              : avatarShotUrl(peep.current)
                           }
                           alt=""
                           width={192}
@@ -283,11 +271,17 @@ export function EmotePicker({
                       replaced the peep everywhere - one click answering two
                       questions, and only one of them asked.
 
-                      Offered only once there is something to switch to. With
-                      no XP body equipped the mode has nothing to show, and the
-                      save refuses it for the same reason.
+                      Offered whether or not anything is equipped, which is the
+                      correction this wardrobe most recently needed. It used to
+                      appear only once you owned and wore an XP body, so the
+                      people with nothing had no mode at all - and the mannequin
+                      was handed to them the other way, as a costume for the
+                      *peep*. That was the same question asked twice, and the
+                      two could disagree. There is one control now: an XP body
+                      with nothing on it is the dummy, and this is how you stand
+                      in it.
                     */}
-                    {peep.xp?.wearing && (
+                    {peep.xp && (
                       <button
                         type="button"
                         onClick={() => peep.xp?.onShow(!peep.xp.showing)}
@@ -315,42 +309,20 @@ export function EmotePicker({
                     )}
 
                     {/*
-                      The peep: the animals, with the dummy as a switch above
-                      them rather than a face among them.
+                      The peep: the animals, and nothing but the animals.
 
                       First of the two grids because it is what a space draws by
                       default and what everybody has before they have anything
-                      else. The dummy is drawn for everybody who can change body
-                      at all, not only for owners, because it is not a purchase -
-                      it is what a player already is in the games and what a
-                      visitor is standing in right now.
+                      else. The mannequin used to sit above this row as a switch,
+                      and taking it out is the whole of this change: a peep is an
+                      animal. Standing in the dummy is not a costume you put on
+                      your peep - it is what your *XP body* looks like wearing
+                      nothing, so it is reached by the mode switch at the top and
+                      by nothing else.
                     */}
                     <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-white/40">
                       {t.peepLabel}
                     </p>
-
-                    {peep.dummy && (
-                      <button
-                        type="button"
-                        onClick={() => peep.dummy?.onToggle(!peep.dummy.on)}
-                        aria-pressed={peep.dummy.on}
-                        className={`mb-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
-                          peep.dummy.on
-                            ? 'border-amber-300/40 bg-amber-400/25 text-amber-100'
-                            : 'border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
-                        }`}
-                      >
-                        <span>{t.dummy}</span>
-                        <Image
-                          src={skinThumbUrl(DUMMY_LOOK)}
-                          alt=""
-                          width={192}
-                          height={192}
-                          loading="lazy"
-                          className="h-5 w-5 object-contain"
-                        />
-                      </button>
-                    )}
 
                     <div
                       role="radiogroup"
@@ -364,10 +336,11 @@ export function EmotePicker({
                          * It used to be `&& !peep.wearing`, so putting an XP
                          * body on un-highlighted every animal and the grid
                          * stopped saying which peep was underneath. The peep is
-                         * always somebody now, whether or not it is the body on
-                         * screen; the dummy switch above is what dims it.
+                         * always somebody, whether or not it is the body on
+                         * screen - so this row says who, and the mode switch at
+                         * the top says whether anybody can see them.
                          */
-                        const current = animal === peep.current && !peep.dummy?.on
+                        const current = animal === peep.current
                         return (
                           <button
                             key={animal}

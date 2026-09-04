@@ -592,8 +592,14 @@ function Wallet({
           </span>
         </div>
 
+        {/*
+          The bundles are `not-in-app`: an App Store build sells nothing
+          (guideline 3.1.1) and `startBucksCheckout` refuses there. Bucks
+          already in the wallet still spend, and presents still redeem - what
+          goes is the row that would charge a card.
+        */}
         {open && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="not-in-app flex flex-wrap items-center gap-2">
             {bundles.map((bundle) => (
               <button
                 key={bundle.id}

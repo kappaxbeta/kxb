@@ -1,6 +1,11 @@
 'use server'
 
 import { randomUUID } from 'node:crypto'
+import { buyExtra } from '@/domain/bank/extras'
+import { nextPrice, type NextPrice } from '@/domain/bank/next'
+import type { Purchasable } from '@/domain/bank/prices'
+import type { Tier } from '@/domain/billing/tiers'
+import type { Client } from '@/es/store'
 import { freshSpec, MAX_BLUEPRINTS_PER_TENANT } from '@/domain/thingiverse/blueprint'
 import { blueprintDecider } from '@/domain/thingiverse/aggregate'
 import {
@@ -24,9 +29,14 @@ import { payToSummon } from '@/domain/thingiverse/shop'
 import {
   countBlueprints,
   countClips,
+  countVehicles,
+  findBlueprint,
   countThings,
+  listBlueprints,
 } from '@/domain/thingiverse/queries'
 import { type ModelHit, searchModels } from '@/domain/thingiverse/models'
+import { sameItem } from '@/domain/thingiverse/craft'
+import { starterSet } from '@/domain/thingiverse/starters'
 import { nameForModel } from '@/domain/thingiverse/summon'
 import { thingDecider } from '@/domain/thingiverse/thing-aggregate'
 import {
@@ -42,7 +52,7 @@ import {
 import { executeCommand } from '@/es/command'
 import { ConcurrencyError, DomainError } from '@/es/errors'
 import { runProjection } from '@/es/projection'
-import { hasRole, hasTier, requireTenant, writeBlockedReason } from '@/lib/tenant'
+import { hasRole, requireTenant, thingiverseOpen, writeBlockedReason } from '@/lib/tenant'
 
 /**
  * Commands for the shelf and for the rooms.
@@ -96,14 +106,19 @@ async function prepare(slug: string) {
   if (blocked) return { ok: false as const, error: blocked }
 
   /*
-   * The feature's own two gates, here as well as on every surface.
+   * The feature's own gate, here as well as on every surface.
    *
-   * They were only on the surfaces, and a gate that lives only where the button
-   * is drawn is not a gate: a server action is a POST endpoint, its id is in the
+   * It was only on the surfaces, and a gate that lives only where the button is
+   * drawn is not a gate: a server action is a POST endpoint, its id is in the
    * client bundle of every page in the space, and "the flag is off" was
-   * enforced by not drawing a link to it. A space on the free plan could have
-   * put two hundred and fifty blueprints on a shelf it is not entitled to, and
-   * the only thing stopping it was that nothing showed it the button.
+   * enforced by not drawing a link to it.
+   *
+   * Two gates once, flag and `xo` tier, and `thingiverseOpen` is now the whole
+   * of it - the tier stopped being half of the answer when the free plan grew
+   * rooms and places to summon into. See the helper for that argument. What
+   * this still catches is the case it was written for: an installation that has
+   * not shipped the thingiverse to this space, reached by a POST rather than by
+   * a link.
    *
    * A refusal rather than `notFound()`, which is what the pages use. The pages
    * are answering "does this URL exist for you" and the honest answer there is
@@ -111,7 +126,7 @@ async function prepare(slug: string) {
    * this file comes back as a sentence the panel can show - a thrown navigation
    * error out of a server action lands as an unexplained failure in a rail.
    */
-  if (!context.features.thingiverse || !hasTier(context, 'xo')) {
+  if (!thingiverseOpen(context)) {
     return { ok: false as const, error: 'The thingiverse is not open in this space.' }
   }
 
@@ -120,6 +135,12 @@ async function prepare(slug: string) {
     supabase: context.supabase,
     tenantId: context.tenant.id,
     userId: context.user.id,
+    /*
+      For the quota, which is a fact about the plan rather than about the
+      request. Read off the context the caller already has rather than through
+      `tenantLimit`'s extra round trip - every path in this file has one.
+    */
+    tier: context.tenant.tier,
     by: {
       actorId: context.user.id,
       admin: hasRole(context, ['owner', 'admin']),
@@ -240,6 +261,119 @@ export async function findParts(slug: string, query: string, pack?: string): Pro
 }
 
 /**
+ * Whether a spec describes a vehicle.
+ *
+ * The presence of the block is the whole test, and it is the same one
+ * `countVehicles` runs in SQL and the workbench runs on the shelf. Written
+ * against `unknown` because it is asked of a spec that has been through zod but
+ * is typed as the schema's output at the call site and as raw input here.
+ */
+function hasVehicle(spec: unknown): boolean {
+  return (
+    typeof spec === 'object' &&
+    spec !== null &&
+    (spec as { vehicle?: unknown }).vehicle != null
+  )
+}
+
+/** A line of the plan, and what the next one on it costs. */
+interface PriceLine {
+  what: Purchasable
+  next: NextPrice
+}
+
+/**
+ * Which line this is charged against, and what it costs.
+ *
+ * Blueprints and vehicles are separate allowances that the same action can
+ * create, so the choice has to be made once, from the spec, in the one place
+ * both the charge and the refusal are decided. Two call sites each deciding it
+ * is how a car comes to be charged as a barrel.
+ *
+ * `blueprints` is the caller's total row count, which includes vehicles - it is
+ * the number `countBlueprints` gives and the number the platform ceiling wants.
+ * The vehicles are subtracted here rather than by the caller so nobody has to
+ * remember that they are counted twice in one place and once in the other.
+ */
+async function priceLine(
+  supabase: Client,
+  tenantId: string,
+  tier: Tier,
+  counts: { vehicle: boolean; blueprints: number },
+): Promise<PriceLine> {
+  const vehicles = await countVehicles(supabase, tenantId)
+
+  return counts.vehicle
+    ? { what: 'vehicles', next: await nextPrice(supabase, tenantId, tier, 'vehicles', vehicles) }
+    : {
+        what: 'blueprints',
+        next: await nextPrice(
+          supabase,
+          tenantId,
+          tier,
+          'blueprints',
+          Math.max(0, counts.blueprints - vehicles),
+        ),
+      }
+}
+
+/** How a line reads in a refusal. */
+const LINE_WORDS: Record<Purchasable, string> = {
+  blueprints: 'blueprints',
+  vehicles: 'vehicles',
+  clips: 'clips',
+  privateXps: 'private levels',
+  publicXps: 'published levels',
+  xoPlaces: 'rooms',
+}
+
+/**
+ * Take the coins, or say why not.
+ *
+ * The half of a create path that is the same whatever is being created, kept
+ * apart so the two callers cannot drift into refusing differently. `buyExtra`
+ * rather than `charge`: a charge without `space_extra_add` is coins taken for a
+ * cap that did not move, so the very next press charges again.
+ *
+ * Vehicles reach the `refused` branch by a different road from everything else
+ * and the sentence has to survive it. Every tier holds *zero* of them, so
+ * `limit` is 0 and the plan-holds phrasing would read "this plan holds 0
+ * vehicles and cannot buy more" - which is exactly backwards, since a vehicle
+ * is the one thing on this table that is always bought and never included. The
+ * only way to get there is an operator's `vehicle_limit` override, so the
+ * sentence names that instead.
+ */
+async function payFor(
+  prepared: { supabase: Client; tenantId: string; userId: string; tier: Tier },
+  line: PriceLine,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const word = LINE_WORDS[line.what]
+
+  if (line.next.kind === 'refused') {
+    return {
+      ok: false,
+      error:
+        line.next.limit === null
+          ? `This space already has unlimited ${word}.`
+          : `This plan holds ${line.next.limit} ${word} and cannot buy more. Retire one, or upgrade.`,
+    }
+  }
+
+  if (line.next.kind === 'costs') {
+    const bought = await buyExtra(
+      prepared.supabase,
+      prepared.tenantId,
+      prepared.userId,
+      prepared.tier,
+      line.what,
+    )
+    if (!bought.ok) return { ok: false, error: bought.error }
+  }
+
+  return { ok: true }
+}
+
+/**
  * Put a new thing on the shelf.
  *
  * The id is minted here rather than by the client, for the reason every stream
@@ -265,6 +399,54 @@ export async function drawBlueprint(
       error: `This space has ${MAX_BLUEPRINTS_PER_TENANT} blueprints. Retire one first.`,
     }
   }
+
+  /*
+    Which line of the plan this is charged against.
+
+    A blueprint with a `vehicle` block is a *vehicle*, and vehicles are their
+    own line - `TierLimits` says so, and the reason is the size of the gap: a
+    blueprint past the allowance is 30 to 60 coins and a vehicle is 10,000 to
+    50,000. So it is one or the other, never both, and the counts have to agree
+    with that or a space pays a vehicle's price for a barrel. The ceiling
+    above is unaffected: a vehicle occupies a row like anything else.
+
+    The New vehicle button on the workbench arrives here with `exampleCar`
+    already in the spec, so a car bought that way is priced correctly from the
+    first press rather than at whatever the bench saves next.
+  */
+  const wanted = await priceLine(prepared.supabase, prepared.tenantId, prepared.tier, {
+    vehicle: hasVehicle(parsed.data.spec),
+    blueprints: standing,
+  })
+
+  /*
+    Past what the plan holds, this costs coins.
+
+    ---------------------------------------------------------------------------
+    Two limits, and they are not the same kind of thing
+    ---------------------------------------------------------------------------
+    The one above is `blueprint.ts`'s platform ceiling: a real limit on a real
+    box, checked first, and no amount of coins moves it. This one is the tier's
+    allowance, which is a commercial number that a purse *can* lift by one. They
+    are deliberately separate rungs - see `resolveLimit` - and a space that buys
+    its way past its plan still stops at the ceiling.
+
+    ---------------------------------------------------------------------------
+    Charged on the press, not behind a confirmation
+    ---------------------------------------------------------------------------
+    Which is a real decision and the same one the summon button already makes:
+    the price is drawn on the control that spends it (`CoinPrice`, and see
+    `nextPrice` for how the two are kept from disagreeing), so pressing it *is*
+    the confirmation. A second dialogue in front of a sixty-coin slot would be a
+    modal in the middle of putting a thing in a room.
+
+    Charge before draw, which is the ordering `buyExtra` argues for at length.
+    The failure it leaves is a slot paid for and not filled - and because a slot
+    belongs to the space permanently, the next draw simply uses it. Nobody has
+    to be made whole for that one.
+  */
+  const paid = await payFor(prepared, wanted)
+  if (!paid.ok) return paid
 
   return dispatchBlueprint(slug, randomUUID(), (by) => ({
     type: 'DrawBlueprint',
@@ -300,11 +482,198 @@ export async function reshapeBlueprint(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid blueprint' }
   }
 
+  /*
+    The other door a vehicle comes through, and the reason it needed one.
+
+    Every other charge in this file hangs off a *create*: a press makes a thing
+    that did not exist, and the price sits on the press. A vehicle is not made
+    that way. It is a `vehicle` block added to a blueprint at the bench - one
+    checkbox, on a spec somebody is already editing - so the act that costs
+    10,000 coins was, until this, an ordinary save.
+
+    Which means the charge has to be a *transition*: this spec has one and the
+    stored one does not. Not "the spec has one", which would charge again on
+    every subsequent save of the same car, and not "the checkbox was ticked",
+    which is a fact about a browser and can be replayed by anybody willing to
+    send the request twice.
+
+    Taking the block away is deliberately free and deliberately not refunded.
+    The slot belongs to the space and stays bought (economy.md §8.8), so
+    unticking and re-ticking is free rather than a way to be charged twice -
+    which is the right way round for a checkbox somebody may well press to see
+    what it does.
+  */
+  const prepared = await prepare(slug)
+  if (!prepared.ok) return prepared
+
+  if (hasVehicle(parsed.data.spec)) {
+    const before = await findBlueprint(
+      prepared.supabase,
+      prepared.tenantId,
+      prepared.userId,
+      parsed.data.id,
+    )
+
+    // A blueprint that is not there is the decider's refusal to make, not this
+    // one's: charging for a stream that does not exist would be the worst of
+    // both. Fall through and let the command fail.
+    if (before && !hasVehicle(before.spec)) {
+      const paid = await payFor(prepared, {
+        what: 'vehicles',
+        next: await nextPrice(
+          prepared.supabase,
+          prepared.tenantId,
+          prepared.tier,
+          'vehicles',
+          await countVehicles(prepared.supabase, prepared.tenantId),
+        ),
+      })
+      if (!paid.ok) return paid
+    }
+  }
+
   return dispatchBlueprint(slug, parsed.data.id, (by) => ({
     type: 'ReshapeBlueprint',
     by,
     spec: parsed.data.spec,
   }))
+}
+
+/**
+ * What adding a set of ours came to.
+ *
+ * A count rather than an id, because there is no single thing to point at: the
+ * caller has just caused up to ten blueprints to exist and the only useful
+ * answers are how many landed and how many were already there. `ok: false` is
+ * still one sentence, which is what every panel in this feature draws.
+ */
+export type StarterResult =
+  | { ok: true; added: number; skipped: number }
+  | { ok: false; error: string }
+
+/**
+ * Put one of our sets on the space's shelf.
+ *
+ * ---------------------------------------------------------------------------
+ * Skipping by name, rather than adding a second Bun
+ * ---------------------------------------------------------------------------
+ * An item is a *word* resolved against the shelf (see `./craft`), so a space
+ * holding two blueprints called "Bun" is a space where every recipe naming one
+ * is a coin toss. Pressing the button twice is a thing people do - to see what
+ * it does, or because the first press was on a slow connection - so the second
+ * press has to be a no-op rather than a quietly broken kitchen.
+ *
+ * The comparison is the *shelf's* rule (`sameItem`: lowercase, spaces and
+ * underscores the same) rather than string equality, because that is the rule a
+ * recipe will resolve by later. Matching more loosely than the thing that reads
+ * it would be a duplicate this could not see.
+ *
+ * ---------------------------------------------------------------------------
+ * One event per blueprint, in a loop, and no transaction
+ * ---------------------------------------------------------------------------
+ * A set is not an aggregate: each of these is an ordinary blueprint on its own
+ * stream from the moment it lands, and nothing afterwards knows they arrived
+ * together. So a set that half-lands is a shelf with half a kitchen on it,
+ * which the count says out loud and which pressing the button again fixes -
+ * exactly the shape the skip above gives it.
+ */
+export async function drawStarterSet(slug: string, setId: string): Promise<StarterResult> {
+  const set = starterSet(setId)
+  if (!set) return { ok: false, error: 'No such set.' }
+
+  const prepared = await prepare(slug)
+  if (!prepared.ok) return prepared
+
+  const standing = await listBlueprints(prepared.supabase, prepared.tenantId, prepared.userId)
+  const wanted = set.things.filter(
+    (starter) => !standing.some((entry) => sameItem(entry.name, starter.name)),
+  )
+
+  if (standing.length + wanted.length > MAX_BLUEPRINTS_PER_TENANT) {
+    return {
+      ok: false,
+      error: `This space has room for ${MAX_BLUEPRINTS_PER_TENANT} blueprints. Retire a few first.`,
+    }
+  }
+
+  /*
+    The plan's allowance, and the one place this feature refuses rather than
+    charges.
+
+    A set is up to ten blueprints behind one press. `drawBlueprint` charges on
+    the press because the price is drawn on the control and the control makes
+    one thing; ten silent charges off one button is a different act, and a purse
+    emptied by a set nobody priced is exactly the kind of thing this economy is
+    written to make impossible. So the whole set is refused, with the number
+    that would let it through.
+
+    Checked against the *shelf* rather than `countBlueprints`, which is the
+    count this path already has and is the same number for this purpose: a
+    starter set is public, and the shelf query returns every public blueprint
+    plus the asker's own.
+  */
+  const room = await nextPrice(
+    prepared.supabase,
+    prepared.tenantId,
+    prepared.tier,
+    'blueprints',
+    standing.length + wanted.length - 1,
+  )
+  if (room.kind !== 'included') {
+    return {
+      ok: false,
+      error: `This plan holds ${room.kind === 'refused' ? (room.limit ?? 'no') : 'fewer'} blueprints than that set needs. Buy a few slots first, or upgrade.`,
+    }
+  }
+
+  /*
+    The command loop is written out rather than run through `dispatchBlueprint`,
+    and the reason is what that helper does *around* the append: it prepares the
+    request and projects the read model, and a ten-thing set would therefore
+    re-read the tenant ten times and rebuild the shelf ten times to add one
+    kitchen. Membership is a fact about this request, so it is read once; the
+    projection is a fold over new events, so it is run once at the end.
+  */
+  const { supabase, tenantId, userId, by } = prepared
+  let added = 0
+
+  try {
+    for (const starter of wanted) {
+      await executeCommand({
+        supabase,
+        decider: blueprintDecider,
+        tenantId,
+        streamId: randomUUID(),
+        command: {
+          type: 'DrawBlueprint',
+          by,
+          name: starter.name,
+          spec: starter.spec,
+          /*
+            Public, which is the one decision here that is not "whatever a fresh
+            blueprint does". A kitchen whose bun is private is a kitchen only its
+            author can cook in: the board resolves the word against what the
+            *room* can see, and half the point of a set is that somebody else
+            walks up to it. See `listBlueprints`, whose filter is the one the
+            shelf and the summon menu both run.
+          */
+          visibility: 'public',
+        },
+        metadata: { actorId: userId },
+      })
+      added += 1
+    }
+  } catch (error) {
+    // Whatever landed before the refusal stays landed - see the note above on
+    // why a set is not an aggregate. The count is not returned here because the
+    // caller is being told something went wrong; pressing the button again adds
+    // the rest.
+    await runProjection(supabase, thingiverseProjection, tenantId)
+    return toResult(error)
+  }
+
+  await runProjection(supabase, thingiverseProjection, tenantId)
+  return { ok: true, added, skipped: set.things.length - wanted.length }
 }
 
 /** Put it on the shelf everybody in the space can reach, or take it back. */
@@ -631,6 +1000,14 @@ export async function saveClip(
       error: `This space has ${MAX_CLIPS_PER_TENANT} clips. Retire one first.`,
     }
   }
+
+  // The plan's allowance, and the coins past it. The same two rungs and the
+  // same ordering as `drawBlueprint` above - read the note there.
+  const paid = await payFor(prepared, {
+    what: 'clips',
+    next: await nextPrice(prepared.supabase, prepared.tenantId, prepared.tier, 'clips', kept),
+  })
+  if (!paid.ok) return paid
 
   return dispatchClip(slug, randomUUID(), (by) => ({
     type: 'DrawClip',

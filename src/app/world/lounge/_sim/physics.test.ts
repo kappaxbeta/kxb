@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  type Deck,
   EYE_HEIGHT,
   GRAVITY,
   JUMP_SPEED,
@@ -602,5 +603,124 @@ describe('being stuck inside something', () => {
 
     expect(result.position.x).toBeCloseTo(0.5, 10)
     expect(result.position.z).toBeCloseTo(0.5, 10)
+  })
+})
+
+describe('riding a moving deck', () => {
+  /**
+   * A lift: three cells across, one thick, top face at `top`.
+   *
+   * Solid and deck reported the way `lounge-things.tsx` reports them - the
+   * cells stop at the last whole one *beneath* the surface, and the surface
+   * itself is the deck. Getting these two out of step is the bug this suite
+   * exists to hold shut: cells that claim the top slab put the rider inside
+   * solid geometry, and the shove out of it is what "i get lifted but i am not
+   * on the object" was.
+   */
+  function lift(top: number) {
+    const bottom = top - 1
+    const solid: SolidTest = (x, y, z) =>
+      x >= -2 && x <= 1 && z >= -2 && z <= 1 && y >= Math.floor(bottom) && y < Math.floor(top)
+    const deck = (
+      x: number,
+      z: number,
+      radius: number,
+      lowest: number,
+      highest: number,
+    ): Deck | null => {
+      if (top < lowest || top > highest) return null
+      if (x + radius <= -1.5 || x - radius >= 1.5) return null
+      if (z + radius <= -1.5 || z - radius >= 1.5) return null
+      return { id: 'lift', top, minX: -1.5, minZ: -1.5 }
+    }
+    return { isSolid: solid, deckUnder: deck }
+  }
+
+  test('a rider stands on the deck, not on the cell below it', () => {
+    const result = run(eyeAt(0, 1.3, 0), { ...lift(1.3), grounded: true })
+
+    // Exactly the drawn surface. The old cell path answered 1.
+    expect(result.position.y - EYE_HEIGHT).toBeCloseTo(1.3, 10)
+    expect(result.grounded).toBe(true)
+    expect(result.riding).toBe(true)
+  })
+
+  test('a rising lift carries the body instead of shoving it', () => {
+    let body = { position: eyeAt(0, 1, 0), velocityY: 0, grounded: true, jumps: 0 }
+    let worst = 0
+
+    // Four cells over three seconds, the shape `freshLift` describes, at the
+    // constant speed that makes the arithmetic checkable.
+    for (let i = 1; i <= 180; i++) {
+      const top = 1 + (4 * i) / 180
+      body = step({
+        ...body,
+        moveX: 0,
+        moveZ: 0,
+        jump: false,
+        delta: FRAME,
+        ...lift(top),
+      })
+      worst = Math.max(worst, Math.abs(body.position.y - EYE_HEIGHT - top))
+      // Never pushed off the platform, which is what `escapeFrom` used to do
+      // to anybody on a lift narrow enough for sideways to be the cheap way out.
+      expect(body.position.x).toBeCloseTo(0, 10)
+      expect(body.position.z).toBeCloseTo(0, 10)
+    }
+
+    // On the deck every single frame. Before decks the gap swung ±0.5 and the
+    // body climbed in whole-cell steps.
+    expect(worst).toBeLessThan(1e-9)
+    expect(body.grounded).toBe(true)
+  })
+
+  test('a descending lift is followed down rather than fallen off', () => {
+    let body = { position: eyeAt(0, 5, 0), velocityY: 0, grounded: true, jumps: 0 }
+
+    for (let i = 1; i <= 180; i++) {
+      const top = 5 - (4 * i) / 180
+      body = step({ ...body, moveX: 0, moveZ: 0, jump: false, delta: FRAME, ...lift(top) })
+      expect(body.position.y - EYE_HEIGHT).toBeCloseTo(top, 10)
+    }
+
+    // And it arrives home with the rider on it, rather than a cell above it -
+    // which is where the cell path parked everybody for good.
+    expect(body.position.y - EYE_HEIGHT).toBeCloseTo(1, 10)
+  })
+
+  test('a rider can still jump off', () => {
+    const jumped = run(eyeAt(0, 1.3, 0), { ...lift(1.3), grounded: true, jump: true })
+    expect(jumped.velocityY).toBeGreaterThan(0)
+    expect(jumped.grounded).toBe(false)
+
+    // And is not snapped straight back down onto it on the way up.
+    const rising = run(eyeAt(0, 1.4, 0), { ...lift(1.3), velocityY: JUMP_SPEED, grounded: false })
+    expect(rising.position.y - EYE_HEIGHT).toBeGreaterThan(1.4)
+    expect(rising.riding).toBeFalsy()
+  })
+
+  test('a deck out of reach is not stood on', () => {
+    // Well above: a crusher on its way up must not fish somebody off the floor.
+    const high = run(eyeAt(0, 0, 0), { ...lift(3), grounded: true, floorY: 0 })
+    expect(high.position.y - EYE_HEIGHT).toBeCloseTo(0, 10)
+    expect(high.riding).toBeFalsy()
+
+    // And well below: a lift that has dropped away leaves you falling.
+    const low = run(eyeAt(0, 5, 0), { ...lift(1), grounded: true, floorY: -50 })
+    expect(low.position.y - EYE_HEIGHT).toBeLessThan(5)
+    expect(low.riding).toBeFalsy()
+  })
+
+  test('a room with nothing moving in it behaves exactly as before', () => {
+    const withDeck = run(eyeAt(0.5, 1, 0.5), {
+      isSolid: FLOOR_AT_0,
+      grounded: true,
+      deckUnder: () => null,
+    })
+    const without = run(eyeAt(0.5, 1, 0.5), { isSolid: FLOOR_AT_0, grounded: true })
+
+    expect(withDeck.position.y).toBeCloseTo(without.position.y, 10)
+    expect(withDeck.grounded).toBe(without.grounded)
+    expect(withDeck.riding).toBeFalsy()
   })
 })

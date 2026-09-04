@@ -23,6 +23,7 @@ import { runProjection } from '@/es/projection'
 import type { Client } from '@/es/store'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasRole, requireTenant, type TenantContext } from '@/lib/tenant'
+import { isAppShell, NOT_FOR_SALE_IN_APP } from '@/lib/app-shell'
 
 /**
  * Billing actions.
@@ -92,6 +93,11 @@ export async function startCheckout(
   slug: string,
   rawTier: string,
 ): Promise<ActionResult | never> {
+  // Nothing is sold inside the installed app - see `isAppShell`. Checked here
+  // and not only in the UI, because a Server Action is a public POST endpoint
+  // and a hidden button is a rendering decision.
+  if (await isAppShell()) return { ok: false, error: NOT_FOR_SALE_IN_APP }
+
   const tier = asPaidTier(rawTier)
   if (!tier) return { ok: false, error: 'Pick xo or xp' }
 
@@ -190,6 +196,11 @@ async function liveSubscription(
  * and the log records what actually happened rather than what we intended.
  */
 export async function openBillingPortal(slug: string): Promise<ActionResult | never> {
+  // Nothing is sold inside the installed app - see `isAppShell`. Checked here
+  // and not only in the UI, because a Server Action is a public POST endpoint
+  // and a hidden button is a rendering decision.
+  if (await isAppShell()) return { ok: false, error: NOT_FOR_SALE_IN_APP }
+
   const context = await requireTenant(slug)
   const { tenant } = context
 
@@ -251,6 +262,11 @@ export async function scheduleTierChange(
   slug: string,
   rawTier: string,
 ): Promise<ActionResult | { ok: true; effectiveAt: string }> {
+  // Nothing is sold inside the installed app - see `isAppShell`. Checked here
+  // and not only in the UI, because a Server Action is a public POST endpoint
+  // and a hidden button is a rendering decision.
+  if (await isAppShell()) return { ok: false, error: NOT_FOR_SALE_IN_APP }
+
   const tier = asPaidTier(rawTier)
   if (!tier) return { ok: false, error: 'Pick xo or xp' }
 
@@ -495,6 +511,11 @@ export async function cancelSubscription(slug: string): Promise<ActionResult | {
 }
 
 export async function resumeSubscription(slug: string): Promise<ActionResult | { ok: true }> {
+  // Nothing is sold inside the installed app - see `isAppShell`. Checked here
+  // and not only in the UI, because a Server Action is a public POST endpoint
+  // and a hidden button is a rendering decision.
+  if (await isAppShell()) return { ok: false, error: NOT_FOR_SALE_IN_APP }
+
   return setCancelAtPeriodEnd(slug, false)
 }
 

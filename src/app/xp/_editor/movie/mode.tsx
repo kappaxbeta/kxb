@@ -50,6 +50,7 @@ import {
   save,
   type CaptureParts,
 } from '@/app/xp/_editor/movie/export'
+import { useClientCapability } from '@/lib/use-client-capability'
 
 /**
  * The movie editor, over the whole screen.
@@ -2341,7 +2342,13 @@ function Export({
   const size = frameOf(frame)
   const [recording, setRecording] = useState<{ stop: () => void } | null>(null)
   const [note, setNote] = useState<string | null>(null)
-  const able = useMemo(() => canRecord(), [])
+  /**
+   * `useMemo(() => canRecord(), [])` used to sit here - the same bug as the
+   * studio's: `useMemo` still runs during the hydration render, so the
+   * server's "no `MediaRecorder`" answer was the only one this ever produced.
+   * See `useClientCapability` for the mount-time fix.
+   */
+  const able = useClientCapability(canRecord)
 
   /* Named `snap` rather than `frame`, which is the delivered *shape* here. */
   const snap = () => {

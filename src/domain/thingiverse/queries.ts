@@ -158,6 +158,44 @@ export async function countBlueprints(
 }
 
 /**
+ * How many of those are vehicles.
+ *
+ * Its own count because a vehicle is its own line on the plan. `TierLimits`
+ * says so in as many words - vehicles are not counted among blueprints,
+ * "because they are priced two orders of magnitude apart" - and the difference
+ * is not a rounding: a blueprint costs 30 to 60 coins past the allowance and a
+ * vehicle costs 10,000 to 50,000. Counting one against the other would either
+ * charge somebody a vehicle's price for a barrel or let a car through on a
+ * blueprint's.
+ *
+ * It does *not* replace `countBlueprints`, which stays exactly as it is. That
+ * one counts rows for the platform ceiling in `blueprint.ts` - a real limit on
+ * a real box, and a vehicle occupies a row like anything else. This one counts
+ * for the plan. Two questions, two numbers, and the create path subtracts.
+ *
+ * `spec->vehicle` rather than a column: the block is part of the spec and lives
+ * or dies with it, and a column would be a second copy for a projection to keep
+ * in step.
+ */
+export async function countVehicles(
+  supabase: Client,
+  tenantId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('thingiverse_blueprints_read_model')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('retired', false)
+    .not('spec->vehicle', 'is', null)
+
+  if (error) {
+    throw new Error(`Failed to count vehicles: ${error.message}`)
+  }
+
+  return count ?? 0
+}
+
+/**
  * Everything standing in one world, with its blueprint attached.
  *
  * Two queries rather than an embedded join, because these are read models and

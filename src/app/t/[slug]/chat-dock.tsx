@@ -10,6 +10,7 @@ import { announceSaid } from '@/app/world/_stores/said-store'
 import { callSummon } from '@/app/t/[slug]/summon-store'
 import { callClip, callThingiverse, callVehicle } from '@/app/world/_stores/thing-store'
 import { countReceived, countSent } from '@/app/world/perf/store'
+import { blockUser } from '@/domain/blocks/actions'
 import { postChatMessage, readRoomChat } from '@/domain/chat/actions'
 import { CHAT_HISTORY_LIMIT } from '@/domain/chat/events'
 import { createClient } from '@/lib/supabase/client'
@@ -66,6 +67,7 @@ export function ChatDock({
   initialMessages,
   /** Null when the viewer may post. A sentence explaining why not, otherwise. */
   blockedReason,
+  blockedPeople,
   rooms,
 }: {
   slug: string
@@ -73,6 +75,8 @@ export function ChatDock({
   userId: string
   initialMessages: ChatLine[]
   blockedReason: string | null
+  /** Account ids this reader has blocked. See the ref below for what it is for. */
+  blockedPeople: string[]
   /** The rooms this person can see, so the rail can offer them. */
   rooms: { roomId: string; name: string }[]
 }) {
@@ -101,6 +105,23 @@ export function ChatDock({
   const [loading, setLoading] = useState(false)
 
   /**
+   * Everyone this reader has blocked, as the socket's copy of the rule.
+   *
+   * A ref rather than state, and the reason is the subscription: `blocked` in
+   * the dependency array of `appendIncoming` would tear the Realtime channel
+   * down and build it again every time somebody was blocked, which is a
+   * reconnect in the middle of a conversation to apply a filter. Nothing here
+   * is rendered - the dock draws nothing at all - so there is nothing a
+   * re-render would be for.
+   *
+   * The database is where this is actually enforced: `author_is_blocked` is in
+   * the chat's select policy, so every scrollback, every room switch and every
+   * reload comes back already filtered. This set exists for the one path that
+   * never selects anything - a broadcast arriving over the socket.
+   */
+  const blocked = useRef(new Set(blockedPeople))
+
+  /**
    * Shared by the Supabase broadcast below and the same-browser relay next to
    * it, so a line cannot be shaped one way from one path and another way from
    * the other.
@@ -116,6 +137,11 @@ export function ChatDock({
       // which is most of the point of chat being durable. A packet missing
       // one is from a client we do not understand.
       if (typeof message.i !== 'string' || !message.i) return
+
+      // The socket's half of the block. Dropped before the list and before the
+      // bubble below it, because a blocked person should not appear over
+      // somebody's head either.
+      if (blocked.current.has(message.u)) return
 
       setLines((current) => {
         if (current.some((line) => line.id === message.i)) return current
@@ -437,6 +463,49 @@ export function ChatDock({
   )
 
   /**
+   * Stop hearing somebody, from the line they said.
+   *
+   * Three things happen and only one of them is a round trip:
+   *
+   *   1. The set the socket filters against gains an id, so the *next* thing
+   *      they say never reaches the panel.
+   *   2. Everything they have already said leaves the list. A block that only
+   *      applied from now on would leave the message somebody was reacting to
+   *      still on screen, which is the opposite of what was asked for.
+   *   3. The row is written.
+   *
+   * Optimistic, with the snapshot kept so a refusal can put it back - and
+   * deliberately not `useOptimistic`, which reverts on its own schedule and
+   * belongs to a transition this panel does not have. If the write fails the
+   * lines come back and the id comes out of the set, so the two halves cannot
+   * end up disagreeing about who is blocked.
+   */
+  const block = useCallback(
+    (blockedId: string) => {
+      if (!blockedId || blockedId === userId) return
+
+      blocked.current.add(blockedId)
+
+      /*
+       * The list as it stands, kept for the rollback. Read from the render
+       * rather than out of the updater below, because an updater that writes
+       * to something outside itself is not a pure function of its argument -
+       * React is allowed to call it twice, and the compiler's lint is right to
+       * say so.
+       */
+      const before = lines
+      setLines((current) => current.filter((line) => line.authorId !== blockedId))
+
+      void blockUser(blockedId).then((result) => {
+        if (result.ok) return
+        blocked.current.delete(blockedId)
+        setLines(before)
+      })
+    },
+    [userId, lines],
+  )
+
+  /**
    * Handed to the emote picker, wherever one happens to be open.
    *
    * No dependency array: cheap, and the one thing that must never happen is a
@@ -465,8 +534,9 @@ export function ChatDock({
       roomId,
       loading,
       onRoom: goToRoom,
+      onBlock: block,
     })
-  }, [slug, userId, lines, blockedReason, rooms, roomId, loading, goToRoom])
+  }, [slug, userId, lines, blockedReason, rooms, roomId, loading, goToRoom, block])
 
   /**
    * The conversation follows you into a room.

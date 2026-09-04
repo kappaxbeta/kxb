@@ -2,7 +2,7 @@
 
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { builderUrl } from '@/domain/builder/packs'
+import { placementUrl } from '@/domain/builder/props'
 
 /**
  * Pictures of models, drawn on demand.
@@ -104,7 +104,7 @@ function setup() {
  */
 async function draw(model: string): Promise<string | null> {
   const { renderer, scene, camera, canvas, loader } = setup()
-  const url = builderUrl(model)
+  const url = placementUrl(model)
   if (!url) return null
 
   let loaded: THREE.Object3D

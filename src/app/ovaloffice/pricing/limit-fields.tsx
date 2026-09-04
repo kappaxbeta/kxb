@@ -4,7 +4,7 @@ import { LIMIT_KEYS, type LimitKey, type TierLimits } from '@/domain/billing/tie
 import type { StoredLimits } from '@/domain/billing/tier-admin'
 
 /**
- * The nine limits, as three answers rather than one number.
+ * Every limit, as three answers rather than one number.
  *
  * A `limits` column has three states and only one of them is a number, which is
  * the whole reason this is a widget rather than nine inputs. Absent means
@@ -38,6 +38,17 @@ const LIMIT_LABELS: Record<LimitKey, string> = {
   matches: 'Matches at once',
   pages: 'Pages',
   pictures: 'Images',
+  // The five a member can also buy one more of with coins. The number here is
+  // still the *allowance* - what the tier includes before anybody pays - so it
+  // is edited exactly like its neighbours. See `docs/product/economy.md` §7.
+  privateXps: 'Private XPs',
+  publicXps: 'Published XPs',
+  blueprints: 'Blueprints',
+  clips: 'Clips',
+  // Zero on every tier by design: a vehicle is always bought. Editable anyway,
+  // because a tier that includes one is a decision somebody may want to make
+  // here rather than in a deploy.
+  vehicles: 'Vehicles',
 }
 
 /**
@@ -58,6 +69,11 @@ export const NO_LIMITS: TierLimits = {
   matches: null,
   pages: null,
   pictures: null,
+  privateXps: null,
+  publicXps: null,
+  blueprints: null,
+  clips: null,
+  vehicles: null,
 }
 
 export function draftFromLimits(limits: StoredLimits): LimitsDraft {

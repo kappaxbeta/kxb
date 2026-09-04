@@ -463,3 +463,103 @@ describe('releases', () => {
     expect(down.releases).toEqual([1, 2])
   })
 })
+
+describe('pricing a level', () => {
+  /**
+   * Two prices in one decision. `once` is what it costs to play, paid a single
+   * time; `remix` is what it costs to take a copy and change it. Both are free
+   * until somebody says otherwise, and nothing about the feature existing
+   * changes what an untouched level costs.
+   */
+  test('a level is free to play and free to fork until it is priced', () => {
+    const state = fold(created())
+    expect(state.price).toEqual({ once: 0, remix: 0, split: {} })
+  })
+
+  test('the owner sets both at once', () => {
+    const state = run(fold(created()), {
+      type: 'PriceXp', actorId: OWNER, once: 40, remix: 200,
+    })
+    expect(state.price.once).toBe(40)
+    expect(state.price.remix).toBe(200)
+  })
+
+  test('nobody else may put a price on somebody s work', () => {
+    expect(() =>
+      decide(fold(created()), { type: 'PriceXp', actorId: OTHER, once: 40, remix: 0 }),
+    ).toThrow(DomainError)
+  })
+
+  test('setting the same price again writes nothing', () => {
+    const priced = fold([...created(), { type: 'XpPriced', data: { once: 40, remix: 0 } }])
+    expect(decide(priced, { type: 'PriceXp', actorId: OWNER, once: 40, remix: 0 })).toEqual([])
+  })
+
+  test('a price can be taken back off', () => {
+    const priced = fold([...created(), { type: 'XpPriced', data: { once: 40, remix: 10 } }])
+    const free = run(priced, { type: 'PriceXp', actorId: OWNER, once: 0, remix: 0 })
+    expect(free.price).toEqual({ once: 0, remix: 0, split: {} })
+  })
+
+  test('a nonsense price is refused rather than clamped', () => {
+    for (const once of [-1, 1.5, 999_999_999, NaN]) {
+      expect(() =>
+        decide(fold(created()), { type: 'PriceXp', actorId: OWNER, once, remix: 0 }),
+      ).toThrow(DomainError)
+    }
+  })
+})
+
+describe('splitting what a remix pays', () => {
+  /**
+   * What is *not* allocated stays with the owner, so a split need not add to
+   * 100 - and deliberately cannot be forced to, because a level whose owner has
+   * given away every point is a level they are paid nothing for. That is a
+   * mistake rather than a configuration.
+   */
+  test('a partial split is complete, because the rest is the owner s', () => {
+    const state = run(fold(created()), {
+      type: 'PriceXp', actorId: OWNER, once: 0, remix: 100, split: { [OTHER]: 30 },
+    })
+    expect(state.price.split).toEqual({ [OTHER]: 30 })
+  })
+
+  test('shares may total exactly the whole', () => {
+    const state = run(fold(created()), {
+      type: 'PriceXp', actorId: OWNER, once: 0, remix: 100,
+      split: { [OTHER]: 60, 'third-person': 40 },
+    })
+    expect(Object.values(state.price.split).reduce((a, b) => a + b, 0)).toBe(100)
+  })
+
+  /**
+   * The one that matters. Paying out more than arrived is minting, dressed up
+   * as a collaboration - and it would be silent, because each share on its own
+   * looks perfectly reasonable.
+   */
+  test('but never more, which would pay out more than came in', () => {
+    expect(() =>
+      decide(fold(created()), {
+        type: 'PriceXp', actorId: OWNER, once: 0, remix: 100,
+        split: { [OTHER]: 60, 'third-person': 60 },
+      }),
+    ).toThrow(/more than the price/)
+  })
+
+  test('a share outside a percentage is meaningless and refused', () => {
+    for (const share of [0, -10, 101, 2.5]) {
+      expect(() =>
+        decide(fold(created()), {
+          type: 'PriceXp', actorId: OWNER, once: 0, remix: 100, split: { [OTHER]: share },
+        }),
+      ).toThrow(DomainError)
+    }
+  })
+
+  test('no split at all carries no key, so the common case stays small', () => {
+    const [event] = decide(fold(created()), {
+      type: 'PriceXp', actorId: OWNER, once: 10, remix: 0,
+    })
+    expect(Object.hasOwn(event.data, 'split')).toBe(false)
+  })
+})
