@@ -30,7 +30,7 @@ import type { Database } from '@/lib/supabase/types'
 
 const password = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
+  .min(6, 'Password must be at least 6 characters')
   // The upper bound is bcrypt's, not ours: it silently truncates past 72 bytes,
   // so a longer one would appear to be accepted and then not be what was typed.
   .max(72, 'Password must be at most 72 characters')

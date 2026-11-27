@@ -139,7 +139,7 @@ export function PasswordPanel({
             type="password"
             autoComplete="new-password"
             required
-            minLength={8}
+            minLength={6}
             maxLength={72}
             className={`mt-1 ${field}`}
           />

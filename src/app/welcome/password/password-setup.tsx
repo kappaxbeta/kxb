@@ -72,12 +72,12 @@ export function PasswordSetup({ email }: { email: string }) {
           type="password"
           autoComplete="new-password"
           required
-          minLength={8}
+          minLength={6}
           autoFocus
           aria-label="New password"
           className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-accent"
         />
-        <p className="text-xs text-ink-muted">At least 8 characters.</p>
+        <p className="text-xs text-ink-muted">At least 6 characters.</p>
         <SubmitButton />
       </form>
 

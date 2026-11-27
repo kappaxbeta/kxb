@@ -69,24 +69,51 @@ need no database** and run in seconds, and 188 migrations.
 
 ## Getting started
 
-Requires [Bun](https://bun.sh) and Docker (for the local Supabase stack).
+You need [Bun](https://bun.sh), the [Supabase CLI](https://supabase.com/docs/guides/cli)
+and Docker Desktop, running.
 
 ```bash
+git clone https://github.com/kappaxbeta/kxb.git && cd kxb
 bun install
+bun run setup
 bun run dev
 ```
 
-Then open <http://127.0.0.1:3000>.
+Open <http://127.0.0.1:3000> and sign in as **`admin@kxb.team`** / **`test123`**.
 
-`dev` starts the local Supabase stack in Docker if it is not already up, reads
-its URL and keys from `supabase status`, and writes them into **`.env.local`**
-before starting Next. There is no anon key to copy by hand: the local keys are
-generated per install, so they are refreshed on every run. The merge only
-rewrites the Supabase-and-URL lines — anything else you keep in `.env.local` is
-preserved.
+That is the whole of it. What each step did:
 
-Everything else you might set is documented, with its failure mode, in
-[`.env.example`](.env.example). None of it is required to start.
+| | |
+|---|---|
+| `bun install` | the app and the workspace packages under `packages/` |
+| `bun run setup` | starts Supabase in Docker, applies every migration, seeds the starter worlds into the catalogue, and creates the local admin above — confirmed, email-verified and a backoffice superadmin, so `/ovaloffice` opens too |
+| `bun run dev` | writes the local stack's URL and keys into `.env.local` and starts Next on port 3000 |
+
+The first `setup` pulls the Supabase images and takes a few minutes; after
+that it takes seconds. Run it again after every `git pull` — it only applies
+what is new, and it never touches anything you made.
+
+**Useful addresses once it is up:** Supabase Studio at <http://127.0.0.1:54323>
+and Mailpit, where every sign-up and magic-link mail lands, at
+<http://127.0.0.1:54324>.
+
+**When something is in the way**
+
+- *Port 3000 is taken* — `bun run dev --port 3300`, with
+  `LOCAL_APP_URL=http://127.0.0.1:3300` in front so links point at it.
+- *Another Supabase project is already running* — two stacks with the same
+  ports cannot both be up. Stop the other one (`supabase stop` in its folder), or
+  give this one its own `project_id` and ports in `supabase/config.toml`.
+- *A different admin* — `SETUP_ADMIN_EMAIL=you@example.com
+  SETUP_ADMIN_PASSWORD=something bun run setup`. The default only ever lands
+  on a local stack: setup refuses any Supabase that is not on this machine.
+- *Start over* — `bun run db:reset`, then `bun run setup` again.
+
+`dev` reads the stack's keys from `supabase status` on every run, so there is
+no anon key to copy by hand, and it only rewrites the Supabase-and-URL lines of
+`.env.local` — anything else you keep there is preserved. Nothing else is
+required to start: Stripe, mail and the AI buddy all stay off until you give
+them keys.
 
 The lounge, the dummy and a starter cast ship with the clone; the rest of the
 kits are fetched — see [docs/assets.md](docs/assets.md).

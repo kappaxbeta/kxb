@@ -23,7 +23,7 @@ export async function finishWelcome(): Promise<never> {
   redirect(await landingPath(supabase, user))
 }
 
-const passwordSchema = z.string().min(8, 'Password must be at least 8 characters')
+const passwordSchema = z.string().min(6, 'Password must be at least 6 characters')
 
 export type PasswordResult = { ok: false; error: string }
 

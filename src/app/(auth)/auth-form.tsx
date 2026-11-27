@@ -481,7 +481,7 @@ function PasswordForm({
           type="password"
           autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
           required
-          minLength={8}
+          minLength={6}
           className={inputClass}
         />
       </div>

@@ -90,7 +90,7 @@ async function rememberPersistence(formData: FormData | undefined): Promise<void
 
 const credentialsSchema = z.object({
   email: emailSchema,
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
 /**
