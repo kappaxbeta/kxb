@@ -88,8 +88,8 @@ preserved.
 Everything else you might set is documented, with its failure mode, in
 [`.env.example`](.env.example). None of it is required to start.
 
-The world will be empty until you fetch the art — see
-[docs/assets.md](docs/assets.md).
+The lounge, the dummy and a starter cast ship with the clone; the rest of the
+kits are fetched — see [docs/assets.md](docs/assets.md).
 
 ## Tests
 
