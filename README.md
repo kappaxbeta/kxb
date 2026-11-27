@@ -79,19 +79,23 @@ bun run setup
 bun run dev
 ```
 
-Open <http://127.0.0.1:3000> and sign in as **`admin@kxb.team`** / **`test123`**.
-
-That is the whole of it. What each step did:
+Open **<http://localhost:3000>** and sign in as **`admin@kxb.team`** / **`test123`**.
+You land in a ready space at `/t/kxb`, with places to walk into and arenas to
+fight in, and the backoffice at `/ovaloffice` is open to you.
 
 | | |
 |---|---|
 | `bun install` | the app and the workspace packages under `packages/` |
-| `bun run setup` | starts Supabase in Docker, applies every migration, seeds the starter worlds into the catalogue, and creates the local admin above — confirmed, email-verified and a backoffice superadmin, so `/ovaloffice` opens too |
+| `bun run setup` | starts Supabase in Docker, applies every migration and loads the seed — see [Seeding](#seeding) for what is in it |
 | `bun run dev` | writes the local stack's URL and keys into `.env.local` and starts Next on port 3000 |
 
 The first `setup` pulls the Supabase images and takes a few minutes; after
-that it takes seconds. Run it again after every `git pull` — it only applies
-what is new, and it never touches anything you made.
+that it takes seconds. Run it again after every `git pull`: it applies only
+what is new and never re-seeds a database you have been using.
+
+Use `localhost`, not `127.0.0.1`. The dev server only trusts the address it
+started on, and on the other one the page draws but never comes alive —
+buttons do nothing and the lounge stays a still picture.
 
 **Useful addresses once it is up:** Supabase Studio at <http://127.0.0.1:54323>
 and Mailpit, where every sign-up and magic-link mail lands, at
@@ -99,15 +103,13 @@ and Mailpit, where every sign-up and magic-link mail lands, at
 
 **When something is in the way**
 
-- *Port 3000 is taken* — `bun run dev --port 3300`, with
-  `LOCAL_APP_URL=http://127.0.0.1:3300` in front so links point at it.
+- *Port 3000 is taken* — `LOCAL_APP_URL=http://localhost:3300 bun run dev --port 3300`.
 - *Another Supabase project is already running* — two stacks with the same
   ports cannot both be up. Stop the other one (`supabase stop` in its folder), or
   give this one its own `project_id` and ports in `supabase/config.toml`.
-- *A different admin* — `SETUP_ADMIN_EMAIL=you@example.com
-  SETUP_ADMIN_PASSWORD=something bun run setup`. The default only ever lands
-  on a local stack: setup refuses any Supabase that is not on this machine.
-- *Start over* — `bun run db:reset`, then `bun run setup` again.
+- *No admin, no space* — the database is older than the seed. `bun run db:reset`
+  replaces it with the seed (and loses whatever you made in it).
+- *Start over* — `bun run db:reset`, any time.
 
 `dev` reads the stack's keys from `supabase status` on every run, so there is
 no anon key to copy by hand, and it only rewrites the Supabase-and-URL lines of
@@ -117,6 +119,89 @@ them keys.
 
 The lounge, the dummy and a starter cast ship with the clone; the rest of the
 kits are fetched — see [docs/assets.md](docs/assets.md).
+
+## Seeding
+
+A new database is never empty. Straight after the migrations, Supabase loads
+[`supabase/seed/community.sql`](supabase/seed/community.sql) — on the first
+`setup` or `dev`, and again on every `bun run db:reset`.
+
+What is in it:
+
+| | |
+|---|---|
+| **The admin** | `admin@kxb.team` / `test123` — confirmed, email-verified, backoffice superadmin |
+| **The space** | `/t/kxb`, owned by the admin, on the xp tier so every feature is open |
+| **Places** | *Restaurant*, *Village* and *Island*, each a room with a starter world loaded into it, beside the Lounge |
+| **Arenas** | *Lava pit arena*, *Stone keep*, *Football ground* and *Parkour tower*, in the space's Battle hub |
+| **Worlds** | the thirteen starter worlds in the public catalogue at `/worlds` |
+| **Flags** | battle, worlds, xp, thingiverse, scenes, pictures, faces and the skin shop switched on |
+
+The admin's password is only safe because the database is on your machine. The
+seed is loaded by the local CLI and never by `supabase db push`, but if you
+ever load it anywhere else, change that password first.
+
+### Changing the seed — an example
+
+The seed is not written by hand. It is your local database, dumped: the app is
+event-sourced, so a room is an event, a read-model row, a checkpoint and a
+sequence number, and a world loaded into it is fifteen thousand blocks. Built
+with the app's own buttons, those can never disagree with each other.
+
+Say every new install should also get a fourth place, *Market*, with the Market
+square in it:
+
+1. **Start from the seed**, so nothing else of yours ends up in it:
+
+   ```bash
+   bun run db:reset
+   bun run dev
+   ```
+
+2. **Build it in the app.** Sign in as the admin, open `/t/kxb`, and under
+   Places click **+ New room** and call it *Market*. In the room, follow
+   **Discover worlds →**, open *Market square* and press **Load into
+   “Market”**.
+
+3. **Let the read models catch up.** The lounge's blocks are projected by a
+   sweep that a server runs on a timer and a laptop does not. Give the sweep a
+   secret once, restart `dev`, then call it:
+
+   ```bash
+   echo "CRON_SECRET=local-$(openssl rand -hex 16)" >> .env.local
+   ```
+
+   ```bash
+   curl -X POST -H "Authorization: Bearer $(grep ^CRON_SECRET= .env.local | cut -d= -f2)" http://localhost:3000/api/cron/project
+   ```
+
+   It answers with `"remaining":0` when everything is projected.
+
+4. **Dump it:**
+
+   ```bash
+   bun run seed:dump
+   ```
+
+5. **Check and commit.** `git diff --stat supabase/seed` shows the file
+   changed; `bun run db:reset` proves it loads into a clean database, and
+   *Market* should be in the sidebar after you sign in again.
+
+`seed:dump` leaves out sessions, refresh tokens and every log table, so nobody's
+login travels with the file — but it does take every account and space in the
+database. That is why step 1 starts from a reset.
+
+## The backoffice
+
+`/ovaloffice` is the operator's side: every account and space, the world
+catalogue, codes and tier grants, feature flags, content reports, health and the
+audit log, plus the studio, world builder and animator the team makes its art
+with. The seeded admin can open all of it; anybody else needs a section granted
+to them under **People & roles**, `view` or `write`.
+
+**[The backoffice guide](docs/ovaloffice.md)** goes through it section by
+section, with recipes — putting a space on xp, turning a feature on for one
+space, letting somebody help without giving them everything.
 
 ## Tests
 

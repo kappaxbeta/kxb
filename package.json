@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "./scripts/dev.sh",
     "setup": "bun run scripts/setup.ts",
+    "seed:dump": "bun run scripts/seed-dump.ts",
     "dev-css-classname": "./scripts/dev-css-classname.sh",
     "build": "bun run boxing:publish && bun run maumau:publish && next build",
     "start": "next start",

@@ -15,7 +15,7 @@ lounge as somebody:
 | `public/xp/packs/dummy` | KayKit's dummy — the body a player is before they are anybody |
 | `public/xp/packs/animation` | the `Rig_Medium` clips the dummy, Gnash and every rigged skin walk with |
 | `public/xp/packs/kappa` | Gnash and Definitely Gnash (`Monster.glb`, `MonsterCostume.glb`) |
-| `public/xp/packs/peepz` | three of Kenney's animals as characters: bunny, pig and tiger |
+| `public/xp/packs/peepz` | Kenney's twenty-four animals as characters, the same cast as the lounge |
 | `public/xp/packs/platformer` | KayKit's platformer kit, all five colourways |
 | `packages/boxing/assets` | the boxing ring and its two fighters; `bun run boxing:publish` copies them to `public/boxing` |
 
