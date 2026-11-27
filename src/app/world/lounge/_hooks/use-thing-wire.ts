@@ -1,7 +1,7 @@
 'use client'
 
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 import type { Claim, Pulse } from '@/domain/thingiverse/live'
 
@@ -141,5 +141,25 @@ export function useThingWire() {
     roomRef.current = []
   }, [])
 
-  return { conn, roomRef, pulseRef, claimsRef, pulse, claim, attach, arrive, leave }
+  /**
+   * One object for the life of the scene, and that is not tidiness.
+   *
+   * `use-things` puts this whole bag in the dependency list of the effect that
+   * opens the room's channel - it has to, because `attach` and `arrive` are
+   * called from inside it. Returned as a fresh literal, as it was, the bag was a
+   * new object on every render, so every render of the scene closed the socket
+   * and opened a new one: `setBusy`, `setThings`, the pocket changing hands,
+   * anything. A summon alone is four renders, and the row it announces went
+   * into a channel that had been open for a few milliseconds and had not
+   * joined yet - and the *receiver* was doing the same to itself, so whichever
+   * side was mid-resubscribe lost the message. Furniture appeared for nobody.
+   *
+   * Every field in here is already stable - a `useState` value, refs, and
+   * `useCallback`s - so the memo changes nothing but the identity of the bag,
+   * which is the one thing that mattered.
+   */
+  return useMemo(
+    () => ({ conn, roomRef, pulseRef, claimsRef, pulse, claim, attach, arrive, leave }),
+    [conn, pulse, claim, attach, arrive, leave],
+  )
 }

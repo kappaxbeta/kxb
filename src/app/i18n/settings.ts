@@ -160,6 +160,22 @@ export interface SettingsDict {
     }
     rename: { title: string; body: string; save: string; done: string }
     /** What each switch on the event desk is called. */
+    /**
+     * Who may write a word the whole room sees.
+     *
+     * One control with three positions rather than two switches, because that
+     * is the question a host actually has - see `spells` in
+     * domain/tenants/events.ts for what it is stored as.
+     */
+    spells: {
+      title: string
+      body: string
+      admins: string
+      members: string
+      everyone: string
+      note: string
+      saved: string
+    }
     capabilities: Record<SpaceCapability, string>
   }
 
@@ -512,6 +528,15 @@ export const SETTINGS_EN: SettingsDict = {
       save: 'Save Name',
       done: 'Space renamed successfully.',
     },
+    spells: {
+      title: 'Xoinggan',
+      body: 'People in your rooms can draw with a pen. Three of the words they can write are seen by everybody standing there — two light the room up, one says who wrote it. This is who may do that.',
+      admins: 'Owners and admins',
+      members: 'Everybody in the space',
+      everyone: 'Visitors too',
+      note: 'Whoever may not cast still sees their own: nothing is sent, and nothing looks broken.',
+      saved: 'Saved.',
+    },
     capabilities: {
       build: 'Build',
       rooms: 'Create rooms',
@@ -522,6 +547,9 @@ export const SETTINGS_EN: SettingsDict = {
       agents: 'Creatures',
       perf_display: 'Performance readout',
       stamina: 'Stamina',
+      glitch: 'Glitch',
+      spells: 'Spells reach the room',
+      spells_guests: 'Visitors may cast spells',
     },
   },
 
@@ -802,6 +830,15 @@ export const SETTINGS_DE: SettingsDict = {
       save: 'Namen speichern',
       done: 'Der Space wurde umbenannt.',
     },
+    spells: {
+      title: 'Xoinggan',
+      body: 'Wer in euren Räumen ist, kann mit einem Stift malen. Drei der Wörter sehen alle, die dort stehen — zwei lassen den Raum aufleuchten, eines sagt, von wem es kam. Hier steht, wer das darf.',
+      admins: 'Inhaber und Admins',
+      members: 'Alle im Space',
+      everyone: 'Auch Gäste',
+      note: 'Wer nicht zaubern darf, sieht den eigenen Zauber trotzdem: es wird nur nichts gesendet.',
+      saved: 'Gespeichert.',
+    },
     capabilities: {
       build: 'Bauen',
       rooms: 'Räume anlegen',
@@ -812,6 +849,9 @@ export const SETTINGS_DE: SettingsDict = {
       agents: 'Tiere',
       perf_display: 'Leistungsanzeige',
       stamina: 'Ausdauer',
+      glitch: 'Glitch',
+      spells: 'Zauber erreichen den Raum',
+      spells_guests: 'Gäste dürfen zaubern',
     },
   },
 
@@ -1093,6 +1133,15 @@ export const SETTINGS_BG: SettingsDict = {
       save: 'Запази името',
       done: 'Спейсът беше преименуван.',
     },
+    spells: {
+      title: 'Xoinggan',
+      body: 'Хората в стаите ви могат да рисуват с писалка. Три от думите се виждат от всички наоколо — две осветяват стаята, а една казва кой я е написал. Тук се решава кой може.',
+      admins: 'Собственици и админи',
+      members: 'Всички в пространството',
+      everyone: 'И гостите',
+      note: 'Който няма право, пак вижда своето: просто нищо не се изпраща.',
+      saved: 'Запазено.',
+    },
     capabilities: {
       build: 'Строеж',
       rooms: 'Създаване на стаи',
@@ -1103,6 +1152,9 @@ export const SETTINGS_BG: SettingsDict = {
       agents: 'Животни',
       perf_display: 'Показател за производителност',
       stamina: 'Издръжливост',
+      glitch: 'Глич',
+      spells: 'Заклинанията стигат до стаята',
+      spells_guests: 'Гостите могат да заклинават',
     },
   },
 

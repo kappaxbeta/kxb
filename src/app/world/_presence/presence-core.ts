@@ -14,6 +14,7 @@
  * subtly wrong in ways you cannot see at sixty frames a second.
  */
 
+import type { Phrase } from '@/app/world/_hand/phrases'
 import { EMOTE_DURATION_MS, type EmoteId } from '@/domain/world/emotes'
 
 /**
@@ -189,6 +190,60 @@ export interface RoomMessage {
    * join rather than only a host.
    */
   rainbow?: boolean
+  /**
+   * Somebody wrote a word big enough for the room to see.
+   *
+   * Ephemeral like the two above, and the only one of the three that carries a
+   * *body*: a beam comes out of somebody's chest and a rainbow stands in front
+   * of them, so where they were and which way they faced travel with it. The
+   * shout has neither - it is drawn on everybody's own glass, in the middle,
+   * where it cannot be missed.
+   *
+   * The handwriting itself is deliberately not here. It is a word, not a
+   * drawing, and a few hundred points per cast would be real bandwidth spent on
+   * a wobble nobody can see once it is exploding - so each client draws the
+   * book's own version of the word. See `world/_ink/ink-layer.tsx`.
+   *
+   * `name` rather than a lookup, because the roster this channel keeps is
+   * positions: the sender already knows what it is called and the receiver
+   * would have to guess.
+   */
+  spell?: {
+    word: 'shout' | 'rainbow' | 'beam'
+    /** Who wrote it, as it should be shown. */
+    name?: string
+    /** Where they stood, in cells. Absent for a shout. */
+    at?: [number, number, number]
+    /** Which way they faced, horizontal and normalised. Absent for a shout. */
+    towards?: [number, number]
+  }
+  /**
+   * Somebody said something with their hand.
+   *
+   * The **meaning** travels, never the words - `'thanks'`, not "Danke" and not
+   * "Благодаря" - and every screen in the room draws that meaning in whichever
+   * language its own reader has picked. That is the whole of how hand mode
+   * translates, and putting it on the wire this way is what makes it free:
+   * there is no sentence to translate, because a sentence never crossed the
+   * room. See `world/_hand/phrases.ts`.
+   *
+   * The typed union rather than a loose string, so that deleting a phrase from
+   * the book is a compile error here rather than a message nobody can read.
+   *
+   * Ephemeral like the party, the rainbow and the spell above it, and on this
+   * channel rather than in chat for the same reason an emote is: it is
+   * something that *happened* in the room, not a line in a log. Only what the
+   * book has a wording for is ever sent - letters somebody spelled out stay on
+   * their own screen, because nothing else in the room could read them.
+   *
+   * `name` rather than a lookup, exactly as the spell does it: the sender knows
+   * what it is called and the receiver would have to guess.
+   */
+  signed?: {
+    phrase: Phrase
+    /** Who signed it, as it should be shown. */
+    name?: string
+  }
 }
 
 /**

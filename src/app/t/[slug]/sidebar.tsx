@@ -118,6 +118,13 @@ export interface SidebarFeatures {
    * in the room it changes.
    */
   stamina: boolean
+  /**
+   * Is a bad connection drawn as a glitch here?
+   *
+   * The `glitch` capability, on the same terms as `stamina`: the space's own
+   * switch, reaching the rail because that is where an owner flips it.
+   */
+  glitch: boolean
 }
 
 /**
@@ -629,6 +636,7 @@ export function Sidebar(props: {
                 hasChat={props.chat !== null}
                 hasThings={props.features.thingiverse}
                 stamina={props.features.stamina}
+                glitch={props.features.glitch}
                 hasPlay={props.canPlayXp}
                 hasRadio={props.radio !== null}
                 rooms={props.rooms}
@@ -750,6 +758,7 @@ export function Sidebar(props: {
             hasChat={props.chat !== null}
             hasThings={props.features.thingiverse}
             stamina={props.features.stamina}
+            glitch={props.features.glitch}
             hasPlay={props.canPlayXp}
             hasRadio={props.radio !== null}
             rooms={props.rooms}

@@ -163,6 +163,29 @@ export const GAMES: readonly FramedGame[] = [
       import('./peepz-world').then((module) => ({ default: module.PeepzWorldFrame })),
     ),
   },
+  {
+    id: 'xoin',
+    label: 'Xoin',
+    /**
+     * Nothing, and it is the only entry here that asks for nothing.
+     *
+     * Every other game in this list needs a name to play under - a corner, a
+     * hand, a purse. A market in `demo` mode needs none: the book is local, the
+     * stake is made up, and the price is a pure function of a seed and the
+     * clock, so two strangers on the public `/xp` host see the same chart
+     * without either of them being anybody.
+     *
+     * That is what makes this the one cartridge that can be *shown* rather than
+     * described - see the note in `./xoin.tsx`. The modes that spend a real
+     * purse are refused at the action by the platform, which is where a refusal
+     * about money belongs; declaring `identity` here would take the demo down
+     * to buy a check the server has to do again regardless.
+     */
+    needs: [],
+    mount: loaded('Xoin', () =>
+      import('./xoin').then((module) => ({ default: module.XoinFrame })),
+    ),
+  },
 ]
 
 export const gameNamed = (id: string): FramedGame | undefined =>

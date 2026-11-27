@@ -1,15 +1,29 @@
 # The art, and where to get it
 
-This repository ships **no 3D models and no audio**. Everything the world is
-drawn and played with comes from four people who publish it themselves, and
-this document is how you fetch it.
+This repository ships **the world's own art and a starter cast**, and nothing
+more. Everything else the world is drawn and played with comes from four
+people who publish it themselves, and this document is how you fetch it.
 
-That is a deliberate choice rather than a licensing one. Every pack below is
-**CC0** — public domain, free for commercial use, no attribution required — so
-mirroring it here would be perfectly legal. It is not done because:
+## What ships in the clone
 
-- it is 237 MB of somebody else's work, and a git clone is a bad way to
-  distribute it;
+Enough to clone, `bun install`, `bun run dev` and walk around a furnished
+lounge as somebody:
+
+| | |
+|---|---|
+| `public/xo/` | the whole lounge — the bb10, proto and restaurant kits, the block and pile icons, the cosmos, fireworks, the companions (Telly, kappa and the Gridbots), the twenty-four peeps and their stills |
+| `public/xp/packs/dummy` | KayKit's dummy — the body a player is before they are anybody |
+| `public/xp/packs/animation` | the `Rig_Medium` clips the dummy, Gnash and every rigged skin walk with |
+| `public/xp/packs/kappa` | Gnash and Definitely Gnash (`Monster.glb`, `MonsterCostume.glb`) |
+| `public/xp/packs/peepz` | three of Kenney's animals as characters: bunny, pig and tiger |
+| `public/xp/packs/platformer` | KayKit's platformer kit, all five colourways |
+| `packages/boxing/assets` | the boxing ring and its two fighters; `bun run boxing:publish` copies them to `public/boxing` |
+
+Every pack in it is **CC0**, and so is everything under `public/xo` that is
+ours. The rest stays out on purpose rather than for licensing reasons:
+
+- it is another two hundred megabytes of somebody else's work, and a git clone
+  is a bad way to distribute it;
 - the authors version, document and improve these kits, and a copy taken once
   goes stale silently;
 - itch.io and kenney.nl are the addresses the authors want people sent to, and
@@ -50,34 +64,17 @@ record what was measured, and the notes beside them explain why. Kenney's kits
 in particular are **not** authored to one shared unit — a blaster is a hand prop
 and a space-station wall is a doorway, in the same download.
 
-## The one body that is included
+## The dummy
 
-`public/xo/pda/dummy/Dummy.glb` — and its copy under `public/xp/packs/dummy/` —
-is **ours**, drawn by [`tools/make-dummy.ts`](../tools/make-dummy.ts), CC0 with
-the rest of `shapes`.
-
-It exists because of everything above. A world with no props is a bare room; a
-world with no *body* is a game you cannot see yourself in, and the animator —
-which is a rig editor — has nothing at all to open. So there is a stand-in.
-
-It is boxes, and it is not pretending to be KayKit's dummy. What it gets right
-is the thing everything downstream keys off: the **twenty-one nodes of
-[`src/domain/animator/rig.ts`](../src/domain/animator/rig.ts)**, spelled exactly
-as that file's `glb` fields spell them, in the hierarchy the editor's handles
-assume, carrying the two rest rotations that file measured (elbows bent a
-little, mirrored; knees bent a little, the same sign on both). So it poses,
-animates and walks like the real one.
-
-Every vertex is bound to one joint at weight 1 — rigid skinning, which is why it
-reads as a marionette rather than a person. That is deliberate: a marionette is
-an honest placeholder in a way a badly-weighted human is not.
+`public/xp/packs/dummy/Dummy.glb` and `public/xo/pda/dummy/Dummy.glb` are
+KayKit's, and ship. [`tools/make-dummy.ts`](../tools/make-dummy.ts) still draws
+the boxes-only stand-in this repository used to carry — the twenty-one nodes of
+[`src/domain/animator/rig.ts`](../src/domain/animator/rig.ts), rigidly skinned —
+if you ever want a body with no art behind it at all:
 
 ```bash
 bun run tools/make-dummy.ts
 ```
-
-Replace it whenever you like — fetch KayKit's characters into
-`public/xp/packs/dummy/` and nothing else has to change.
 
 ## What is generated rather than fetched
 
@@ -102,10 +99,11 @@ committed here for the same reason the packs are not — it is somebody else's
 work, LGPL and minified without its licence header, and the `p5` entry in
 `package.json` is a better place to fetch it from than a git mirror.
 
-## Running without the art
+## Running without the rest of the art
 
-The app starts. The world does not draw, and the level editor's model picker is
-empty — everything else (spaces, membership, chat, the event log, the netcode)
+The app starts and the lounge draws. The level editor's model picker offers
+only the packs above, and anything a level names from a pack you have not
+fetched does not draw — everything else (spaces, membership, chat, the event log, the netcode)
 works, because none of it depends on a mesh.
 
 The test suite tells you the same thing, precisely:

@@ -7,7 +7,7 @@ document, a client, a Postgres function, and a socket.
 
 **This is the *record* of one game's round.** The general version — a `flow`
 block a document writes instead of encoding its round in triggers, with an
-editor that draws it — is proposed in xp-flow.md, and this file is
+editor that draws it — is proposed in [xp-flow.md](xp-flow.md), and this file is
 the thing it has to be able to express. Read this one first: every constraint in
 that proposal came from something on this page.
 
@@ -15,8 +15,8 @@ that proposal came from something on this page.
 today; what is not is in [Not yet](#not-yet), separately, so this file cannot
 quietly become a plan.
 
-Read alongside server-authority.md §4 for why the dice
-belongs to the arbiter, and backlog.md §7e for how the board got
+Read alongside [server-authority.md](server-authority.md) §4 for why the dice
+belongs to the arbiter, and [backlog.md](backlog.md) §7e for how the board got
 here.
 
 ---

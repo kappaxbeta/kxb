@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { AnalyticsBeacon } from './components/analytics-beacon'
 import { CtaTracker } from './components/cta-tracker'
 import pixelMillennium from './components/fonts/pixel'
+import openDyslexic from './components/fonts/dyslexic'
 import { ContactWidget } from './components/contact-widget'
 import { ConnectionFavicon } from './components/connection-favicon'
 import { CookieBanner } from './components/cookie-banner'
@@ -115,7 +116,7 @@ export default function RootLayout({
     // broke loudly enough to notice.
     <html
       lang="en"
-      className={cn("dark font-sans", inter.variable, pixelMillennium.variable)}
+      className={cn("dark font-sans", inter.variable, pixelMillennium.variable, openDyslexic.variable)}
     >
       <body className="min-h-screen antialiased">
         {children}

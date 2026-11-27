@@ -31,7 +31,9 @@ export const dynamic = 'force-dynamic'
  * own.
  *
  * `?scene=` opens a saved row as itself, so saving writes over it; `?v=` opens
- * a document straight out of a link. A `?v=` document that gets saved becomes a
+ * a document straight out of a link. `?back=` says a page opened this tab and
+ * is waiting for the shot to come home - see `handoff.ts`; it changes nothing
+ * about the editor except that it grows a way out. A `?v=` document that gets saved becomes a
  * `?scene=` one at that moment and stays there - the editor only carries the
  * document in the address while there is no row to name instead. See the note
  * on `onSaved` in the shot editor for what that was costing.
@@ -41,13 +43,13 @@ export default async function SpaceVideoStudioPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ v?: string; scene?: string }>
+  searchParams: Promise<{ v?: string; scene?: string; back?: string }>
 }) {
   const { slug } = await params
   const context = await requireTenant(slug)
   requireFeature(context, 'scenes')
 
-  const { v, scene } = await searchParams
+  const { v, scene, back } = await searchParams
 
   /**
    * Who may put what they made on the board, from here.
@@ -113,6 +115,7 @@ export default async function SpaceVideoStudioPage({
             }}
             worlds={worlds}
             blueprints={blueprints}
+            back={back}
           />
         </section>
       )
@@ -145,6 +148,7 @@ export default async function SpaceVideoStudioPage({
         scene={{ scope: { kind: 'space', slug }, canPin, canPinTop }}
         worlds={worlds}
         blueprints={blueprints}
+        back={back}
       />
     </section>
   )

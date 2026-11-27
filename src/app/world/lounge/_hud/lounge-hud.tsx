@@ -89,8 +89,12 @@ export function loungeControls({
       rows.push(row([actionKey(soft.dash)], t.attack))
       rows.push(row([actionKey(soft.kick)], t.shove))
     }
-    // Last, and unconditional, exactly like the G row on a keyboard.
-    rows.push(row([actionKey(soft.dance)], t.dance))
+    // Last, and unconditional, exactly like the P row on a keyboard. The
+    // button in that corner is the pen now; what it can spell is in the book
+    // behind the line along the top edge, not in this list.
+    rows.push(row([actionKey(dict.ink.pen)], t.draw))
+    // And the hand beside it, in the same corner and for the same reason.
+    rows.push(row([actionKey(dict.hand.hand)], t.sign))
     return rows
   }
 
@@ -118,6 +122,10 @@ export function loungeControls({
   rows.push(row([key('R')], t.lookAtYourself))
   rows.push(row([key('O')], t.seeTheRoom))
   rows.push(row([actionKey('G')], t.dance))
+  rows.push(row([key('P')], t.draw))
+  // U rather than H, which has opened this very panel since long before the
+  // hand existed. See the key handler in ../lounge-scene.
+  rows.push(row([key('U')], t.sign))
   rows.push(row([key('L')], t.mouseLook))
   // Above the housekeeping pair below, because it changes the world rather
   // than the way you are looking at it.

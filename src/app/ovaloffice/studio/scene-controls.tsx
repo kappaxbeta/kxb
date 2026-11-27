@@ -20,18 +20,21 @@ import {
 } from '@/app/ovaloffice/studio/world-picker'
 import {
   Add,
+  Duplicate,
   EmoteSwatch,
   hasClip,
   Num,
   Pick,
   PickCast,
-  PickGroups,
   Remove,
   Row,
   Section,
   Slide,
   Tint,
 } from '@/app/ovaloffice/studio/parts'
+import { PickModel } from '@/app/ovaloffice/studio/pick-model'
+import { copyPeep, insertAfter } from '@/domain/studio/duplicate'
+import { freeSpot } from '@/domain/studio/spawn'
 import { EmoteGrid } from '@/app/world/_hud/emote-grid'
 import { TERRAIN_BLOCKS } from '@/domain/lounge/palette'
 import {
@@ -251,6 +254,14 @@ function Ground({ scene, patch }: { scene: StudioScene; patch: Patch }) {
   )
 }
 
+/**
+ * How many bodies one picture holds.
+ *
+ * A number rather than the literal it was, now that two buttons obey it: the
+ * cap that stops the panel growing and the cap that stops a duplicate.
+ */
+const MAX_PEEPS = 24
+
 function Peeps({ scene, patch }: { scene: StudioScene; patch: Patch }) {
   const set = (index: number, fields: Partial<PeepSpec>) =>
     patch({
@@ -268,12 +279,27 @@ function Peeps({ scene, patch }: { scene: StudioScene; patch: Patch }) {
             onRemove={() =>
               patch({ peeps: scene.peeps.filter((_, i) => i !== index) })
             }
+            /*
+              Inserted straight after the one it came from rather than appended,
+              so the copy is the next row down instead of at the bottom of a
+              list of twenty-four. Nothing here holds an index across a render -
+              the rows are drawn from the document every time - so shifting the
+              ones below costs nothing.
+            */
+            onDuplicate={
+              scene.peeps.length < MAX_PEEPS
+                ? () =>
+                    patch({
+                      peeps: insertAfter(scene.peeps, index, copyPeep(peep)),
+                    })
+                : undefined
+            }
           />
         ))}
       </div>
       <Add
         label="Add a peep"
-        disabled={scene.peeps.length >= 24}
+        disabled={scene.peeps.length >= MAX_PEEPS}
         onClick={() =>
           patch({
             peeps: [
@@ -298,10 +324,13 @@ function PeepRow({
   peep,
   onChange,
   onRemove,
+  onDuplicate,
 }: {
   peep: PeepSpec
   onChange: (fields: Partial<PeepSpec>) => void
   onRemove: () => void
+  /** Absent when the picture is already full. See `MAX_PEEPS`. */
+  onDuplicate?: () => void
 }) {
   const [picking, setPicking] = useState(false)
 
@@ -392,6 +421,18 @@ function PeepRow({
           />
         )}
 
+        {/* --- the glitch ---------------------------------------------------
+            The lounge's bad-connection effect, put on a peep on purpose. Zero
+            drops the key rather than writing one - see `PeepSpec.glitch`. */}
+        <Slide
+          label="Glitch"
+          value={peep.glitch ?? 0}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(glitch) => onChange(glitch > 0 ? { glitch } : { glitch: undefined })}
+        />
+
         {/* --- what they are saying --------------------------------------- */}
         <label className="mt-1 flex flex-col gap-1 text-xs text-muted-foreground">
           Says
@@ -465,7 +506,18 @@ function PeepRow({
           </>
         )}
 
-        <Remove onClick={onRemove}>Remove</Remove>
+        {/*
+          Both verbs on one line, at the foot of the controls they act on. The
+          duplicate is here rather than on the summary row because the summary
+          row is a <summary> - a button inside it is a button you cannot press
+          without also opening the row.
+        */}
+        <div className="flex items-center gap-1">
+          <Duplicate onClick={() => onDuplicate?.()} disabled={!onDuplicate}>
+            Duplicate
+          </Duplicate>
+          <Remove onClick={onRemove}>Remove</Remove>
+        </div>
       </div>
     </Row>
   )
@@ -487,7 +539,7 @@ function Blocks({ scene, patch }: { scene: StudioScene; patch: Patch }) {
               <span className="flex-1">{block.model}</span>
             </summary>
             <div className="mt-2 flex flex-col gap-1.5">
-              <PickGroups label="Block" value={block.model} onChange={(model) => set(index, { model })} />
+              <PickModel label="Block" value={block.model} onChange={(model) => set(index, { model })} />
               <Slide label="Across" value={block.x} min={-20} max={20} step={0.5} onChange={(x) => set(index, { x })} />
               <Slide label="Depth" value={block.z} min={-20} max={20} step={0.5} onChange={(z) => set(index, { z })} />
               {/* Height of the block's *top face*, which is how the world grid
@@ -515,7 +567,15 @@ function Blocks({ scene, patch }: { scene: StudioScene; patch: Patch }) {
         label="Add a block"
         disabled={scene.blocks.length >= 120}
         onClick={() =>
-          patch({ blocks: [...scene.blocks, { model: 'crate', x: 0, top: 1, z: -3, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0 }] })
+          patch({
+            blocks: [
+              ...scene.blocks,
+              // Found rather than fixed: `z: -3` was a spot nothing stood on in
+              // the default scene and nothing at all in one somebody had
+              // arranged. See `freeSpot`.
+              { model: 'crate', ...freeSpot(scene), top: 1, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0 },
+            ],
+          })
         }
       />
     </Section>

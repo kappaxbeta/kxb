@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { EMOTE_COUNT, type EmoteId } from '@/domain/world/emotes'
+import { NOTE_LIMIT } from '@/domain/ink/note'
 
 /**
  * `actorId` is stamped from the session in the action and never accepted from
@@ -69,9 +70,21 @@ export const publishPostSchema = z
     sceneId: z.uuid().nullish(),
     /** A picture to pin with it, as the slug /api/uploads serves it under. */
     imageSlug: uploadSlugSchema.nullish(),
+    /**
+     * A drawing to pin with it - the pen's own format, and its own length cap.
+     *
+     * Checked here rather than trusted, because unlike a scene id or an upload
+     * slug this is the content: a string that arrives too long, or shaped like
+     * something else entirely, would be written into the log as it stands.
+     */
+    ink: z.string().max(NOTE_LIMIT, 'That drawing is too long to keep').nullish(),
   })
   .refine(
-    (input) => input.body.length > 0 || Boolean(input.sceneId) || Boolean(input.imageSlug),
+    (input) =>
+      input.body.length > 0 ||
+      Boolean(input.sceneId) ||
+      Boolean(input.imageSlug) ||
+      Boolean(input.ink),
     {
       message: 'A notice needs some words',
       path: ['body'],
@@ -104,6 +117,7 @@ export type PublishPost = {
   pinned: boolean
   sceneId: string | null
   imageSlug: string | null
+  ink: string | null
 }
 
 export type EditPost = { type: 'EditPost'; actorId: string; body: string }

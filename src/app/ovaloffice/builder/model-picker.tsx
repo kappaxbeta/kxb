@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   cachedThumbnail,
   clearQueue,
@@ -8,6 +9,7 @@ import {
   subscribe,
 } from '@/app/ovaloffice/builder/thumbnails'
 import { PackPreviewGrid } from '@/app/components/pack-preview'
+import { CATALOGUE, isBuildable } from '@/domain/builder/catalogue'
 import {
   placementThumbnail,
   PLACEABLE_PACKS,
@@ -15,6 +17,7 @@ import {
 } from '@/domain/builder/props'
 import { MODEL_COUNT } from '@/domain/thingiverse/models'
 import { packPreviews, splitPreviews } from '@/domain/thingiverse/pack-preview'
+import { PALETTE } from '@/domain/lounge/palette'
 import { isBlockModel } from '@/domain/worlds/blocks'
 
 /**
@@ -47,35 +50,60 @@ import { isBlockModel } from '@/domain/worlds/blocks'
  * was.
  */
 
+/**
+ * How wide the offer is, which is a question about the document being edited.
+ *
+ * Three answers rather than a boolean, because there turned out to be three
+ * documents and the middle one had nowhere to say so:
+ *
+ * - `everything` - both registries, 5,863 models. The backoffice's world
+ *   builder, which shoots marketing stills and wants the whole library.
+ * - `blocks` - the lounge palette out of `bb10`. A space's builder, laying out
+ *   somewhere its members will stand: everything else is left behind when the
+ *   world is copied in (see domain/worlds/blocks.ts), so offering it would be
+ *   offering 5,800 things that quietly vanish.
+ * - `world` - the world catalogue only, no level packs. The scene studio,
+ *   whose document's own allow-list is `isBuildable` (see `parseScene`): a
+ *   level model chosen here would be a tile you can press that the scene then
+ *   refuses to hold, which is worse than not offering it.
+ *
+ * It was `blocksOnly?: boolean` while there were two, and widening it to a
+ * union rather than adding a second flag is the point - two booleans have four
+ * states and only three of them mean anything.
+ */
+export type PickerScope = 'everything' | 'blocks' | 'world'
+
 export function ModelPicker({
   selected,
   onSelect,
   onClose,
-  blocksOnly = false,
+  scope = 'everything',
 }: {
   selected: string
   onSelect: (model: string) => void
   onClose: () => void
-  /**
-   * Offer only the models that survive into a world people walk around in.
-   *
-   * On for a space's builder, off for the backoffice's. The two are building
-   * different things: a space is laying out somewhere its members will stand,
-   * and everything outside the lounge palette is left behind when that world is
-   * copied in (see domain/worlds/blocks.ts) - so a picker with 1,308 models in
-   * it is a picker offering 1,250 things that will quietly vanish. The
-   * backoffice builder shoots marketing stills, where the furniture is the
-   * whole point.
-   */
-  blocksOnly?: boolean
+  /** How wide the offer is. See `PickerScope`. */
+  scope?: PickerScope
 }) {
   const [query, setQuery] = useState('')
   const [pack, setPack] = useState<string | undefined>(undefined)
   const input = useRef<HTMLInputElement>(null)
 
   const groups = useMemo(() => {
-    const found = searchPlaceable(query, blocksOnly ? 'bb10' : pack)
-    if (!blocksOnly) return found
+    const found = searchPlaceable(query, scope === 'blocks' ? 'bb10' : pack)
+    // The world half of `searchPlaceable`, which is the half whose ids
+    // `isBuildable` answers for. Dropping the level packs by asking the same
+    // question the document asks, rather than by listing pack names here -
+    // a list would go stale the next time a pack lands.
+    if (scope === 'world') {
+      return found
+        .map((group) => ({
+          ...group,
+          models: group.models.filter((entry) => isBuildable(entry.id)),
+        }))
+        .filter((group) => group.models.length > 0)
+    }
+    if (scope !== 'blocks') return found
 
     // The pack and the palette are not the same list: `bb10` ships blocks the
     // lounge never adopted, and one of those in a world is a model the walkable
@@ -86,7 +114,7 @@ export function ModelPicker({
         models: group.models.filter((entry) => isBlockModel(entry.id)),
       }))
       .filter((group) => group.models.length > 0)
-  }, [query, pack, blocksOnly])
+  }, [query, pack, scope])
   const found = groups.reduce((sum, group) => sum + group.models.length, 0)
 
   /**
@@ -99,7 +127,25 @@ export function ModelPicker({
   const previews = useMemo(() => splitPreviews(packPreviews()), [])
 
   /** Nothing typed and no pack pressed: the state the packs are the answer to. */
-  const landing = !blocksOnly && pack === undefined && query.trim() === ''
+  const landing = scope !== 'blocks' && pack === undefined && query.trim() === ''
+
+  /**
+   * How many models are on offer, for the search box to name.
+   *
+   * The number in the placeholder is the one promise this control makes before
+   * anybody types, and a `world` picker claiming 5,863 would be over-promising
+   * by four thousand models it then refuses to show. `blocks` was already
+   * over-promising by five thousand eight hundred, which nobody had noticed
+   * because a placeholder is not where you find out a picker is narrow.
+   */
+  const offered =
+    scope === 'blocks' ? PALETTE.length : scope === 'world' ? CATALOGUE.length : MODEL_COUNT
+
+  /** The same narrowing, for the pack count next to it. */
+  const packsOffered = useMemo(
+    () => (scope === 'world' ? previews.rooms : PLACEABLE_PACKS),
+    [scope, previews.rooms],
+  )
 
   useEffect(() => {
     input.current?.focus()
@@ -116,7 +162,31 @@ export function ModelPicker({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  return (
+  /**
+   * Onto `body`, rather than wherever it was mounted.
+   *
+   * ---------------------------------------------------------------------------
+   * Why `fixed inset-0 z-50` was not enough
+   * ---------------------------------------------------------------------------
+   * It was enough in the builder, where this is a sibling of the canvas at the
+   * top of the page, and it stopped being enough the moment the studio mounted
+   * one inside its controls column. The studio's viewport is `sticky top-0
+   * z-20` - a positioned element with a z-index, which is a *stacking context*
+   * - so it and everything inside it paint above the whole auto-z column next
+   * to it. A descendant of that column asking for `z-50` is asking within a
+   * context that already lost: the shot drew straight over the open picker,
+   * camera-lock buttons and all, and no number here would have fixed it.
+   *
+   * A portal moves the element out from under that argument entirely. It ends
+   * up a child of `body`, where the z-index it always had means what it says.
+   *
+   * The React tree is unchanged, which is the point - `onClose`, the escape
+   * key and the focus effect all still belong to the component that rendered
+   * it, and a caller passes the same props it always did.
+   */
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <button
         type="button"
@@ -137,12 +207,12 @@ export function ModelPicker({
               ref={input}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={`Search ${MODEL_COUNT.toLocaleString()} models — try “chair”, “tree”, “wall red”…`}
+              placeholder={`Search ${offered.toLocaleString()} models — try “chair”, “tree”, “wall red”…`}
               aria-label="Search models"
               className="min-w-0 flex-1 rounded-full border border-line/60 bg-surface/70 px-4 py-2 text-sm text-ink outline-none transition placeholder:text-ink-muted/70 focus:border-accent"
             />
             <span className="shrink-0 text-xs tabular-nums text-ink-muted">
-              {landing ? `${PLACEABLE_PACKS.length} packs` : `${found} found`}
+              {landing ? `${packsOffered.length} packs` : `${found} found`}
             </span>
             <button
               type="button"
@@ -167,7 +237,7 @@ export function ModelPicker({
 
               Gone entirely when only blocks are on offer: one tab is not a
               filter, it is a label. */}
-          {!blocksOnly && !landing && (
+          {scope !== 'blocks' && !landing && (
           <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
             <PackChip active={pack === undefined} onClick={() => setPack(undefined)}>
               All packs
@@ -199,12 +269,17 @@ export function ModelPicker({
                 onSelect={setPack}
                 sizeLabelOf={sizeLabel}
               />
-              <PackPreviewGrid
-                label="Level packs"
-                previews={previews.levels}
-                onSelect={setPack}
-                sizeLabelOf={sizeLabel}
-              />
+              {/* Absent entirely for a `world` picker, rather than drawn
+                  empty: a heading over nothing reads as a pack list that
+                  failed to load. */}
+              {scope !== 'world' && (
+                <PackPreviewGrid
+                  label="Level packs"
+                  previews={previews.levels}
+                  onSelect={setPack}
+                  sizeLabelOf={sizeLabel}
+                />
+              )}
             </div>
           ) : (
             <>
@@ -237,7 +312,8 @@ export function ModelPicker({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

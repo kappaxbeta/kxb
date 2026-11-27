@@ -291,6 +291,20 @@ export interface WorkspaceDict {
       looking: string
       /** Nothing in either catalogue matches `{q}`. */
       noPieces: string
+      /**
+       * The other way in: the catalogue as a tree, for somebody with no word
+       * to type. The two shelves are named again here rather than read off the
+       * workbench's own keys, because this panel is a column two words wide -
+       * "For rooms" fits where a sentence would not.
+       */
+      browsePacks: string
+      browseHint: string
+      forRooms: string
+      forLevels: string
+      /** One more page of an opened pack. */
+      showMore: string
+      /** The ask that did not come back, as the press that repeats it. */
+      browseAgain: string
       /** `{where}` is the piece the sockets belong to. */
       socketsOn: string
       socketsHint: string
@@ -603,6 +617,10 @@ export interface WorkspaceDict {
     emptyCanPost: string
     empty: string
     compose: string
+    /** The pen on the composer, and the way back out of it. */
+    draw: string
+    drawing: string
+    clearDrawing: string
     keepAtTop: string
     post: string
     posting: string
@@ -1271,6 +1289,12 @@ export const WORKSPACE_EN: WorkspaceDict = {
       look: 'Look',
       looking: 'Looking…',
       noPieces: 'Nothing matches “{q}”.',
+      browsePacks: 'Browse the packs',
+      browseHint: 'Every model this space can build with, by pack.',
+      forRooms: 'For rooms',
+      forLevels: 'For levels',
+      showMore: 'Show more',
+      browseAgain: 'Try the packs again',
       socketsOn: 'Sockets on {where}',
       socketsHint: 'A named place something attaches to — a seat, or the grip of a held item. It turns and moves with its piece.',
       socketName: 'name it',
@@ -1488,6 +1512,9 @@ export const WORKSPACE_EN: WorkspaceDict = {
       'Nothing on the board yet. Write the first notice, or make something in the studio and pin it here.',
     empty: 'Nothing on the board yet.',
     compose: 'Tell the space something',
+    draw: '✎ Draw',
+    drawing: 'Drawing',
+    clearDrawing: 'Clear',
     keepAtTop: 'Keep it at the top',
     post: 'Post',
     posting: 'Posting…',
@@ -2130,6 +2157,12 @@ export const WORKSPACE_DE: WorkspaceDict = {
       look: 'Suchen',
       looking: 'Wird gesucht …',
       noPieces: 'Nichts passt zu „{q}“.',
+      browsePacks: 'Pakete durchsehen',
+      browseHint: 'Alle Modelle, aus denen dieser Space bauen kann, nach Paket.',
+      forRooms: 'Für Räume',
+      forLevels: 'Für Level',
+      showMore: 'Mehr zeigen',
+      browseAgain: 'Pakete erneut laden',
       socketsOn: 'Andockpunkte an {where}',
       socketsHint: 'Ein benannter Punkt, an dem etwas ansetzt — ein Sitz oder der Griff eines gehaltenen Dings. Er dreht und bewegt sich mit seinem Teil.',
       socketName: 'benennen',
@@ -2347,6 +2380,9 @@ export const WORKSPACE_DE: WorkspaceDict = {
       'Noch nichts an der Pinnwand. Schreiben Sie den ersten Aushang, oder machen Sie etwas im Studio und heften Sie es hierher.',
     empty: 'Noch nichts an der Pinnwand.',
     compose: 'Sagen Sie dem Space etwas',
+    draw: '✎ Malen',
+    drawing: 'Zeichnung',
+    clearDrawing: 'Löschen',
     keepAtTop: 'Oben festhalten',
     post: 'Anschlagen',
     posting: 'Wird angeschlagen …',
@@ -3013,6 +3049,12 @@ export const WORKSPACE_BG: WorkspaceDict = {
       look: 'Търси',
       looking: 'Търси се…',
       noPieces: 'Нищо не съвпада с „{q}“.',
+      browsePacks: 'Разгледай пакетите',
+      browseHint: 'Всички модели, с които това пространство може да гради, по пакет.',
+      forRooms: 'За стаи',
+      forLevels: 'За нива',
+      showMore: 'Покажи още',
+      browseAgain: 'Опитай пакетите отново',
       socketsOn: 'Гнезда на {where}',
       socketsHint: 'Наименувано място, където нещо се закача — седалка или дръжката на държан предмет. Върти се и се мести заедно със своята част.',
       socketName: 'име',
@@ -3230,6 +3272,9 @@ export const WORKSPACE_BG: WorkspaceDict = {
       'Още няма нищо на дъската. Напишете първото съобщение или направете нещо в студиото и го закачете тук.',
     empty: 'Още няма нищо на дъската.',
     compose: 'Кажете нещо на спейса',
+    draw: '✎ Рисувай',
+    drawing: 'Рисунка',
+    clearDrawing: 'Изчисти',
     keepAtTop: 'Дръж го най-отгоре',
     post: 'Публикувай',
     posting: 'Публикува се…',

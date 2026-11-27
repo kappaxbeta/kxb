@@ -9,9 +9,11 @@ import { sceneWorldNow, subscribe as subscribeHere } from '@/app/world/_stores/h
 import { announceSaid } from '@/app/world/_stores/said-store'
 import { callSummon } from '@/app/t/[slug]/summon-store'
 import { callClip, callThingiverse, callVehicle } from '@/app/world/_stores/thing-store'
+import { callBuddy, talkToBuddy, toggleBuddy } from '@/app/world/_buddy'
 import { countReceived, countSent } from '@/app/world/perf/store'
 import { blockUser } from '@/domain/blocks/actions'
 import { postChatMessage, readRoomChat } from '@/domain/chat/actions'
+import { buddyOf } from '@/domain/buddy/persona'
 import { CHAT_HISTORY_LIMIT } from '@/domain/chat/events'
 import { createClient } from '@/lib/supabase/client'
 import { notifyIfHidden, openTabChannel } from '@/lib/tab-sync/broadcast'
@@ -332,6 +334,31 @@ export function ChatDock({
       const vehicle = /^\/vehicle(?:\s+([\s\S]*))?$/i.exec(typed)
       if (vehicle) {
         callVehicle((vehicle[1] ?? '').trim())
+        return
+      }
+
+      /**
+       * `/buddy` - the pen's "ai", typed: your buddy comes, or goes home.
+       *
+       * `/buddy kappa` names which one - Kappa, the red twin, or `telly` for
+       * the pink one - and naming the one already out sends him home, so the
+       * command is a toggle either way. Anything else after it is said *to*
+       * him rather than to the room: the words go to his chat box and never
+       * into this one, which is the difference between talking to a companion
+       * and talking about one. Swallowed even when no world is on screen, like
+       * the verbs above; he walks out when you next enter one. See
+       * `world/_buddy`.
+       */
+      const buddy = /^\/buddy(?:\s+([\s\S]*))?$/i.exec(typed)
+      if (buddy) {
+        const words = (buddy[1] ?? '').trim()
+        const named = buddyOf(words)
+        if (!words || named) {
+          toggleBuddy(named ?? undefined)
+          return
+        }
+        callBuddy()
+        void talkToBuddy(words)
         return
       }
 

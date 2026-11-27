@@ -111,6 +111,8 @@ import { Shutter } from '@/app/world/lounge/_canvas/shutter'
 import { useSpawn } from '@/app/world/lounge/_hooks/use-spawn'
 import { saveShot } from '@/app/world/lounge/_sim/save-shot'
 import { type Companion, Companions } from '@/app/world/lounge/_canvas/companions'
+import { castFlare } from '@/app/world/_stores/flare-store'
+import { Flares } from '@/app/world/lounge/_canvas/flares'
 import { PresenceSender, RemotePeeps } from '@/app/world/_presence/room-peers'
 import type { Room } from '@/app/world/_presence/room-presence'
 import {
@@ -123,6 +125,7 @@ import {
 } from '@/app/world/_canvas/rainbow'
 import { publishRainbow } from '@/app/world/_stores/rainbow-store'
 import { useStaminaOverride } from '@/app/world/_stores/stamina-store'
+import { useGlitchOverride } from '@/app/world/_stores/glitch-store'
 import { SpawnMark } from '@/app/world/lounge/_canvas/spawn-mark'
 import type { WorldSpawn } from '@/domain/worlds/queries'
 import {
@@ -158,6 +161,9 @@ import { useRosterChime } from '@/app/world/_presence/roster-chime'
 import { publishParty } from '@/app/world/_stores/party-store'
 import { play } from '@/lib/audio/engine'
 import { EmotePicker } from '@/app/world/_hud/emote-picker'
+import { HandLayer, type HandIncoming, type Phrase, type Said } from '@/app/world/_hand'
+import { Buddy, BuddyChat, toggleBuddy } from '@/app/world/_buddy'
+import { type Incoming, InkLayer, type Word } from '@/app/world/_ink'
 import { isTyping } from '@/app/world/_sim/typing'
 import {
   nothingSaid,
@@ -207,6 +213,7 @@ import {
 } from '@/app/world/_stores/pocket-store'
 import { answersUse, priceOfSlot } from '@/domain/thingiverse/blueprint'
 import { itemLook, itemLooks } from '@/domain/thingiverse/craft'
+import { holdable } from '@/domain/thingiverse/hold'
 import { inFront, SHOT_ARC, SWING_ARC, type Target as AimTarget } from '@/app/world/lounge/_sim/aim'
 import { fireTracer } from '@/app/world/_stores/tracer-store'
 import { payToTake } from '@/domain/thingiverse/shop'
@@ -292,11 +299,13 @@ export function LoungeScene({
   newThingPrice = 0,
   initialClips = [],
   stamina = false,
+  glitch = false,
   initialGoals = [],
   football,
   race,
   readOnly,
   canModerate,
+  canCast = true,
   mode: initialMode = 'battle',
   canSetMode = false,
   canFly,
@@ -377,6 +386,13 @@ export function LoungeScene({
    */
   stamina?: boolean
   /**
+   * Whether a bad connection is drawn as a glitch here.
+   *
+   * The space's `glitch` capability, on the same terms as `stamina`: a prop
+   * from the page and a store from the rail - see `useGlitchOverride`.
+   */
+  glitch?: boolean
+  /**
    * The goals standing in this world, from the log.
    *
    * Always drawn, in every mode - they are part of the world, like a wall somebody
@@ -438,6 +454,18 @@ export function LoungeScene({
    * and not that: an arena has no mode to switch.
    */
   canModerate: boolean
+  /**
+   * Whether a word this person writes may reach anybody else here.
+   *
+   * Decided on the server, where the role and the space's setting both are -
+   * see `mayCast` in lib/tenant.ts. A three-way setting arrives as one boolean
+   * on purpose: the scene has no business knowing which rung of the ladder
+   * somebody is on, only whether the room hears them.
+   *
+   * True by default, which is what the rooms with no space behind them want:
+   * the demo and the lobby have nobody to ask and nobody to protect.
+   */
+  canCast?: boolean
   /**
    * Sparring on, or building undisturbed.
    *
@@ -922,6 +950,50 @@ export function LoungeScene({
   const [dancing, setDancing] = useState(false)
 
   /**
+   * Whether the pen is out.
+   *
+   * A mode rather than a press, and the only mode in this scene that takes the
+   * pointer away from the room: while it is on, a sheet of glass over the world
+   * eats every drag, because a stroke and a look are the same gesture. See
+   * `world/_ink` - the letters, the ink and the words they spell are all in
+   * there, and this flag is the whole of the scene's share in it.
+   */
+  const [pen, setPen] = useState(false)
+
+  /**
+   * Whether the hand is out.
+   *
+   * The pen's twin, and a mode for the same reason: signing is something you
+   * leave running while you stand and talk to somebody. It takes the space bar
+   * with it - the thumb of the hand on screen is your own thumb on the space
+   * bar - so you cannot jump while it is out, which is the right trade for a
+   * mode whose whole point is that you have stopped to say something.
+   *
+   * See `world/_hand`. The alphabet, the phrasebook, the reader and the neon
+   * are all in there; this flag and `signed` below are the scene's whole share.
+   */
+  const [signing, setSigning] = useState(false)
+
+  /**
+   * Somebody else's word, drawn on our own glass. See `<InkLayer incoming>`.
+   *
+   * Up here with the other flags rather than down beside the handler that
+   * fills it, because the room's channel is opened above and reads it: a
+   * setter declared after its own listener is one the listener cannot see.
+   */
+  const [incoming, setIncoming] = useState<Incoming | undefined>(undefined)
+
+  /**
+   * Somebody else's phrase, drawn on our own screen in our own language.
+   *
+   * What arrived was a meaning, not a sentence - see `signed` on the room
+   * message - so this holds the meaning and the layer words it. Up here with
+   * the other flags for the same reason `incoming` is: the channel is opened
+   * above and a setter declared after its own listener is one it cannot see.
+   */
+  const [signed, setSigned] = useState<HandIncoming | undefined>(undefined)
+
+  /**
    * Presence state lives out here rather than inside <Multiplayer> because the
    * HUD is outside the Canvas and has to show it.
    *
@@ -1139,6 +1211,15 @@ export function LoungeScene({
         party?: boolean
         /** The world as glass, on or off. Ephemeral in the same way. */
         rainbow?: boolean
+        /** A word somebody wrote. See `spell` in ../_presence/presence-core. */
+        spell?: {
+          word: 'shout' | 'rainbow' | 'beam'
+          name?: string
+          at?: [number, number, number]
+          towards?: [number, number]
+        }
+        /** A phrase somebody signed, as a meaning. See `signed` in the same file. */
+        signed?: { phrase: Phrase; name?: string }
       }) => void)
     | null
   >(null)
@@ -1162,8 +1243,53 @@ export function LoungeScene({
       template?: string
       party?: boolean
       rainbow?: boolean
+      spell?: {
+        word: 'shout' | 'rainbow' | 'beam'
+        name?: string
+        at?: [number, number, number]
+        towards?: [number, number]
+      }
+      signed?: { phrase: Phrase; name?: string }
     }) => {
       if (message.mode) setMode(message.mode)
+
+      /*
+        Somebody wrote something the room can see.
+
+        A shout is drawn on our own glass, in the middle, by the pen layer - so
+        it only needs a timestamp to fire on and a name to put under it. A beam
+        and a rainbow come out of a body, so they are handed to the flare queue
+        with the position and heading that travelled with them, and the thing
+        inside the Canvas draws them exactly as if we had cast them ourselves.
+      */
+      if (message.spell) {
+        const cast = message.spell
+        if (cast.word === 'shout') {
+          setIncoming({ word: 'shout', from: cast.name, at: performance.now() })
+        } else if (cast.at && cast.towards) {
+          castFlare({
+            kind: cast.word,
+            from: { x: cast.at[0], y: cast.at[1], z: cast.at[2] },
+            towards: { x: cast.towards[0], z: cast.towards[1] },
+          })
+        }
+      }
+
+      /*
+        Somebody signed something.
+
+        `at` is a fresh timestamp rather than anything that travelled, because
+        it is not *when* they signed it - it is what makes the same phrase twice
+        in a row play twice on this screen. The wording is chosen down in the
+        layer, in this reader's language, from the meaning that arrived.
+      */
+      if (message.signed) {
+        setSigned({
+          phrase: message.signed.phrase,
+          name: message.signed.name ?? '',
+          at: performance.now(),
+        })
+      }
 
       // No host to record, unlike the party below: nothing about the sweep
       // depends on who threw the switch.
@@ -1396,6 +1522,102 @@ export function LoungeScene({
    * visitor could only be told about.
    */
   const combat = (Boolean(presence) || demo) && mode === 'battle' && (canFight ?? true)
+
+  /**
+   * What a written word does.
+   *
+   * Five words, three kinds of consequence, and the split is deliberate:
+   *
+   * - **magic** is only ever light on your own screen. The ink layer has
+   *   already thrown it by the time this runs; there is nothing for the room to
+   *   do about somebody enjoying themselves.
+   * - **dance** moves your body, which the room is already told about on the
+   *   heartbeat - so it is one line here and nothing on the wire. It toggles,
+   *   exactly like the button it replaced: writing it again is how you stop.
+   * - **shout**, **rainbow** and **beam** leave your screen, and those are the
+   *   three this space's setting can withhold. A player who may not cast still
+   *   *sees their own* - the ink bursts, the beam fires, the arc goes up in
+   *   front of them - and nothing goes out. Silently doing nothing at all would
+   *   read as the pen being broken.
+   *
+   * The two that come out of a body carry where it was and which way it faced,
+   * read here rather than in the flare, because these refs are the frame loop's
+   * and this is the moment the word was written.
+   */
+  const spell = useCallback(
+    (word: Word) => {
+      // Telly is yours alone - nothing goes out, so the space's spell setting
+      // has nothing to withhold. See `world/_buddy`.
+      if (word === 'companion') {
+        toggleBuddy()
+        return
+      }
+      if (word === 'dance') {
+        setDancing((current) => !current)
+        return
+      }
+      if (word === 'magic') return
+
+      const here = playerRef.current
+      const facing = headingRef.current
+      const from = { x: here.x, y: here.y - EYE_HEIGHT, z: here.z }
+      const towards = { x: facing.x, z: facing.z }
+
+      if (word !== 'shout') castFlare({ kind: word, from, towards })
+      if (!canCast) return
+
+      roomRef.current?.({
+        spell:
+          word === 'shout'
+            ? { word, name: presence?.name }
+            : {
+                word,
+                name: presence?.name,
+                at: [from.x, from.y, from.z],
+                towards: [towards.x, towards.z],
+              },
+      })
+    },
+    [canCast, headingRef, playerRef, presence?.name],
+  )
+
+  /**
+   * Which words work here.
+   *
+   * The beam is a battle's, and only a battle's. Everything else is a thing you
+   * do in a room. The book is drawn from this same list, so a lounge never
+   * offers a spell it would then ignore - see `<Spellbook spells>`.
+   */
+  const vocabulary = useMemo<Word[]>(
+    () =>
+      combat
+        ? ['magic', 'shout', 'dance', 'rainbow', 'beam', 'companion']
+        : ['magic', 'shout', 'dance', 'rainbow', 'companion'],
+    [combat],
+  )
+
+
+  /**
+   * What a signed phrase does.
+   *
+   * Only the ones the book has a wording for go out. A run of letters somebody
+   * spelled at their own screen stays there - nobody else in the room could
+   * read it, and a mode that quietly broadcast half-words would be one you
+   * could not practise in.
+   *
+   * Not gated on `canCast`, and that is deliberate. The three loud spells are
+   * withheld from guests in some spaces because they are *effects* - light
+   * across everybody's screen. This is somebody saying hello. It rides the
+   * presence channel beside the emotes, which is what it is: something that
+   * happened in the room rather than a line in the chat log.
+   */
+  const say = useCallback(
+    (said: Said) => {
+      if (!said.phrase) return
+      roomRef.current?.({ signed: { phrase: said.phrase, name: presence?.name } })
+    },
+    [presence?.name],
+  )
 
   /**
    * Who flies here.
@@ -1774,7 +1996,8 @@ export function LoungeScene({
    * The words this scene is read in, resolved once and handed to the two things
    * that print any: the controls list, and the HUD below it.
    */
-  const dict = worldDict(useLocale())
+  const locale = useLocale()
+  const dict = worldDict(locale)
 
   /**
    * The pictures on the walls. Their own aggregate, so their own hook - see
@@ -1945,6 +2168,7 @@ export function LoungeScene({
     carry: carryThing,
     cancel: cancelSummon,
     dismiss: dismissThing,
+    take: takeThing,
     setFalls,
     setSolid,
     nudge: nudgeSummon,
@@ -1986,6 +2210,10 @@ export function LoungeScene({
    */
   const staminaOverride = useStaminaOverride()
   const staminaOn = staminaOverride ?? stamina
+
+  /** Whether a bad connection is drawn as a glitch, on the same terms. */
+  const glitchOverride = useGlitchOverride()
+  const glitchOn = glitchOverride ?? glitch
 
   /** What is in your hands is exactly where you put it. Nothing follows a look. */
 /**
@@ -2637,14 +2865,19 @@ export function LoungeScene({
     // Under somebody right now: neither key does anything, so promise nothing.
     if (drivenThings.has(nearThing.id)) return null
 
-    // In play mode the promise is only good for things you can get into: a
-    // crate you cannot lift and cannot sit on has nothing to say at all.
+    // In play mode the promise is only good for things you can get into or
+    // pick up: a crate you cannot lift and cannot sit on has nothing to say at
+    // all.
     const spec = nearThing.blueprint?.spec
     const usable = Boolean(spec?.use)
-    if (!canBuild && !usable) return null
+    const takes = Boolean(spec && holdable(spec))
+    if (!canBuild && !usable && !takes) return null
 
     const drives = Boolean(spec && drivable(spec))
-    const using = usable ? (drives ? t.driveIt : t.useIt) : null
+    // Taking first, as `interact` does: a thing with a grip goes into your
+    // pocket, and a pistol that also happened to have a seat would still be a
+    // pistol.
+    const using = takes ? t.takeIt : usable ? (drives ? t.driveIt : t.useIt) : null
 
     /*
       Both verbs, when both apply.
@@ -2664,9 +2897,11 @@ export function LoungeScene({
       line: isTouch
         ? canBuild
           ? t.tapPickUp
-          : drives
-            ? t.tapDrive
-            : t.tapUse
+          : takes
+            ? t.tapTake
+            : drives
+              ? t.tapDrive
+              : t.tapUse
         : [using, canBuild ? t.pickUp : null].filter(Boolean).join(' · '),
     }
   }, [canBuild, carrying, dict.things, drivenThings, isTouch, nearThing, usingThing])
@@ -2778,6 +3013,18 @@ export function LoungeScene({
       one of them. So the two verbs are two keys - E edits the thing, G uses
       it - and each one means the same thing in every mode.
     */
+    /*
+      Something you can carry goes into your pocket.
+
+      Before the seat search, because a grip is a stronger claim than a seat:
+      a thing somebody posed in a fist is a thing meant to be held, and the
+      rack's own hint - "take it off the rack with G" - is the sentence this
+      completes for the same pistol lying on the floor. See `take`.
+    */
+    if (nearThing.blueprint && holdable(nearThing.blueprint.spec)) {
+      return takeThing(nearThing.id)
+    }
+
     const use = nearThing.blueprint?.spec.use
     if (!use) return false
 
@@ -2834,6 +3081,7 @@ export function LoungeScene({
     leaveThing,
     nearThing,
     refs,
+    takeThing,
     usingThing,
   ])
 
@@ -3217,6 +3465,50 @@ export function LoungeScene({
          */
         event.preventDefault()
         setOverview((current) => !current)
+      } else if (event.code === 'KeyP') {
+        /*
+          P for the pen.
+
+          Its own key rather than a second life for G, which already has two:
+          use the thing in front of you, and dance when there is nothing there.
+          The pen is a mode you leave running, so it needs a key that means the
+          same thing wherever you are standing.
+        */
+        event.preventDefault()
+        setPen((current) => !current)
+      } else if (event.code === 'KeyU') {
+        /*
+          U for the hand, and not H.
+
+          H is the obvious letter and it is taken - it has opened the controls
+          panel since before this existed, from a hook shared with every other
+          scene, and a key that did two things would be a key that did the wrong
+          one. So the mnemonic is positional instead, which is the same language
+          the mode already speaks: U sits directly above J, so the key that
+          opens the mode is under the index finger that will be signing with it.
+
+          Its own key beside P, because the hand and the pen are two ways of
+          saying the same five words and half a key would make neither
+          reachable. Both can be out at once - one is a sheet of glass you draw
+          on, the other is five keys under your right hand, and they do not
+          fight over anything.
+        */
+        event.preventDefault()
+        setSigning((current) => {
+          /*
+            And it lets go of the pointer, which it did not have to until the
+            mode grew something to press.
+
+            The same courtesy the block picker and the emote grid extend two
+            handlers up, and now for the same literal reason: the camera switch
+            is a button, and a button under a pointer locked to the canvas is a
+            button nobody can click. It costs nothing here - this mode is one
+            you *stop* to use, your right hand is busy making shapes, and the
+            look is not going anywhere while you do.
+          */
+          if (!current && document.pointerLockElement) document.exitPointerLock()
+          return !current
+        })
       } else if (event.code === 'KeyG') {
         event.preventDefault()
         // A toggle, not a hold: dancing is something you leave running while you
@@ -3986,6 +4278,18 @@ export function LoungeScene({
               />
             </Rainbow>
 
+            {/*
+              Whatever somebody just wrote, burning in the air.
+
+              Outside <Rainbow> because it is light rather than scenery: the
+              glass sweep repaints what the room is *made of*, and a beam is
+              something that happened in it. Unconditional, because a flare
+              arrives from the channel as readily as from this player's own pen
+              - a room where you can see your own spells and not anybody else's
+              would be a worse room than one with none.
+            */}
+            <Flares />
+
             <CosmicGround />
             <SelfAvatar
               model={wearing}
@@ -4113,6 +4417,7 @@ export function LoungeScene({
                 onHitLanded={noteHitLanded}
                 onPushed={takePush}
                 party={party}
+                glitch={glitchOn}
                 partyHost={partyHost}
                 faces={faces}
                 // The workspace the row belongs to, which `topic` cannot supply
@@ -4128,6 +4433,14 @@ export function LoungeScene({
               player arrives on, and the hosts stand on the same paving - see the
               note on `feetY`.
             */}
+            {/* Telly, if the pen called him. Draws nothing until then. */}
+            <Buddy
+              playerRef={playerRef}
+              headingRef={headingRef}
+              eyeHeight={EYE_HEIGHT}
+              dancing={dancing}
+            />
+
             {companions && companions.length > 0 && (
               <Companions
                 companions={companions}
@@ -4797,7 +5110,63 @@ export function LoungeScene({
           while the camera is parked on the thing, so what would be drawn under
           that panel is a control that cannot do the one thing it depicts.
         */}
-        {isTouch && touchActive && !pickerOpen && !carrying && !browsing && (
+        {/*
+          The glass you write on.
+
+          Outside the canvas and inside `.playing`, so it covers the world and
+          nothing else, and mounted last so that the panels above it - the block
+          picker, the emotes, the controls - keep their own z-order. It draws
+          nothing at all while `pen` is false: no context, no frame loop, no
+          listeners.
+        */}
+        {/* Talking to Telly. Only there while he is out. */}
+        <BuddyChat labels={dict.buddy} name={presence?.name} />
+
+        <InkLayer
+          active={pen}
+          onWord={spell}
+          labels={dict.ink}
+          spells={vocabulary}
+          incoming={incoming}
+          className="rounded-[3rem]"
+        />
+
+        {/*
+          The hand, in the corner.
+
+          Above the glass and below the panels, exactly like the pen - and like
+          the pen it draws nothing at all while it is away: no canvas, no frame
+          loop, no listeners. What it sends is a meaning; what it shows when
+          somebody else sends one is that meaning in this reader's language.
+
+          `camera` offers the webcam as a way to make the shapes, and it is the
+          room's to offer rather than the mode's: it asks for a permission and
+          downloads a model, so nothing happens until somebody presses the
+          switch. Switched on, the hand stops being a corner and flows over the
+          room with the one in front of the lens - which is the pen's bargain
+          too, and the same answer to why that is allowed: a mode you turned on
+          deliberately is a mode you are looking at rather than past.
+
+          That last part is not free: a second full-screen canvas over a room
+          that is already fill-rate bound is roughly two milliseconds a frame at
+          this size, on top of a detector running thirty times a second. Both
+          are the price of the mode being on, both stop the moment it is off,
+          and neither is paid by anybody who never presses the switch - which is
+          the whole reason it is a switch.
+        */}
+        <HandLayer
+          active={signing}
+          camera
+          labels={dict.hand}
+          locale={locale}
+          spells={vocabulary}
+          onSay={say}
+          onCast={spell}
+          incoming={signed}
+          onAway={() => setSigning(false)}
+        />
+
+        {isTouch && touchActive && !signing && !pickerOpen && !carrying && !browsing && (
           <TouchLayer
             hand={hand}
             dict={dict}
@@ -4809,8 +5178,10 @@ export function LoungeScene({
             canBuild={canBuild}
             combat={Boolean(combat)}
             flying={flying}
-            dancing={dancing}
-            onDancing={setDancing}
+            pen={pen}
+            onPen={() => setPen((current) => !current)}
+            signing={signing}
+            onHand={() => setSigning(true)}
             action={touchAction}
             onPlace={place}
             onRemove={remove}

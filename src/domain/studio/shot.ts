@@ -15,6 +15,7 @@ import {
   type BlockSpec,
   DEFAULT_LIGHT,
   DEFAULT_SCENE,
+  glitchKey,
   type GlowSpec,
   type GoalSpec,
   type GroundSpec,
@@ -254,6 +255,8 @@ export interface Actor {
   tracks: Tracks
   /** Whether they light the room, and how. See `GlowTrack`. */
   glow: GlowTrack
+  /** Drawn as a body on a bad connection, this strongly. See `PeepSpec.glitch`. */
+  glitch?: number
   emoteHeight: number
   emoteSize: number
   /** Where a `talk` beat's bubble sits, and how big it is. See `PeepSpec`. */
@@ -475,7 +478,7 @@ export const DEFAULT_SHOT: ShotSpec = {
   height: 720,
   fps: 30,
   duration: 8,
-  background: { colour: '#120a24', image: null },
+  background: { colour: '#120a24', image: BACKDROP_IMAGE },
   ground: DEFAULT_SCENE.ground,
   set: null,
   rainbow: DEFAULT_RAINBOW,
@@ -895,6 +898,7 @@ export function actorAt(actor: Actor, t: number, live?: LiveMotion): PeepSpec {
     sayHeight: actor.sayHeight,
     saySize: actor.saySize,
     glow: glowAt(actor.glow, t),
+    ...(actor.glitch ? { glitch: actor.glitch } : {}),
     say: talk ? talk.text : null,
     // Spread rather than set, so an actor who is never hidden carries no key
     // and a shot composed before this existed re-encodes byte for byte.
@@ -1127,6 +1131,7 @@ function actor(value: unknown): Actor {
     actions: ordered(parsed),
     tracks: parseTracks(raw.tracks, 'peep'),
     glow: glowTrack(raw.glow),
+    ...glitchKey(raw.glitch),
     emoteHeight: number(raw.emoteHeight, DEFAULT_ACTOR.emoteHeight, 0, 12),
     emoteSize: number(raw.emoteSize, DEFAULT_ACTOR.emoteSize, 0.2, 3),
     // Off this actor's own emote pair when absent, not off the defaults - the
@@ -1194,13 +1199,14 @@ function sameOrigin(value: unknown): string | null {
  * read as the colour they always meant.
  */
 function backdrop(value: unknown): Backdrop {
+  if (value === undefined || value === null) return DEFAULT_SHOT.background
   if (typeof value === 'string') {
     return {
       colour: HEX.test(value) ? value : DEFAULT_SHOT.background.colour,
       image: null,
     }
   }
-  const raw = (value ?? {}) as Record<string, unknown>
+  const raw = value as Record<string, unknown>
   return {
     colour:
       typeof raw.colour === 'string' && HEX.test(raw.colour)
@@ -1270,7 +1276,11 @@ export function parseShot(value: unknown): ShotSpec {
     peeps: [],
   })
 
-  const camera = Array.isArray(raw.camera) ? ordered(raw.camera.slice(0, 24).map(cameraKey)) : []
+  // Sixty-four, where the other lists stop at twenty-four: a scene cut from a
+  // script writes four keys per framing to keep the spline still between cuts
+  // - see `cameraFor` in `@/domain/channels/shot` - and six cuts is not a long
+  // scene. A key is seven numbers, so the URL grows by a few hundred bytes.
+  const camera = Array.isArray(raw.camera) ? ordered(raw.camera.slice(0, 64).map(cameraKey)) : []
 
   return {
     width: Math.round(number(raw.width, DEFAULT_SHOT.width, 64, 4096)),
@@ -1406,6 +1416,7 @@ export function shotFromScene(scene: StudioScene, duration = DEFAULT_SHOT.durati
       glow: peep.glow
         ? { mode: 'colour', colour: peep.glow.colour, sparkle: peep.glow.sparkle, strength: peep.glow.strength }
         : DEFAULT_GLOW,
+      ...(peep.glitch ? { glitch: peep.glitch } : {}),
       stride: DEFAULT_STRIDE,
       pose: null,
     })),

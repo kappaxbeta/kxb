@@ -37,6 +37,8 @@ export interface BoardPostState {
   sceneId: string | null
   /** The picture pinned with it, if any. In the state for the reason above. */
   imageSlug: string | null
+  /** The drawing pinned with it, in the pen's own format. */
+  ink: string | null
 }
 
 export const initialBoardPostState: BoardPostState = {
@@ -46,6 +48,7 @@ export const initialBoardPostState: BoardPostState = {
   reactions: {},
   sceneId: null,
   imageSlug: null,
+  ink: null,
 }
 
 function reactorsOf(reactions: Reactions, emote: EmoteId): string[] {
@@ -65,6 +68,7 @@ export function evolve(state: BoardPostState, event: BoardEvent): BoardPostState
         // picture, which arrived later still.
         sceneId: event.data.sceneId ?? null,
         imageSlug: event.data.imageSlug ?? null,
+        ink: event.data.ink ?? null,
       }
 
     case 'PostEdited':
@@ -121,6 +125,7 @@ export function decide(state: BoardPostState, command: BoardCommand): BoardEvent
             pinned: command.pinned,
             sceneId: command.sceneId,
             imageSlug: command.imageSlug,
+            ink: command.ink,
           },
         },
       ]

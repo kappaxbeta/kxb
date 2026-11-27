@@ -4,6 +4,7 @@ import { Sparkles, useGLTF } from '@react-three/drei'
 import { useLoader, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { newGlitch, wear } from '@/app/world/_canvas/body-shader'
 import { useRainbowFor, useRainbowSkin } from '@/app/world/_canvas/rainbow'
 import { type AvatarClip, avatarUrl, isSkinLook } from '@/domain/lounge/avatars'
 import type { Pose } from '@/domain/animator/clip'
@@ -127,6 +128,22 @@ interface PeepProps {
    */
   rim?: string | null
   /**
+   * How badly this body's connection is drawn as failing, from 0 to 1.
+   *
+   * A studio peep has no connection; the number is the author's, so a story
+   * can put somebody in the lounge's glitch on purpose. Zero, the default, is
+   * the shader not worn at all. See `wear` in ../_canvas/body-shader.
+   */
+  glitch?: number
+  /**
+   * Which bands tear, so two glitching peeps do not tear in step.
+   *
+   * The cast index is what the stage passes - the identity everything else in
+   * the studio selects and poses by - and it keeps a recorded shot the same
+   * file twice, which a random seed would not.
+   */
+  glitchSeed?: number
+  /**
    * A pose laid over the clip, or null for the clip alone.
    *
    * Already sampled - `actorAt` blends the keys, so what arrives here is where
@@ -248,6 +265,8 @@ function Body({
   tilt = 0,
   scale = 1,
   rim = null,
+  glitch = 0,
+  glitchSeed = 0,
   pose = null,
   onPick,
   onBody,
@@ -329,67 +348,39 @@ function Body({
   }, [rim, rimColour])
 
   /**
-   * The rim, applied to this body's materials and taken off again.
-   *
-   * `scene.clone(true)` shares materials with every other clone of the same
-   * animal - that is what makes a scene of six pandas cheap - so the first
-   * thing this does is give *this* body its own copies. Without it, one peep
-   * glowing would light up everybody who picked the same animal, in their
-   * colour.
-   *
-   * Lifted from `<AvatarModel rim>` rather than imported: that component is the
-   * lounge's, and it is a live-room thing built around `useAnimations` and a
-   * frame loop. Everything in this file is posed by hand. The shader is
-   * deliberately identical, because the two have to look the same.
+   * The glitch's numbers, on the same terms as the rim's colour: one
+   * long-lived set of uniforms, written after paint, so the playhead driving
+   * `time` and the author dragging `glitch` never rebuild a material. In a
+   * ref rather than a memo because an effect may write into a ref and the
+   * compiler's rules say it may not write into anything else it was handed.
    */
+  const glitchRef = useRef(newGlitch())
+  const glitchOn = glitch > 0
+
   useEffect(() => {
-    if (!rimOn) return
+    glitchRef.current.strength.value = glitch
+    glitchRef.current.time.value = time
+    glitchRef.current.seed.value = glitchSeed
+  }, [glitch, glitchSeed, time])
 
-    const restore: { mesh: THREE.Mesh; material: THREE.Material }[] = []
-
-    object.traverse((node) => {
-      const mesh = node as THREE.Mesh
-      if (!mesh.isMesh) return
-      const source = mesh.material
-      if (Array.isArray(source)) return
-
-      const material = source.clone()
-      material.onBeforeCompile = (shader) => {
-        shader.uniforms.uRimColour = { value: rimColour }
-        shader.fragmentShader = shader.fragmentShader
-          .replace('#include <common>', `#include <common>\nuniform vec3 uRimColour;`)
-          /**
-           * At the very end, after tone mapping and colour space, so the edge
-           * stays the neon it was asked for instead of being rolled back
-           * towards white by the tone mapper.
-           *
-           * `vViewPosition` is the fragment-to-camera vector every lit material
-           * in three declares; its dot with the normal is one at the centre of
-           * a surface facing you and zero at its edge, so one minus that,
-           * raised to a power, is a band that hugs the silhouette.
-           */
-          .replace(
-            '#include <dithering_fragment>',
-            `#include <dithering_fragment>
-  float rimFacing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  float rimBand = pow(1.0 - rimFacing, 2.4);
-  gl_FragColor.rgb += uRimColour * rimBand * 1.6;`,
-          )
-      }
-      material.needsUpdate = true
-
-      restore.push({ mesh, material: source })
-      mesh.material = material
-    })
-
-    return () => {
-      for (const entry of restore) {
-        const worn = entry.mesh.material
-        entry.mesh.material = entry.material
-        if (!Array.isArray(worn)) worn.dispose()
-      }
-    }
-  }, [object, rimOn, rimColour])
+  /**
+   * The rim and the glitch, applied to this body's materials and taken off
+   * again.
+   *
+   * Once lifted from `<AvatarModel rim>` rather than imported, because that
+   * component is the lounge's - a live-room thing built around `useAnimations`
+   * and a frame loop, while everything here is posed by hand. The shader itself
+   * is now shared in `wear`, which is what keeps a studio body and a lounge
+   * body looking the same: they are patched by the same lines.
+   */
+  useEffect(
+    () =>
+      wear(object, {
+        rim: rimOn ? rimColour : null,
+        glitch: glitchOn ? glitchRef.current : null,
+      }),
+    [object, rimOn, rimColour, glitchOn],
+  )
 
   /**
    * Which clip is playing, swapped when it changes.
@@ -985,8 +976,32 @@ export function Block({
 
   return (
     <group
+      /*
+        A cell's floor, then the pack's lift - not a cell's centre.
+
+        `position` arrives as `blockY(top)`, which is the *centre* of the cell a
+        bb10 cube fills, because that is where a cube modelled around its own
+        pivot has to go. `Pack.lift` is measured from the cell's *floor* - the
+        builder says so where it places the same models (`instances.tsx`: "a
+        cell's `y` is the level of its floor"), and it is 0.5 for bb10 and zero
+        for every other pack precisely because everything else is modelled
+        standing on y=0.
+
+        Adding a floor-relative lift to a centre put every model outside bb10
+        half a cell into the air. Nobody saw it while the only pack a still
+        could reach was `cosmos`, whose galaxy hovers in its own geometry and
+        was *supposed* to float. The first park bench placed in a shot made it
+        obvious, and this is where it was wrong.
+
+        `* size` for the reason the builder gives: a cube drawn at half size is
+        half a cell tall, so its centre sits a quarter of a cell above its
+        floor. The pack's own scale is not multiplied in - that is already what
+        makes one authored cube one cell.
+      */
       position={
-        drawing ? [position[0], position[1] + drawing.lift, position[2]] : position
+        drawing
+          ? [position[0], position[1] - 0.5 + drawing.lift * size, position[2]]
+          : position
       }
       rotation={[pitch, rotation, roll]}
       scale={(drawing ? drawing.scale : BLOCK_SCALE) * size}

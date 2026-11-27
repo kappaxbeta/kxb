@@ -1,0 +1,16 @@
+{
+  "name": "@kxb/xoin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The xoin market: a constant-product pool, a mining schedule with halvings, and a deterministic price everybody computes for themselves. No currency of its own - the coin is the money, and a xoin is a thing you buy with it.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./units": "./src/market/units.ts",
+    "./pool": "./src/market/pool.ts",
+    "./drift": "./src/market/drift.ts",
+    "./price": "./src/market/price.ts",
+    "./modes": "./src/modes.ts",
+    "./play": "./src/play/market.tsx",
+    "./position": "./src/market/position.ts"
+  }
+}

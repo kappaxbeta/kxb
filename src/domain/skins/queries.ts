@@ -21,6 +21,7 @@ type SkinRow = {
   voucher_cost: number
   backstory: string
   active: boolean
+  variant_of: string | null
 }
 
 const toView = (row: SkinRow): SkinView => ({
@@ -31,6 +32,7 @@ const toView = (row: SkinRow): SkinView => ({
   voucherCost: row.voucher_cost,
   backstory: row.backstory,
   active: row.active,
+  variantOf: row.variant_of ?? null,
 })
 
 /**
@@ -72,9 +74,21 @@ export async function shopFor(supabase: Client, userId: string | null): Promise<
   const ownedMap: Record<string, string> = {}
   for (const row of owned.data ?? []) ownedMap[row.skin_id] = row.via
 
+  /**
+   * Colours ride along with their parent rather than being filtered out here.
+   *
+   * The shelf strip only draws the rows with no `variantOf` - see `Shop` - but
+   * the swatches need the colour rows themselves, and a second query for two
+   * extra rows would be a round trip to save nothing. `shelfOrder` puts a
+   * colour wherever its name sorts; nothing reads that position.
+   *
+   * A colour is kept for an owner of the *parent*, not of itself: nothing ever
+   * issues ownership of a colour, so filtering on `ownedMap[skin.id]` would
+   * retire every colour the day its parent came off the shelf.
+   */
   const skins = ((skinRows ?? []) as SkinRow[])
     .map(toView)
-    .filter((skin) => skin.active || ownedMap[skin.id])
+    .filter((skin) => skin.active || ownedMap[skin.id] || (skin.variantOf && ownedMap[skin.variantOf]))
     .sort(shelfOrder)
 
   return {

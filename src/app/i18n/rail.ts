@@ -574,6 +574,14 @@ export interface RailDict {
     staminaOn: string
     staminaOff: string
     staminaFailed: string
+    /** Whether a bad connection is drawn as a glitch. Owners and admins only. */
+    glitch: string
+    glitchOn: string
+    glitchOff: string
+    glitchFailed: string
+    /** The button that glitches your own body for a moment, locally. */
+    glitchTest: string
+    glitchTesting: string
     play: string
     playHint: string
     close: string
@@ -800,6 +808,12 @@ export const RAIL_EN: RailDict = {
     staminaOn: 'Running costs breath. Walk to get it back.',
     staminaOff: 'Run as long as you like.',
     staminaFailed: 'That could not be changed',
+    glitch: 'Glitch',
+    glitchOn: 'A shaky connection shows as a glitching body.',
+    glitchOff: 'Everybody is drawn as if their connection were fine.',
+    glitchFailed: 'That could not be changed',
+    glitchTest: 'Test',
+    glitchTesting: 'Glitching you for a moment. Turn the mirror round to see it.',
     play: 'Play',
     playHint: 'a level →',
     close: 'Close',
@@ -1355,6 +1369,12 @@ export const RAIL_DE: RailDict = {
     staminaOn: 'Rennen kostet Puste. Gehen bringt sie zurück.',
     staminaOff: 'Rennen, so lange Sie wollen.',
     staminaFailed: 'Das ließ sich nicht ändern',
+    glitch: 'Glitch',
+    glitchOn: 'Eine wackelige Verbindung zeigt sich als glitchender Körper.',
+    glitchOff: 'Alle werden gezeichnet, als wäre ihre Verbindung in Ordnung.',
+    glitchFailed: 'Das ließ sich nicht ändern',
+    glitchTest: 'Testen',
+    glitchTesting: 'Sie glitchen für einen Moment. Drehen Sie den Spiegel um, um es zu sehen.',
     play: 'Spielen',
     playHint: 'ein Level →',
     close: 'Schließen',
@@ -1937,6 +1957,12 @@ export const RAIL_BG: RailDict = {
     staminaOn: 'Тичането коства дъх. Ходенето го връща.',
     staminaOff: 'Тичайте колкото искате.',
     staminaFailed: 'Това не можа да се промени',
+    glitch: 'Глич',
+    glitchOn: 'Нестабилна връзка се показва като гличващо тяло.',
+    glitchOff: 'Всички се рисуват, сякаш връзката им е наред.',
+    glitchFailed: 'Това не можа да се промени',
+    glitchTest: 'Тест',
+    glitchTesting: 'Гличвате за миг. Обърнете огледалото, за да го видите.',
     play: 'Игра',
     playHint: 'ниво →',
     close: 'Затвори',

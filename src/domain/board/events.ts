@@ -37,9 +37,27 @@ import type { DomainEvent } from '@/es/types'
  * whether the reader may have the bytes. Set once at publication, like the
  * scene, because a picture is what the notice is.
  */
+/**
+ * `ink` is the third of these optional attachments and the first that is the
+ * thing itself rather than a reference to one. A scene is a live document and a
+ * picture is a file; a note is a few hundred numbers describing a hand moving,
+ * and they are small enough to sit in the event that announced them (see
+ * `domain/ink/note.ts`, which caps the length).
+ *
+ * That also means it cannot rot. A scene can be deleted and an upload can 404,
+ * and a card draws neither - a note is as readable in five years as the day it
+ * was written, which is the right property for the one attachment that is
+ * somebody's handwriting.
+ */
 export type PostPublished = DomainEvent<
   'PostPublished',
-  { body: string; pinned: boolean; sceneId?: string | null; imageSlug?: string | null }
+  {
+    body: string
+    pinned: boolean
+    sceneId?: string | null
+    imageSlug?: string | null
+    ink?: string | null
+  }
 >
 
 export type PostEdited = DomainEvent<'PostEdited', { body: string }>

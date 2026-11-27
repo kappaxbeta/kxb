@@ -98,11 +98,11 @@ docs/marketing/images/
 # ...and the same for the card game. `bun run maumau:assets --publish`.
 /public/maumau
 
-# Vendored by `bun run mocap:vendor` for the camera capture page: MediaPipe's
-# wasm runtime, copied out of node_modules, and the two pose models, fetched
-# from Google's bucket. Fifteen megabytes that is a pure function of a version
-# number and two URLs - the script is the part worth keeping. Same bargain as
-# /public/boxing above.
+# Vendored by `bun run mocap:vendor` for the two pages with a camera on them -
+# the animator's capture and hand mode: MediaPipe's wasm runtime, copied out of
+# node_modules, and the body and hand models, fetched from Google's bucket.
+# Twenty-odd megabytes that is a pure function of a version number and three
+# URLs - the script is the part worth keeping. Same bargain as /public/boxing.
 /public/mocap
 
 # Written by `bun run banners:render`: seventy-two App Store panels and the

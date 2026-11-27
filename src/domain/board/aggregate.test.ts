@@ -36,6 +36,7 @@ describe('board evolve', () => {
       reactions: {},
       sceneId: null,
       imageSlug: null,
+      ink: null,
     })
   })
 
@@ -96,6 +97,7 @@ describe('board decide', () => {
       pinned: true,
       sceneId: null,
       imageSlug: null,
+      ink: null,
     })
 
     expect(events).toEqual([
@@ -106,6 +108,7 @@ describe('board decide', () => {
           pinned: true,
           sceneId: null,
           imageSlug: null,
+          ink: null,
         },
       },
     ])
@@ -119,6 +122,7 @@ describe('board decide', () => {
       pinned: false,
       sceneId: '11111111-2222-3333-4444-555555555555',
       imageSlug: null,
+      ink: null,
     })
 
     expect(events[0]?.data).toMatchObject({
@@ -134,6 +138,7 @@ describe('board decide', () => {
       pinned: false,
       sceneId: null,
       imageSlug: 'Zm9vYmFyYmF6cXV4',
+      ink: null,
     })
 
     expect(events[0]?.data).toMatchObject({ imageSlug: 'Zm9vYmFyYmF6cXV4', body: '' })
@@ -161,6 +166,7 @@ describe('board decide', () => {
         pinned: false,
         sceneId: null,
         imageSlug: null,
+        ink: null,
       }),
     ).toThrow(DomainError)
   })

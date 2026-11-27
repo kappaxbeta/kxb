@@ -8,6 +8,7 @@ import { useSceneRefs } from '@/app/world/lounge/_scene/scene-refs'
 // is in ./_sim/seats, where it can be tested without a canvas.
 import { freeSeat, seatOf } from '@/app/world/lounge/_sim/seats'
 import { usable } from '@/domain/thingiverse/blueprint'
+import { holdable } from '@/domain/thingiverse/hold'
 import type { ThingView } from '@/domain/thingiverse/queries'
 
 /**
@@ -73,8 +74,14 @@ export function Usables({
     let bestDistance = USE_REACH
 
     for (const thing of things) {
+      /*
+        What counts, while playing: anything you can get into, and anything you
+        can pick up. The second was missing - a pistol summoned onto the floor
+        was never the nearest thing, so G at it found nothing and the chip said
+        nothing - which is why `take` in `use-things` had no way to be reached.
+      */
       const spec = thing.blueprint?.spec
-      if (!spec || (!all && !usable(spec))) continue
+      if (!spec || (!all && !usable(spec) && !holdable(spec))) continue
 
       /*
         Where it is drawn, and only the row as a fallback.

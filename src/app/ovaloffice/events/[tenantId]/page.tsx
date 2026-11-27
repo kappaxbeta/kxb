@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { EventConsole } from '@/app/ovaloffice/events/[tenantId]/event-console'
+import { MachinePanel } from '@/app/ovaloffice/events/[tenantId]/machine-panel'
+import { eventOrigin, getMachine } from '@/domain/events/machines'
 import { guestLinkUrl } from '@/domain/guests/application'
 import { env } from '@/lib/env'
 import { getEvent } from '@/domain/events/queries'
@@ -56,6 +58,21 @@ export default async function EventConsolePage({
     listInvitations(admin, tenantId),
   ])
 
+  /**
+   * The live link, pointed at wherever this event currently is.
+   *
+   * Built here rather than read from a column, because an event moves: it
+   * starts on kxb.team, may spend a weekend on its own box, and comes back. A
+   * link stored at creation is wrong for two of those three phases - which is
+   * how one event ends up with two different links and nobody sure which to
+   * send.
+   *
+   * The *token* is stable across all of that; only the host changes. So the
+   * token is read from whichever live link the space has, and the origin is
+   * decided by the machine's state.
+   */
+  const machine = await getMachine(admin, tenantId)
+
   const { data: link } = await admin
     .from('guest_links')
     .select('token')
@@ -65,11 +82,25 @@ export default async function EventConsolePage({
     .limit(1)
     .maybeSingle()
 
+  /**
+   * The link that works where the event actually is.
+   *
+   * A token is only meaningful in the database that minted it, and a box gets
+   * its own during seeding - so pointing main's token at the box's hostname
+   * produces a URL that is well-formed, looks entirely correct, and renders
+   * "this link has expired" to everyone you sent it to. That is not a
+   * hypothetical: it is what the console showed the first time a box came up.
+   *
+   * So once there is a machine, its `guest_url` is the answer, whole. Main's
+   * token is right only while the event is still at home.
+   */
+  const onABox = machine?.status === 'ready' && machine.guestUrl
 
-  // The guest link is the main origin and whichever token the space currently
-  // has. The token was always the stable half; without a box there is nowhere
-  // else for it to point.
-  const guestUrl = link ? guestLinkUrl(env.appUrl(), link.token) : null
+  const guestUrl = onABox
+    ? machine.guestUrl
+    : link
+      ? guestLinkUrl(eventOrigin(tenant.slug, machine, env.appUrl()), link.token)
+      : null
 
   const capabilities = (tenant.capabilities ?? {}) as Record<string, boolean>
 
@@ -110,6 +141,13 @@ export default async function EventConsolePage({
           role: invitation.role,
         }))}
         viewerIsMember={members.some((member) => member.userId === user.id)}
+      />
+
+      <MachinePanel
+        tenantId={tenantId}
+        slug={tenant.slug}
+        machine={machine}
+        guestUrl={guestUrl}
       />
 
       <EventConsole

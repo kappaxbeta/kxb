@@ -134,10 +134,23 @@ function SkinCard({
             >
               {skin.tier}
             </span>
-            <span>
-              {skin.voucherCost} {skin.voucherCost === 1 ? 'buck' : 'bucks'}
-            </span>
-            <span>· {skin.owners} owned</span>
+            {/* A colourway says so instead of quoting a price, because it has
+                none that is read: it is never sold, and it is worn by whoever
+                owns the skin it is painted from. Without this line the row is
+                a skin at zero bucks with nobody owning it, which reads as a
+                mistake somebody would go and 'fix'. */}
+            {skin.variantOf ? (
+              <span>
+                colour of <span className="font-mono">{skin.variantOf}</span>
+              </span>
+            ) : (
+              <>
+                <span>
+                  {skin.voucherCost} {skin.voucherCost === 1 ? 'buck' : 'bucks'}
+                </span>
+                <span>· {skin.owners} owned</span>
+              </>
+            )}
             {!skin.active && <span className="text-amber-600">· retired</span>}
           </p>
         </div>

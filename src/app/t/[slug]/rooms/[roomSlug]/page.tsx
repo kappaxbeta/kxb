@@ -48,6 +48,7 @@ import {
   requireTenant,
   thingiverseOpen,
   xpOpen,
+  mayCast,
 } from '@/lib/tenant'
 import { fill } from '@/app/i18n/fill'
 import type { Locale } from '@/domain/i18n/locale'
@@ -398,10 +399,15 @@ export default async function RoomPage({
         has never touched the switch has not asked for the rule.
       */
       stamina={context.tenant.capabilities.stamina ?? false}
+      glitch={context.tenant.capabilities.glitch ?? false}
       readOnly={!canWrite(context)}
       // A guest walks here too, for the reason the lounge page gives at length.
       canFly={isGuest(context) ? false : undefined}
       canModerate={hasRole(context, ['owner', 'admin'])}
+      // Whether a word written in here may reach anybody else. The space's
+      // three-position setting and this person's role, answered on the server
+      // where both of them are - see `mayCast`.
+      canCast={mayCast(context)}
       /**
        * The room's own mode, not the space's.
        *

@@ -539,6 +539,80 @@ export const PACKS: Record<string, Pack> = {
     skeleton: 'dummy',
     ...KAY,
   },
+  /**
+   * The mech - one character, and the third pack to ride the dummy's rig.
+   *
+   * The joint list is checked, not assumed: the same `Rig_Medium` skin with the
+   * same 23 bones (`root, hips, spine, chest … handslot.l/r … toes.l/r`), in a
+   * different export order the mixer does not care about, exported by the same
+   * Blender version that wrote the dummy and the adventurers. So it binds the
+   * shared clip pack, offers the same two grip sockets, and takes the
+   * `SkinnedBody` path - a new mesh and no new vocabulary, which is the whole
+   * bar a character pack has to clear.
+   *
+   * Measured, not assumed, and it is the dummy's figure: 2.27 tall and 1.96
+   * across the shoulders against the dummy's 2.40 and 1.94, standing on its own
+   * floor. So a mech walks through the same doorway the dummy does, and the
+   * pack needs no scale of its own - which matters more here than for scenery,
+   * because scaling a body moves its hands off the grip sockets every held
+   * thing is authored against.
+   *
+   * `.glb` is doing the same quiet work it does for the monsters: the folder
+   * also holds the mech's axe and its minigun as `.gltf`, and those are hand
+   * props rather than bodies. They are offered separately - see
+   * `spacenina-gear` - so the character pack lists exactly one character.
+   *
+   * ---------------------------------------------------------------------------
+   * Two of them, because it is painted twice
+   * ---------------------------------------------------------------------------
+   * The kit ships two textures for the one mesh - white-and-green, and
+   * olive-and-orange - and `CombatMech_Olive.glb` is the second baked into its
+   * own file by `scripts/xp-recolour.ts`. Same geometry, same rig, same UVs;
+   * only the embedded PNG differs.
+   *
+   * A second *file* rather than a texture swapped at draw time, and the reason
+   * is not about rendering: a look is one string. `spacenina/CombatMech_Olive`
+   * travels down the presence channel, into a document and into a `skins` row
+   * exactly as any other id does, where a colour living only in the renderer
+   * would need a second field on every one of them. The shop is what makes the
+   * pair read as one character - it draws the colours as swatches on one card -
+   * and that is a shop decision, made in the migration that added
+   * `skins.variant_of`, not a fact about the art.
+   */
+  spacenina: {
+    label: 'Mech',
+    path: '/xp/packs/spacenina',
+    ext: '.glb',
+    // The dummy's grid again, so the player blueprint's scale needs no third
+    // opinion. See the note above for the numbers.
+    scale: 1,
+    lift: 0,
+    skeleton: 'dummy',
+    ...KAY,
+  },
+  /**
+   * The mech's two hands: an axe and a minigun, out of the same folder.
+   *
+   * A second pack over the same directory rather than a field on the first,
+   * because `ext` is one extension and these two ship as `.gltf` beside a
+   * character that ships as `.glb`. Splitting them is also the honest listing:
+   * a picker offering "Mech" should offer a mech, and these are things a mech
+   * (or anyone else with a hand) holds.
+   *
+   * The minigun is modelled as two nodes - the body and a `_Barrel` - which is
+   * what a blueprint's `spin` picks from, so it can be a gun whose barrels
+   * turn without a second file.
+   */
+  'spacenina-gear': {
+    label: 'Mech · Gear',
+    path: '/xp/packs/spacenina',
+    ext: '.gltf',
+    // Drawn to the same figure as everything else Kay hands a character: the
+    // axe is 1.54 tall against a 2.27 mech.
+    scale: 1,
+    lift: 0,
+    ...KAY,
+  },
   ...PLATFORMER,
   /**
    * The eleven flat kits, all at scale 1.
@@ -868,6 +942,7 @@ export const PACK_ORDER = [
   'peepz',
   'adventurers',
   'kappa',
+  'spacenina',
   // Neutral first of the five: it holds the pieces a platformer is *about* -
   // the spikes, the chains, the cannon, the bomb - where the four colourways
   // are the same 118 blocks in different paint.
@@ -903,6 +978,9 @@ export const PACK_ORDER = [
   // With the weapons, because that is what it is - the same shelf, drawn by
   // somebody else and pointed at a different kind of level.
   'blaster',
+  // And with them, the mech's axe and minigun - the pair its own pack cannot
+  // list, because a character pack lists characters.
+  'spacenina-gear',
   'tools',
   'forest-color1',
   'forest-color2',

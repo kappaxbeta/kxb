@@ -449,6 +449,18 @@ export function PlayerControls({
       // one - so this is the only thing standing between typing "walk" in the
       // chat box and actually walking.
       if (isTyping(event)) return
+      /*
+        Something nearer to hand already answered this key.
+
+        Hand mode is the one that does it: its five keys are the space bar and
+        four of the home row, and while it is out they are fingers rather than a
+        jump and a look lock. It claims them in the capture phase, so by the
+        time this runs the answer is already given. See `world/_hand`.
+
+        Only the keydown is guarded. The keyup below must stay unguarded for the
+        reason written on it.
+      */
+      if (event.defaultPrevented) return
       /**
        * L toggles the look lock without needing a click.
        *

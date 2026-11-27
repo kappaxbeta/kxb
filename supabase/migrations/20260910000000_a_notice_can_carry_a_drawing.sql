@@ -1,0 +1,33 @@
+-- ============================================================================
+-- A notice can carry a drawing
+-- ----------------------------------------------------------------------------
+-- The third thing on the board that is not text, and it arrives the way the
+-- first two did - see 20260904020000_board_post_scene.sql, which argued the
+-- shape of all of this and is the file to read first.
+--
+-- What differs is that this one is not a reference. A scene is a row in
+-- public.published_scenes and stays a live document; a picture is a slug that
+-- /api/uploads answers for. A drawing made with the pen is a few hundred
+-- numbers describing a hand moving - see src/app/world/_ink/note.ts - and they
+-- are small enough to keep in place. So the column holds the thing itself.
+--
+-- Three consequences, all of them good:
+--
+--   * nothing to look up when the board is listed, and so no second query and
+--     no index;
+--   * nothing that can rot. A scene can be deleted and an upload can 404, and
+--     the card draws neither; a note is as readable in five years as it was the
+--     day it was drawn, which is the right property for handwriting;
+--   * nothing to authorise. There is no other row being reached through this,
+--     so a notice cannot become a way to read something the reader would
+--     otherwise be refused.
+--
+-- The length is capped in the command schema (NOTE_LIMIT, about twelve
+-- thousand characters, some thirty seconds of steady drawing) rather than by a
+-- constraint here. A read model is rebuilt by replay, and a constraint that
+-- refused a row would make the replay fail on an event the log had already
+-- accepted - the same reason the two columns above have no foreign keys.
+-- ============================================================================
+
+alter table public.board_posts_read_model
+  add column if not exists ink text;

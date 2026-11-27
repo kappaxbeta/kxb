@@ -232,6 +232,41 @@ export type SpaceCapability =
    * asked for it.
    */
   | 'stamina'
+  /**
+   * Draw a peer on a bad connection as a glitch.
+   *
+   * A room's choice about how honest its picture is: with it on, somebody
+   * whose packets are late or jittery is drawn tearing and shifting hue, so
+   * everybody looking at them knows why they stutter across the floor rather
+   * than wondering what is wrong with the room. Off is what every world has
+   * always drawn - a body held still and then caught up, with nothing to say
+   * why - and it defaults off like `stamina` does, because a space that has
+   * never asked for the effect has not asked for it.
+   */
+  | 'glitch'
+  /**
+   * Whether a word written in the room reaches anybody but its author.
+   *
+   * The pen (`world/_ink`) reads five words. Two of them - a magic and a dance -
+   * never leave the writer's own screen and are nobody's business but theirs.
+   * The other three light up everybody standing there, and *that* is a thing a
+   * space has an opinion about: a public lounge with a link on the internet is
+   * not the same room as a team's.
+   *
+   * Two switches rather than one because the answer has three steps, and the
+   * settings page draws them as one control with three positions:
+   *
+   *   * both off - only owners and admins may cast to the room;
+   *   * `spells` on - members may too, which is the default and what every
+   *     space has had since the pen shipped;
+   *   * `spells_guests` on as well - visitors may, which is a decision somebody
+   *     has to make on purpose.
+   *
+   * Ladder, not a set: the guest half means nothing with the member half off,
+   * and `castReach` in lib/tenant.ts reads them in that order.
+   */
+  | 'spells'
+  | 'spells_guests'
 
 export const SPACE_CAPABILITIES: SpaceCapability[] = [
   'build',
@@ -243,6 +278,9 @@ export const SPACE_CAPABILITIES: SpaceCapability[] = [
   'agents',
   'perf_display',
   'stamina',
+  'glitch',
+  'spells',
+  'spells_guests',
 ]
 
 /**
@@ -253,11 +291,28 @@ export const SPACE_CAPABILITIES: SpaceCapability[] = [
  * screen. Split out rather than filtered at each of the two call sites, so
  * adding a capability makes somebody decide which list it is on.
  */
-export type GuestWriteCapability = Exclude<SpaceCapability, 'perf_display' | 'stamina'>
+type NotAGuestWrite = 'perf_display' | 'stamina' | 'glitch' | 'spells' | 'spells_guests'
+
+export type GuestWriteCapability = Exclude<SpaceCapability, NotAGuestWrite>
+
+const NOT_GUEST_WRITES: NotAGuestWrite[] = [
+  'perf_display',
+  'stamina',
+  'glitch',
+  /*
+    Both halves of the spell ladder are off this list, and for opposite
+    reasons. `spells` is a room-wide switch rather than a write a guest could be
+    granted, like the three above it; `spells_guests` *is* the guest answer, so
+    offering it on the desk that asks "what may a guest do" would be the same
+    question twice, in two places, able to disagree.
+  */
+  'spells',
+  'spells_guests',
+]
 
 export const GUEST_WRITE_CAPABILITIES: GuestWriteCapability[] = SPACE_CAPABILITIES.filter(
   (capability): capability is GuestWriteCapability =>
-    capability !== 'perf_display' && capability !== 'stamina',
+    !(NOT_GUEST_WRITES as string[]).includes(capability),
 )
 
 /** Human labels, for the console and the event desk. */
@@ -271,6 +326,9 @@ export const SPACE_CAPABILITY_LABELS: Record<SpaceCapability, string> = {
   agents: 'Creatures',
   perf_display: 'Performance readout',
   stamina: 'Stamina',
+  glitch: 'Glitch',
+  spells: 'Spells reach the room',
+  spells_guests: 'Visitors may cast spells',
 }
 
 export function isSpaceCapability(value: string): value is SpaceCapability {

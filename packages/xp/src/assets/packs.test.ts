@@ -22,25 +22,28 @@ describe('models with bones', () => {
     expect(isRigged('platformer-neutral/floor_spikes_2x2x1')).toBe(false)
   })
 
-  test('exactly four packs claim it, so a fifth is a decision rather than a drift', () => {
+  test('exactly five packs claim it, so a sixth is a decision rather than a drift', () => {
     /**
-     * Not a rule that there may only ever be four. It is a rule that adding
+     * Not a rule that there may only ever be five. It is a rule that adding
      * the next one is a thing somebody did on purpose, with this test in front
      * of them, rather than a field that appeared because a pack was copied -
      * and every rig costs a clip table, a handle table and a part vocabulary,
      * none of which a copied line would bring with it.
      *
-     * The adventurers and the monsters were exactly that decision, made
-     * cheaply twice: both claim the *dummy's* skeleton rather than a rig of
-     * their own, because their joint lists are the dummy's 23 bones name for
-     * name. New meshes, no new vocabulary.
+     * The adventurers, the monsters and the mech were exactly that decision,
+     * made cheaply three times: each claims the *dummy's* skeleton rather than
+     * a rig of its own, because their joint lists are the dummy's 23 bones name
+     * for name. New meshes, no new vocabulary.
      */
     const rigged = Object.entries(PACKS)
       .filter(([, pack]) => pack.skeleton)
       .map(([id]) => id)
-    expect(rigged).toEqual(['dummy', 'peepz', 'adventurers', 'kappa'])
+    expect(rigged).toEqual(['dummy', 'peepz', 'adventurers', 'kappa', 'spacenina'])
     expect(PACKS.adventurers.skeleton).toBe('dummy')
     expect(PACKS.kappa.skeleton).toBe('dummy')
+    expect(PACKS.spacenina.skeleton).toBe('dummy')
+    // And the gear beside it is not a body, however much it shares a folder.
+    expect(PACKS['spacenina-gear'].skeleton).toBeUndefined()
   })
 
   test('and the default player body is one of them', () => {

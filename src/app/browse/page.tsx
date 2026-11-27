@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { MarketingShell } from '@/app/components/marketing-shell'
 import { XpShelf, type StoreCartridge } from '@/app/browse/xp-shelf'
 import { WorldCard } from '@/app/worlds/world-card'
+import { InkPad } from '@/app/world/_ink'
+import { worldDict } from '@/app/i18n/world'
 import { listXpCatalogue, type XpSummary } from '@/domain/xps/catalogue'
 import { readXpViewer, type XpViewer } from '@/domain/xps/viewer'
 import { listPublicWorlds } from '@/domain/worlds/queries'
@@ -126,6 +128,34 @@ export default async function BrowsePage() {
           */}
           <div className="mt-6 sm:max-w-md">
             <MakeOne viewer={viewer} t={t} />
+          </div>
+        </section>
+
+        {/* --- the pen ----------------------------------------------------- */}
+        <section className="mt-16" aria-labelledby="pen-heading">
+          <div className="border-t border-line/40 pt-8">
+            <h2 id="pen-heading" className="font-pixel text-2xl uppercase leading-tight">
+              {t.xoinggan.title}
+            </h2>
+            <p className="mt-2 max-w-[62ch] text-sm text-ink-muted">{t.xoinggan.body}</p>
+          </div>
+
+          {/*
+            The only thing on this page somebody can use without an account, a
+            space or a download - so it is here rather than behind a link, and
+            it is the real one: the same pad, the same recogniser and the same
+            book as the pen in the rooms upstairs.
+          */}
+          <div className="mt-6 max-w-3xl">
+            <InkPad
+              labels={worldDict(locale).ink}
+              words={{
+                free: t.xoinggan.free,
+                chase: t.xoinggan.chase,
+                idle: t.xoinggan.idle,
+                written: t.xoinggan.written,
+              }}
+            />
           </div>
         </section>
 

@@ -2,7 +2,7 @@
 
 How to write an XP, what the engine will do with it, and where it stops.
 
-This is the reference. xp-creator.md is the plan and the
+This is the reference. [xp-creator.md](creator.md) is the plan and the
 argument - why any of this is shaped the way it is. If you want to know *what a
 field does*, you are in the right file; if you want to know *why the doorway
 does not work*, that one has the reasoning and this one has the number.
@@ -11,12 +11,12 @@ Two more, and both are *proposals* rather than descriptions — nothing in eithe
 is built, so where they disagree with this file, this file is what the code
 does.
 
-- xp-backend.md — an XP made by somebody outside the team,
+- [xp-backend.md](backend.md) — an XP made by somebody outside the team,
   carrying its own art: the folder, the checks, storage, who owns it, the store,
   and review.
-- xp-scenes.md — one document holding more than one place: the
+- [xp-scenes.md](scenes.md) — one document holding more than one place: the
   scene tree, timelines, and where a game's memory lives. It changes the format,
-  so read xp-two-sessions.md on shared ground first.
+  so read [xp-two-sessions.md](two-sessions.md) on shared ground first.
 
 ---
 
@@ -1146,7 +1146,7 @@ this is*:
 |---|---|
 | `space` | A place that is simply there. No round, nothing to win, and what happens in it stays. `steal-a-plant` is one: your plants are on the shelf tomorrow. |
 | `lobby` | Where people gather before or between rounds — **and it can still keep score.** The rest of the block applies unchanged, which is the whole reason it is a mode rather than a flag. |
-| `battle` | A run: it starts, it ends, and what it counted should go with it. See xp-flow.md §5, which makes the same distinction for the data block and is where the `run` scope came from. |
+| `battle` | A run: it starts, it ends, and what it counted should go with it. See [xp-flow.md](xp-flow.md) §5, which makes the same distinction for the data block and is where the `run` scope came from. |
 
 They were one list, and the sign of it was that `preset`'s list read as four
 styles and an absence — `freestyle` is not a game you play, it is a statement
@@ -1731,7 +1731,7 @@ Two were removed, deliberately:
 > agreed, and injected — so a test runs a five-minute match in a millisecond,
 > and `world.random()`, which is chance everybody agrees about.
 
-**Random, and why it is not a generator.** `world.random()` is in `0, 1)` like
+**Random, and why it is not a generator.** `world.random()` is in `[0, 1)` like
 the function it replaces; `world.roll(6)` is a die, `world.randomInt(1, 6)` is
 inclusive at both ends, and `world.pick(list)` takes one of them. What makes
 them shared is that a value is `hash(seed, tick, index)` rather than the next
@@ -1752,7 +1752,7 @@ wrong about how many rolls a frame contained is wrong for one frame.
 > It is dice, jitter and which of four idles a peep picks — **not a secret**. It
 > is derived entirely from numbers every client holds, so every client can
 > compute the next one. Hidden state is
-> [server authority, and it is a different thing.
+> [server authority](server-authority.md), and it is a different thing.
 
 ### The limits
 
@@ -1954,7 +1954,7 @@ stream is the next milestone.
 Authority. Nobody owns anything, nothing is reconciled, and a shot at another
 player does nothing to them - the trigger pass tests the local body against the
 level, and remote bodies are drawn rather than simulated. That is §9 of
-xp-creator.md, and this is the milestone before it: the one that
+[xp-creator.md](creator.md), and this is the milestone before it: the one that
 answers whether two people can be in the same room at all.
 
 ---
@@ -2034,7 +2034,7 @@ three kinds it is: `refused` (the rules said no — show why), `lost` (no reply 
 unresolved, not failed, and never drawn as done) or `stale` (the round moved on
 — re-read the view). `memoryArbiter()` implements it in a `Map` for tests, which
 is what makes the interface mean anything; the database function behind it is
-designed in server-authority.md §4.1 and unbuilt.
+designed in [server-authority.md](server-authority.md) §4.1 and unbuilt.
 
 It is named `arbiter` and not `server` because `server` is already one of §9's
 three authority tiers, and a document that needs one **refuses to load** where
@@ -2397,7 +2397,7 @@ naming conflicts with future file conventions" as the reason to use one.
 You can check it: `/xp/_runtime` is a 404, and so are the other two.
 
 Two boundaries are enforced by lint rather than by convention, and both are
-explained in xp-creator.md §1.2:
+explained in [xp-creator.md §1.2](creator.md):
 
 - **`packages/xp` does not import the app.** No React, no three, no Supabase, no
   browser globals. It talks to the outside through `@kxb/xp/host`.

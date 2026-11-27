@@ -318,6 +318,10 @@ export function SceneStage({
                 // The rim is the same colour as the lamp, because they are one
                 // light: the body is edged in the hue it is throwing.
                 rim={peep.glow ? peep.glow.colour : null}
+                // A story can put somebody in the lounge's bad-connection
+                // glitch on purpose. The cast index seeds it - see `Peep`.
+                glitch={peep.glitch ?? 0}
+                glitchSeed={i}
               />
               {peep.glow && (
                 <Glow

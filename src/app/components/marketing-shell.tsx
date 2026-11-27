@@ -1,5 +1,6 @@
 import { readLocale } from '@/app/i18n/preference'
 import { resolveFeatures } from '@/domain/flags/queries'
+import { XoShortcut } from '@/app/components/xo-shortcut'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient, getUser } from '@/lib/supabase/server'
@@ -242,6 +243,13 @@ export async function MarketingShell({
           )}
         </nav>
       </header>
+
+      {/*
+        Two letters and the store opens. See <XoShortcut> - it draws nothing,
+        and it is here rather than in the root layout because the rooms behind a
+        login have a pen that reads the same word properly.
+      */}
+      <XoShortcut />
 
       {children}
 

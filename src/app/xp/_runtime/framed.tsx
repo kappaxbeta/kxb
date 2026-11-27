@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { backgroundOf, type XpDocument } from '@kxb/xp'
 import { describeNeed, missingCapabilities, type HostCapability } from '@kxb/xp/host'
 
+import { localHost } from '@/app/xp/_hosts/local'
 import { realtimeHost } from '@/app/xp/_hosts/realtime'
 import { gameNamed } from '@/app/xp/_runtime/games/registry'
 
@@ -130,6 +131,22 @@ export function Framed({ xp, room, me, startedAt, match }: FramedProps) {
    * per render. It is also the clock a game's wire timings are measured against,
    * and a second host would start a second clock at a different zero.
    */
+  /**
+   * What the document asked for and what the game cannot start without, both.
+   *
+   * A union rather than either alone: a document may ask for more than its game
+   * strictly requires - a cartridge wanting `persistence` so a result is kept -
+   * and the platform has to satisfy all of it. Deduped, so a capability both of
+   * them named is reported once.
+   *
+   * Computed before the host rather than after it, because whether it is
+   * *empty* decides which host to build. See below.
+   */
+  const asked: HostCapability[] = useMemo(
+    () => [...new Set([...(xp.backend?.needs ?? []), ...(game?.needs ?? [])])],
+    [game, xp.backend?.needs],
+  )
+
   const host = useMemo(
     /**
      * A room, or no wire at all - and never the level's own id.
@@ -151,8 +168,33 @@ export function Framed({ xp, room, me, startedAt, match }: FramedProps) {
      * be *and* somewhere to be it. Sharing an instance is `?room=`, which the
      * public host already reads, and that room id is the capability.
      */
-    () => (me && room ? realtimeHost(me, room, xp.id) : null),
-    [me, room, xp.id],
+    /**
+     * ---------------------------------------------------------------------------
+     * And a cartridge that asks for nothing gets a local one instead of a refusal
+     * ---------------------------------------------------------------------------
+     * The rule above - somebody to be, and somewhere to be it - is a rule about
+     * *the wire*. `realtimeHost` opens a channel, and the argument is that the
+     * room id is the capability that admits you to it.
+     *
+     * A cartridge whose asked-for capabilities are empty opens no channel, keeps
+     * nothing on a server and has nobody to be: `@kxb/xoin` in demo is a chart
+     * and a made-up stake. Refusing it for want of a room was refusing it for
+     * want of a thing it does not use, and the refusal read as *"this needs to
+     * know who you are"* to a reader of a page that needs to know nothing.
+     *
+     * `localHost` was written for exactly this browser-with-nothing-behind-it
+     * case and had no caller until now. It opens no socket, so the capability
+     * argument above is untouched: there is no channel here to be admitted to.
+     *
+     * The condition is the union being empty rather than a flag on the game,
+     * deliberately - a document that adds a `backend.needs` to a game that
+     * declares none is asking for the platform, and gets the platform's rules
+     * back. Nothing that ships today has an empty union but xoin, so no existing
+     * cartridge changes behaviour.
+     */
+    () =>
+      asked.length === 0 ? localHost() : me && room ? realtimeHost(me, room, xp.id) : null,
+    [asked, me, room, xp.id],
   )
 
   if (!frame) return null
@@ -183,15 +225,6 @@ export function Framed({ xp, room, me, startedAt, match }: FramedProps) {
     )
   }
 
-  /**
-   * What the document asked for and what the game cannot start without, both.
-   *
-   * A union rather than either alone: a document may ask for more than its game
-   * strictly requires - a cartridge wanting `persistence` so a result is kept -
-   * and the platform has to satisfy all of it. Deduped, so a capability both of
-   * them named is reported once.
-   */
-  const asked: HostCapability[] = [...new Set([...(xp.backend?.needs ?? []), ...game.needs])]
   const missing = missingCapabilities(host, asked)
 
   if (missing.length > 0) {

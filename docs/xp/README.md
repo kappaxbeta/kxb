@@ -8,7 +8,7 @@ and a separate engine from it on purpose, not a layer over it (§1.2, §16.2).
 
 | | | |
 |---|---|---|
-| 1 | creator.md | **The plan and the arguments.** Why anything is shaped the way it is. §1.2 (copy, don't import) and §2.0 (backoffice-only) are the two decisions everything hangs on. |
+| 1 | [creator.md](creator.md) | **The plan and the arguments.** Why anything is shaped the way it is. §1.2 (copy, don't import) and §2.0 (backoffice-only) are the two decisions everything hangs on. |
 | 2 | [manual.md](manual.md) | **The reference.** The format field by field, every limit with its measurement, capabilities, scripts, hosts, the editor. What the code does *today* — it wins over any plan where they disagree. |
 | 3 | [editor-guide.md](editor-guide.md) | The other half of the manual: what to press. |
 
@@ -16,27 +16,27 @@ and a separate engine from it on purpose, not a layer over it (§1.2, §16.2).
 
 | | |
 |---|---|
-| backend.md | Where a project lives: the folder, storage, the store, the review queue |
+| [backend.md](backend.md) | Where a project lives: the folder, storage, the store, the review queue |
 | [round.md](round.md) | A round of the board game, end to end, as flow charts — and which of the four places it runs through decides what |
-| scenes.md | **Proposal.** One document holding more than one place — scenes, timelines, saves. Changes `format.ts`, which is shared ground |
+| [scenes.md](scenes.md) | **Proposal.** One document holding more than one place — scenes, timelines, saves. Changes `format.ts`, which is shared ground |
 | [sketch.md](sketch.md) | The p5.js cartridge: code the document carries, run in an opaque-origin container, and the `window.xp` SDK it wakes up inside |
-| two-sessions.md | Working in here alongside somebody else. The file-level split and the git rules. **Read before starting, not after** |
+| [two-sessions.md](two-sessions.md) | Working in here alongside somebody else. The file-level split and the git rules. **Read before starting, not after** |
 
 ## What is not built yet
 
-backlog.md is the index — a paragraph and a link each, ordered by
+[backlog.md](backlog.md) is the index — a paragraph and a link each, ordered by
 what gates what. The designs behind it:
 
 | | |
 |---|---|
-| xp-flow.md | **Mostly built** — `flow`: rounds, phases, what a role may do in each, and what wins. The block, the runtime and the editor are in; §8's open questions and the run id are backlog §3a |
-| editor.md | The editor's next round, and what "visual scripting" can mean |
-| server-authority.md | Reopening §17, and the games it unlocks |
-| state.md | State that survives a session |
-| devices.md | Mobile, desktop and XR |
-| ai-integration.md | Generating levels from a brief. Deliberately last |
+| [xp-flow.md](xp-flow.md) | **Mostly built** — `flow`: rounds, phases, what a role may do in each, and what wins. The block, the runtime and the editor are in; §8's open questions and the run id are backlog §3a |
+| [editor.md](editor.md) | The editor's next round, and what "visual scripting" can mean |
+| [server-authority.md](server-authority.md) | Reopening §17, and the games it unlocks |
+| [state.md](state.md) | State that survives a session |
+| [devices.md](devices.md) | Mobile, desktop and XR |
+| [ai-integration.md](ai-integration.md) | Generating levels from a brief. Deliberately last |
 
-backlog.md is now the **only** queue: §0 is the milestone work
+[backlog.md](backlog.md) is now the **only** queue: §0 is the milestone work
 still open, §1 onwards is everything that was never in a milestone, and the
 whole file is ordered by what gates what.
 

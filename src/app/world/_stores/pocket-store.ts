@@ -83,6 +83,18 @@ export function heldIndex(): number | null {
   return pocket.holding
 }
 
+/**
+ * The whole pocket, read without subscribing.
+ *
+ * For the one caller that has to find something it put in a moment ago: a
+ * thing taken off the floor goes into the pocket before the server has agreed
+ * the floor is empty, and a refusal has to find that word again to take it
+ * back out. See `take` in `use-things`.
+ */
+export function pocketNow(): Pocket {
+  return pocket
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
@@ -94,7 +106,20 @@ function snapshot(): Pocket {
   return pocket
 }
 
+/**
+ * The server's answer, made once.
+ *
+ * `emptyPocket()` in that position was a new object per call, and React says
+ * so on every lounge load: "the result of getServerSnapshot should be cached".
+ * One empty pocket is as empty as another.
+ */
+const NOTHING = emptyPocket()
+
+function serverSnapshot(): Pocket {
+  return NOTHING
+}
+
 /** What you are carrying, for whoever draws it. */
 export function usePocket(): Pocket {
-  return useSyncExternalStore(subscribe, snapshot, emptyPocket)
+  return useSyncExternalStore(subscribe, snapshot, serverSnapshot)
 }

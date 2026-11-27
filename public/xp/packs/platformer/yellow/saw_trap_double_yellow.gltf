@@ -1,0 +1,290 @@
+{
+    "asset" : {
+        "generator" : "Khronos glTF Blender I/O v3.4.50",
+        "version" : "2.0"
+    },
+    "scene" : 0,
+    "scenes" : [
+        {
+            "name" : "Scene",
+            "nodes" : [
+                2
+            ]
+        }
+    ],
+    "nodes" : [
+        {
+            "mesh" : 0,
+            "name" : "saw_trap_double_sawblade_A_yellow",
+            "translation" : [
+                -4,
+                0,
+                0
+            ]
+        },
+        {
+            "mesh" : 1,
+            "name" : "saw_trap_double_sawblade_B_yellow",
+            "translation" : [
+                4,
+                0,
+                0
+            ]
+        },
+        {
+            "children" : [
+                0,
+                1
+            ],
+            "mesh" : 2,
+            "name" : "saw_trap_double_yellow"
+        }
+    ],
+    "materials" : [
+        {
+            "name" : "platformer",
+            "pbrMetallicRoughness" : {
+                "baseColorTexture" : {
+                    "index" : 0
+                },
+                "metallicFactor" : 0,
+                "roughnessFactor" : 0.30000001192092896
+            }
+        }
+    ],
+    "meshes" : [
+        {
+            "name" : "saw_trap_double_sawblade_A_yellow",
+            "primitives" : [
+                {
+                    "attributes" : {
+                        "POSITION" : 0,
+                        "TEXCOORD_0" : 1,
+                        "NORMAL" : 2
+                    },
+                    "indices" : 3,
+                    "material" : 0
+                }
+            ]
+        },
+        {
+            "name" : "saw_trap_double_sawblade_B_yellow",
+            "primitives" : [
+                {
+                    "attributes" : {
+                        "POSITION" : 4,
+                        "TEXCOORD_0" : 5,
+                        "NORMAL" : 6
+                    },
+                    "indices" : 3,
+                    "material" : 0
+                }
+            ]
+        },
+        {
+            "name" : "saw_trap_double_yellow",
+            "primitives" : [
+                {
+                    "attributes" : {
+                        "POSITION" : 7,
+                        "TEXCOORD_0" : 8,
+                        "NORMAL" : 9
+                    },
+                    "indices" : 10,
+                    "material" : 0
+                }
+            ]
+        }
+    ],
+    "textures" : [
+        {
+            "sampler" : 0,
+            "source" : 0
+        }
+    ],
+    "images" : [
+        {
+            "mimeType" : "image/png",
+            "name" : "platformer_texture",
+            "uri" : "platformer_texture.png"
+        }
+    ],
+    "accessors" : [
+        {
+            "bufferView" : 0,
+            "componentType" : 5126,
+            "count" : 1878,
+            "max" : [
+                3.398073673248291,
+                0.45018503069877625,
+                3.3980753421783447
+            ],
+            "min" : [
+                -3.398074150085449,
+                -0.4501860439777374,
+                -3.3980724811553955
+            ],
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 1,
+            "componentType" : 5126,
+            "count" : 1878,
+            "type" : "VEC2"
+        },
+        {
+            "bufferView" : 2,
+            "componentType" : 5126,
+            "count" : 1878,
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 3,
+            "componentType" : 5123,
+            "count" : 3480,
+            "type" : "SCALAR"
+        },
+        {
+            "bufferView" : 4,
+            "componentType" : 5126,
+            "count" : 1878,
+            "max" : [
+                3.398073673248291,
+                0.45018503069877625,
+                3.3980753421783447
+            ],
+            "min" : [
+                -3.398074150085449,
+                -0.4501860439777374,
+                -3.3980724811553955
+            ],
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 5,
+            "componentType" : 5126,
+            "count" : 1878,
+            "type" : "VEC2"
+        },
+        {
+            "bufferView" : 6,
+            "componentType" : 5126,
+            "count" : 1878,
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 7,
+            "componentType" : 5126,
+            "count" : 514,
+            "max" : [
+                5.4181694984436035,
+                1.0000001192092896,
+                1.4181698560714722
+            ],
+            "min" : [
+                -5.418169975280762,
+                -1.0000001192092896,
+                -1.4181699752807617
+            ],
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 8,
+            "componentType" : 5126,
+            "count" : 514,
+            "type" : "VEC2"
+        },
+        {
+            "bufferView" : 9,
+            "componentType" : 5126,
+            "count" : 514,
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 10,
+            "componentType" : 5123,
+            "count" : 1200,
+            "type" : "SCALAR"
+        }
+    ],
+    "bufferViews" : [
+        {
+            "buffer" : 0,
+            "byteLength" : 22536,
+            "byteOffset" : 0,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 15024,
+            "byteOffset" : 22536,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 22536,
+            "byteOffset" : 37560,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 6960,
+            "byteOffset" : 60096,
+            "target" : 34963
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 22536,
+            "byteOffset" : 67056,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 15024,
+            "byteOffset" : 89592,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 22536,
+            "byteOffset" : 104616,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 6168,
+            "byteOffset" : 127152,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 4112,
+            "byteOffset" : 133320,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 6168,
+            "byteOffset" : 137432,
+            "target" : 34962
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 2400,
+            "byteOffset" : 143600,
+            "target" : 34963
+        }
+    ],
+    "samplers" : [
+        {
+            "magFilter" : 9729,
+            "minFilter" : 9987
+        }
+    ],
+    "buffers" : [
+        {
+            "byteLength" : 146000,
+            "uri" : "saw_trap_double_yellow.bin"
+        }
+    ]
+}

@@ -1,14 +1,18 @@
 'use client'
 
 import { useAnimations, useGLTF } from '@react-three/drei'
-import { useEffect, useMemo, useRef } from 'react'
+import { type RefObject, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { type GlitchUniforms, wear } from '@/app/world/_canvas/body-shader'
+import { LEGS, splitForFeet, UPPER } from '@/app/world/lounge/_canvas/feet'
 import { lead } from '@/app/world/lounge/_canvas/lead'
-import { type AvatarClip, avatarUrl } from '@/domain/lounge/avatars'
+import { AVATAR_CLIPS, type AvatarClip, avatarUrl, type Gait } from '@/domain/lounge/avatars'
 
 type AvatarModelProps = {
   model: string
   clip?: AvatarClip
+  /** What the legs do while `clip` is the dance. See `BodyModel.feet`. */
+  feet?: Gait
   /** A clip the space made, ready to play. See `BodyModel`. */
   pose?: THREE.AnimationClip | null
   /** Seconds to cross-fade when the clip changes. Zero snaps. */
@@ -35,6 +39,17 @@ type AvatarModelProps = {
    * than a material rebuild. See `usePartyColour`.
    */
   rim?: THREE.Color | null
+  /**
+   * A bad connection, drawn on the body. Null is a body that is fine.
+   *
+   * Uniforms rather than a number, for the reason `rim` is a `Color`: the
+   * strength and the clock are written by a frame loop, and the material must
+   * not be rebuilt for either. A *ref* to them rather than the object, because
+   * a frame loop may write into a ref and the compiler's rules say it may not
+   * write into anything else it was handed. See `wear` in
+   * ../_canvas/body-shader.
+   */
+  glitch?: RefObject<GlitchUniforms> | null
 }
 
 /**
@@ -70,12 +85,28 @@ export function AvatarModel(props: AvatarModelProps) {
 function AvatarBody({
   model,
   clip = 'idle',
+  feet,
   pose = null,
   fade = 0.2,
   ignoreRay = false,
   rim = null,
+  glitch = null,
 }: AvatarModelProps) {
-  const { scene, animations } = useGLTF(avatarUrl(model))
+  const { scene, animations: whole } = useGLTF(avatarUrl(model))
+
+  /**
+   * The animal's clips, and its dance cut at the waist - or rather at the
+   * shoulder, since a peep's legs are four nodes and the rest is body and
+   * tail. Same cut, same reason, same names as the skinned body: see
+   * `splitForFeet`, and `SkinModel` for why the halves ride in this array.
+   */
+  const animations = useMemo(() => {
+    const named = (name: string) => whole.find((one) => one.name === name)
+    const gaits = [named(AVATAR_CLIPS.walk), named(AVATAR_CLIPS.run)].filter(
+      (one): one is THREE.AnimationClip => one !== undefined,
+    )
+    return [...whole, ...splitForFeet(gaits, named(AVATAR_CLIPS.dance))]
+  }, [whole])
 
   /**
    * useGLTF caches one scene per URL, and a single Object3D cannot sit in two
@@ -97,71 +128,11 @@ function AvatarBody({
   }, [scene, ignoreRay])
 
   /**
-   * The rim, applied to this clone's materials and taken off again.
-   *
-   * `scene.clone(true)` shares materials with every other clone of the same
-   * animal - that is what makes a room of six pandas cheap - so the first thing
-   * this does is give *this* body its own copies. Without that, one person
-   * lighting up would light up everybody who picked the same animal, in their
-   * colour.
-   *
-   * The originals are kept so switching the party off puts the shared materials
-   * back rather than leaving a cloned set behind per body per toggle.
+   * The rim and the glitch, applied to this clone's materials and taken off
+   * again. Why a body needs its own copies first, and why the two are one
+   * patch, is argued in `wear`.
    */
-  useEffect(() => {
-    if (!rim) return
-
-    const restore: { mesh: THREE.Mesh; material: THREE.Material | THREE.Material[] }[] = []
-
-    cloned.traverse((node) => {
-      const mesh = node as THREE.Mesh
-      if (!mesh.isMesh) return
-
-      const source = mesh.material
-      if (Array.isArray(source)) return
-
-      const material = source.clone()
-      material.onBeforeCompile = (shader) => {
-        shader.uniforms.uRimColour = { value: rim }
-
-        shader.fragmentShader = shader.fragmentShader
-          .replace(
-            '#include <common>',
-            `#include <common>\nuniform vec3 uRimColour;`,
-          )
-          /**
-           * Added at the very end, after tone mapping and colour space, so the
-           * edge stays the neon it was asked for instead of being rolled back
-           * toward white by the tone mapper - which is exactly what "cyber
-           * neon" must not happen to.
-           *
-           * `vViewPosition` is the fragment-to-camera vector every lit material
-           * in three declares; the dot of it with the normal is one at the
-           * centre of a surface facing you and zero at its edge, so one minus
-           * that, raised to a power, is a band that hugs the silhouette.
-           */
-          .replace(
-            '#include <dithering_fragment>',
-            `#include <dithering_fragment>
-  float rimFacing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  float rimBand = pow(1.0 - rimFacing, 2.4);
-  gl_FragColor.rgb += uRimColour * rimBand * 1.6;`,
-          )
-      }
-      material.needsUpdate = true
-
-      restore.push({ mesh, material: source })
-      mesh.material = material
-    })
-
-    return () => {
-      for (const entry of restore) {
-        const worn = entry.mesh.material
-        entry.mesh.material = entry.material
-        if (!Array.isArray(worn)) worn.dispose()
-      }
-    }
-  }, [cloned, rim])
+  useEffect(() => wear(cloned, { rim, glitch: glitch?.current ?? null }), [cloned, rim, glitch])
 
   const group = useRef<THREE.Group>(null)
 
@@ -191,11 +162,20 @@ function AvatarBody({
   /** What is playing now, so the next thing can fade *from* it. */
   const playing = useRef<THREE.AnimationAction | null>(null)
 
+  /** The dance's top half while the feet walk. See the same ref in `SkinModel`. */
+  const upperPlaying = useRef<THREE.AnimationAction | null>(null)
+
   useEffect(() => {
     // The gait, the pose, or both. See the same block in `SkinModel`, which
     // explains why a clip that leaves part of the body alone is a layer.
     const layered = pose?.blendMode === THREE.AdditiveAnimationBlendMode
-    const gait = !pose || layered ? actions[clip] : null
+    const wholeBody = !pose || layered
+
+    // Dancing on the move: legs from the gait, everything else from the dance.
+    // The same cut `SkinModel` makes, argued there and in `splitForFeet`.
+    const onTheMove = clip === 'dance' && feet !== undefined && wholeBody
+    const gait = onTheMove ? actions[feet + LEGS] : wholeBody ? actions[clip] : null
+    const upper = onTheMove ? (actions[AVATAR_CLIPS.dance + UPPER] ?? null) : null
 
     /**
      * The space's own clip, bound here rather than added to the list above.
@@ -210,6 +190,11 @@ function AvatarBody({
     const extra = pose && root ? mixer.clipAction(pose, root) : null
 
     if (gait) lead(gait, playing, fade)
+    if (upperPlaying.current !== upper) {
+      upperPlaying.current?.fadeOut(fade)
+      if (upper) upper.reset().fadeIn(fade).play()
+      upperPlaying.current = upper
+    }
     if (extra) {
       // A layer rides on top and never becomes what the next change fades from:
       // a wave ending hands back to the walk that was underneath it.
@@ -221,7 +206,7 @@ function AvatarBody({
     return () => {
       if (layered) extra?.fadeOut(fade)
     }
-  }, [actions, clip, fade, mixer, pose])
+  }, [actions, clip, fade, feet, mixer, pose])
 
   return (
     <group ref={group}>

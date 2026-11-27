@@ -32,6 +32,7 @@ import {
   requireFeature,
   requireTenant,
   thingiverseOpen,
+  mayCast,
 } from '@/lib/tenant'
 import { readLocale } from '@/app/i18n/preference'
 import { worldDict } from '@/app/i18n/world'
@@ -210,6 +211,8 @@ export default async function LoungePage({
         has never touched the switch has not asked for the rule.
       */
       stamina={context.tenant.capabilities.stamina ?? false}
+      // Whether a bad connection is drawn as a glitch. Off unless the space asked.
+      glitch={context.tenant.capabilities.glitch ?? false}
       readOnly={!canWrite(context)}
       /**
        * A guest walks.
@@ -226,6 +229,10 @@ export default async function LoungePage({
        */
       canFly={isGuest(context) ? false : undefined}
       canModerate={hasRole(context, ['owner', 'admin'])}
+      // Whether a word written in here may reach anybody else. The space's
+      // three-position setting and this person's role, answered on the server
+      // where both of them are - see `mayCast`.
+      canCast={mayCast(context)}
       mode={tenant.loungeMode}
       // Same pair the decider will re-check. This only decides whether the
       // button is offered; SetLoungeMode is where the answer is enforced.

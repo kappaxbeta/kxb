@@ -25,11 +25,13 @@ import type { WorldDict } from '@/app/i18n/world'
  *
  * Three of the four groups below are gated, and the reasons are not symmetrical:
  *
- *  - **Dance is not gated at all.** Building and fighting are the two things the
- *    mode chooses between, and dancing is neither - it is what you do while
- *    waiting for somebody, mid-scrap, or instead of a scrap. On a phone it had
- *    no control at all, which made the one verb in the room with no cost and no
- *    cooldown a keyboard-only feature.
+ *  - **The pen is not gated at all**, and it stands where the dance button
+ *    stood. Building and fighting are the two things the mode chooses between,
+ *    and drawing on the room is neither - it is what you do while waiting for
+ *    somebody, mid-scrap, or instead of a scrap. It replaced the dance rather
+ *    than joining it because the pen *can* dance: write a d, b or p and you do.
+ *    Two buttons would have been two ways to one verb, one of which also does
+ *    everything else.
  *  - **▲ is never gated either**, because it is two things at once: up while
  *    flying, and *jump* while walking - `<PlayerControls>` turns `vertical > 0`
  *    into a jump when your feet are on the ground. It is the only jump control
@@ -130,8 +132,10 @@ export function TouchLayer({
   canBuild,
   combat,
   flying,
-  dancing,
-  onDancing,
+  pen,
+  onPen,
+  signing,
+  onHand,
   action,
   onPlace,
   onRemove,
@@ -149,15 +153,26 @@ export function TouchLayer({
   canBuild: boolean
   combat: boolean
   flying: boolean
-  dancing: boolean
-  onDancing: (next: (current: boolean) => boolean) => void
+  /** Whether the pen is out. See `world/_ink`. */
+  pen: boolean
+  onPen: () => void
+  /**
+   * Whether the hand is out. See `world/_hand`.
+   *
+   * Only ever `false` in practice, because the scene takes this whole rig down
+   * while somebody is signing - a joystick and five finger pads cannot share
+   * the bottom of a phone. So this button is the way *in*; the way out is the
+   * one the hand layer draws for itself.
+   */
+  signing: boolean
+  onHand: () => void
   /**
    * What the thing in front of you offers, if anything - use, take, drive,
-   * get up. It takes the dance button's spot rather than adding a fifth
-   * button: the two are never both urgent (you dance *between* things, not
-   * at one), a thumb has a memory for places rather than labels, and this is
-   * the same trade the keyboard makes - G acts when something is in front of
-   * you and dances the rest of the time.
+   * get up. It takes the pen's spot rather than adding a fifth button: the two
+   * are never both urgent (you write *between* things, not at one), a thumb has
+   * a memory for places rather than labels, and this is the same trade the
+   * keyboard makes - G acts when something is in front of you and dances the
+   * rest of the time.
    */
   action?: { label: string; onPress: () => void } | null
   onPlace: (cell: Cell, model: string) => void
@@ -177,24 +192,36 @@ export function TouchLayer({
 
     <div className={actionsAnchor(hand)}>
       {/*
-        Dancing, in every mode and on every device.
+        The pen, in every mode and on every device.
 
-        Outside both gates below on purpose. Building and fighting are the
-        two things the mode chooses between, and dancing is neither - it
-        is what you do while waiting for somebody, mid-scrap, or instead
-        of a scrap. On a phone it had no control at all, which meant the
-        one verb in the room with no cost and no cooldown was a
-        keyboard-only feature.
+        Outside both gates below on purpose, for the reason the dance button it
+        replaced was: building and fighting are the two things the mode chooses
+        between, and writing on the room is neither. It is lit while the pen is
+        out, because a mode you cannot see you are in is a mode you get stuck
+        in - and the same press puts it away.
       */}
       <div className="flex gap-3">
         {action ? (
           <TapButton label={action.label} tone="cyan" onPress={action.onPress} />
         ) : (
-          <TapButton
-            label={dancing ? dict.world.stopDancing : dict.softKeys.dance}
-            tone={dancing ? 'pink' : 'cyan'}
-            onPress={() => onDancing((current) => !current)}
-          />
+          <>
+            <TapButton
+              label={pen ? dict.ink.away : dict.ink.pen}
+              tone={pen ? 'pink' : 'cyan'}
+              onPress={onPen}
+            />
+            {/*
+              And the hand beside the pen, because on a phone there is no `U` to
+              press and a mode nobody can find is a mode nobody has. It gives up
+              its spot to the action for the same reason the pen does: you sign
+              *between* things, not at one.
+            */}
+            <TapButton
+              label={signing ? dict.hand.away : dict.hand.hand}
+              tone={signing ? 'pink' : 'cyan'}
+              onPress={onHand}
+            />
+          </>
         )}
       </div>
 

@@ -95,7 +95,7 @@ describe('countryForIp', () => {
   })
 
   test('every answer is a plausible ISO-3166 code', () => {
-    for (const ip of ['8.8.8.8', '1.1.1.1', '2a01:4f8:c17:b8f::1']) {
+    for (const ip of ['8.8.8.8', '1.1.1.1', '2a01:4f8:c17:b8f::1', '62.238.54.7']) {
       expect(countryForIp(ip)).toMatch(/^[A-Z]{2}$/)
     }
   })

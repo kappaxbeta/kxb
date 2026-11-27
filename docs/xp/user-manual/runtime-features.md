@@ -3,9 +3,9 @@
 A field-by-field list of what the `packages/xp` engine and its host (the
 editor, the player, the netcode) actually do *today*. Written as a checklist
 rather than an explanation — the argument for each decision is in
-[../manual.md](../manual.md) and ../creator.md; this is the
+[../manual.md](../manual.md) and [../creator.md](../creator.md); this is the
 flat list to write a user-facing manual from. Nothing here is a proposal;
-anything not built lives in ../backlog.md and is called out
+anything not built lives in [../backlog.md](../backlog.md) and is called out
 at the bottom as explicitly **not** in this list.
 
 Source of truth for every claim: `packages/xp/src/*.ts`, cross-checked
@@ -573,9 +573,9 @@ point:
 Documented as **proposals**, not runtime features — see the linked design
 docs before promising any of these in a user manual:
 
-- Scenes — one document holding more than one place (scenes.md)
-- Server authority for anything beyond the `arbiter` interface (server-authority.md)
+- Scenes — one document holding more than one place ([scenes.md](../scenes.md))
+- Server authority for anything beyond the `arbiter` interface ([server-authority.md](../server-authority.md))
 - Player-vs-player damage inside a room (§12)
-- A folder-based XP (assets beyond the shipped catalogue, review, the store) — v2, see backend.md
-- Mobile/desktop/XR-specific input (devices.md)
-- AI-generated levels (ai-integration.md)
+- A folder-based XP (assets beyond the shipped catalogue, review, the store) — v2, see [backend.md](../backend.md)
+- Mobile/desktop/XR-specific input ([devices.md](../devices.md))
+- AI-generated levels ([ai-integration.md](../ai-integration.md))

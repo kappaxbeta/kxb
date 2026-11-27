@@ -5,6 +5,8 @@ import { useOptimistic, useRef, useState, useTransition } from 'react'
 import { NewsBanner, NewsList } from '@/app/t/[slug]/dashboard/news'
 import { PictureCard } from '@/app/t/[slug]/dashboard/picture-card'
 import { SceneCard } from '@/app/t/[slug]/dashboard/scene-card'
+import { InkNote, InkSlate } from '@/app/world/_ink'
+import { worldDict } from '@/app/i18n/world'
 import { EmoteGrid } from '@/app/world/_hud/emote-grid'
 import {
   type ActionResult,
@@ -308,9 +310,21 @@ function Composer({
   onError: (message: string | null) => void
 }) {
   const refusal = useRefusal()
-  const t = workspaceDict(useLocale()).board
+  const locale = useLocale()
+  const t = workspaceDict(locale).board
   const formRef = useRef<HTMLFormElement>(null)
   const [isPending, startTransition] = useTransition()
+
+  /*
+    A drawing is a second way to say something, not a decoration on the first.
+
+    So it lives beside the words rather than under them, an empty box is not a
+    notice but a drawing on its own *is* one (the command schema agrees), and
+    posting clears both. See `<InkSlate>` for the pen, and `note.ts` for what
+    ends up on the row.
+  */
+  const [sketching, setSketching] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
 
   return (
     <div className="wire-first">
@@ -328,7 +342,7 @@ function Composer({
         ref={formRef}
         action={(formData) => {
           const body = String(formData.get('body') ?? '').trim()
-          if (!body) return
+          if (!body && !note) return
           const pinned = formData.get('pinned') === 'on'
 
           // Cleared before the round trip: the composer is the one place where
@@ -336,8 +350,11 @@ function Composer({
           // the error rather than in the box.
           formRef.current?.reset()
           onError(null)
+          const drawn = note
+          setNote(null)
+          setSketching(false)
           startTransition(async () => {
-            const result = await publishPost(slug, body, pinned)
+            const result = await publishPost(slug, body, pinned, null, null, drawn)
             if (!result.ok) onError(`${refusal(result.error)} — "${body.slice(0, 60)}"`)
           })
         }}
@@ -350,11 +367,37 @@ function Composer({
           placeholder={t.compose}
           className="w-full resize-y bg-transparent p-1 text-sm leading-relaxed outline-none placeholder:text-ink-muted/70"
         />
+        {sketching && (
+          <InkSlate
+            labels={worldDict(locale).ink}
+            onNote={setNote}
+            clearLabel={t.clearDrawing}
+            className="mt-2"
+          />
+        )}
+
         <div className="mt-1 flex items-center justify-between gap-3">
           <label className="flex items-center gap-2 text-xs text-ink-muted">
             <input type="checkbox" name="pinned" className="accent-current" />
             {t.keepAtTop}
           </label>
+          <button
+            type="button"
+            onClick={() => {
+              setSketching((current) => !current)
+              // Closing the slate throws the drawing away rather than posting
+              // something nobody can see any more.
+              if (sketching) setNote(null)
+            }}
+            aria-pressed={sketching}
+            className={`ml-auto rounded-full border px-3 py-1.5 text-xs transition ${
+              sketching
+                ? 'border-accent text-ink'
+                : 'border-line text-ink-muted hover:border-accent/40'
+            }`}
+          >
+            {t.draw}
+          </button>
           <button
             type="submit"
             disabled={isPending}
@@ -483,6 +526,19 @@ function Notice({
           the sentence explaining it. */}
       {post.scene && <SceneCard slug={slug} scene={post.scene} />}
       {post.image && <PictureCard src={post.image} by={author} />}
+      {/*
+        The drawing, redrawing itself.
+
+        Not a picture of one: the note keeps the pauses, so a card that somebody
+        wrote by hand writes itself out for whoever opens the board. See
+        `<InkNote>`, which draws nothing at all for a note it cannot read.
+      */}
+      {post.ink && (
+        <InkNote
+          note={post.ink}
+          className="mt-3 h-40 w-full overflow-hidden rounded-2xl border border-line/50 bg-[#0a0616]"
+        />
+      )}
 
       <ReactionStrip post={post} canReact={canReact} onReact={onReact} />
     </li>

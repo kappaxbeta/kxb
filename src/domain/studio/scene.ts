@@ -133,6 +133,16 @@ export interface PeepSpec {
   /** A coloured lamp at their chest, or null for an animal that does not glow. */
   glow: GlowSpec | null
   /**
+   * Drawn as a body on a bad connection, this strongly, or absent for one
+   * that is fine.
+   *
+   * The lounge's glitch - see `wear` in `app/world/_canvas/body-shader` -
+   * put on a peep on purpose, from 0 to 1. Optional and spread rather than
+   * set, like `hidden`: a peep that is not glitching carries no key, and a
+   * link written before this existed re-encodes byte for byte.
+   */
+  glitch?: number
+  /**
    * What they are saying, or null for nothing.
    *
    * A line rather than a reference to one: by the time a scene exists the
@@ -601,6 +611,7 @@ function peep(value: unknown): PeepSpec {
       3,
     ),
     glow: glow(raw.glow),
+    ...glitchKey(raw.glitch),
     // Trimmed rather than rejected on length: a line that arrives too long came
     // from a hand-edited link, and a truncated bubble is a better answer than a
     // silent peep.
@@ -628,6 +639,17 @@ function glow(value: unknown): GlowSpec | null {
     sparkle: raw.sparkle !== false,
     strength: number(raw.strength, 1, 0, 4),
   }
+}
+
+/**
+ * A glitch strength as the key it becomes, or no key at all.
+ *
+ * Exported for the shot document, whose actors carry the same optional
+ * number on the same terms.
+ */
+export function glitchKey(value: unknown): { glitch: number } | Record<never, never> {
+  const strength = number(value, 0, 0, 1)
+  return strength > 0 ? { glitch: strength } : {}
 }
 
 function block(value: unknown): BlockSpec | null {
@@ -839,7 +861,7 @@ export const STUDIO_CLIPS = Object.values(AVATAR_CLIPS)
  * itself was forked from the builder's rather than imported. The catalogue
  * that knows these models is half a megabyte of generated bounds; this module
  * is decoded on every surface that opens a scene link, including the public
- * ones, and twelve ids is not what half a megabyte is for. The cost is the
+ * ones, and fourteen ids is not what half a megabyte is for. The cost is the
  * cost every fork here pays: a new skeleton pack means adding its bodies to
  * this list before the studio can cast them.
  *
@@ -859,12 +881,14 @@ export const STUDIO_RIGGED = [
   'adventurers/Rogue_Hooded',
   'kappa/Monster',
   'kappa/MonsterCostume',
+  'spacenina/CombatMech',
+  'spacenina/CombatMech_Olive',
 ] as const
 
 /**
  * The whole cast, grouped the way the picker draws it.
  *
- * A flat list of thirty-six where twelve wear slashes and twenty-four do not
+ * A flat list of thirty-eight where fourteen wear slashes and twenty-four do not
  * is a select nobody can scan; the groups are the packs, named what the packs
  * call themselves.
  */
@@ -873,6 +897,7 @@ export const STUDIO_CAST_GROUPS: readonly { name: string; models: readonly strin
   { name: 'Characters', models: ['dummy/Dummy'] },
   { name: 'Adventurers', models: STUDIO_RIGGED.filter((look) => look.startsWith('adventurers/')) },
   { name: 'Monsters', models: STUDIO_RIGGED.filter((look) => look.startsWith('kappa/')) },
+  { name: 'Mech', models: STUDIO_RIGGED.filter((look) => look.startsWith('spacenina/')) },
 ]
 
 const STUDIO_LOOKS: ReadonlySet<string> = new Set<string>([...AVATARS, ...STUDIO_RIGGED])

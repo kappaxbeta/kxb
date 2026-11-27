@@ -29,18 +29,19 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import {
   Add,
+  Duplicate,
   EmoteSwatch,
-  ModelField,
   Num,
   Pad,
   Pick,
   PickCast,
-  PickGroups,
   Remove,
   Section,
   Slide,
   Tint,
 } from '@/app/ovaloffice/studio/parts'
+import { PickModel } from '@/app/ovaloffice/studio/pick-model'
+import { freeSpot } from '@/domain/studio/spawn'
 import { PosePanel } from '@/app/ovaloffice/studio/pose-panel'
 import type { BlueprintChoice } from '@/app/ovaloffice/studio/scene-stage'
 import type { RigHandle } from '@/app/ovaloffice/animator/posing'
@@ -51,6 +52,7 @@ import {
   sameNode,
   writeTracks,
 } from '@/app/ovaloffice/studio/timeline'
+import { copyActor, insertAfter } from '@/domain/studio/duplicate'
 import { EmoteGrid } from '@/app/world/_hud/emote-grid'
 import { parseAnyDoc } from '@/domain/animator/clip'
 import { TERRAIN_BLOCKS } from '@/domain/lounge/palette'
@@ -678,6 +680,14 @@ function Output({
 
 // ---------------------------------------------------------------------------
 
+/**
+ * How many bodies one shot holds.
+ *
+ * A number rather than the literal it was, now that two buttons obey it: the
+ * one that adds a peep and the one that copies the selected one.
+ */
+const MAX_CAST = 24
+
 function Cast({
   shot,
   patch,
@@ -714,7 +724,7 @@ function Cast({
       ))}
       <Add
         label="Add peep"
-        disabled={shot.cast.length >= 24}
+        disabled={shot.cast.length >= MAX_CAST}
         onClick={() => {
           patch({ cast: [...shot.cast, { ...DEFAULT_ACTOR }] })
           onSelect({ node: { kind: 'peep', index: shot.cast.length }, action: null })
@@ -796,34 +806,22 @@ function Props({
               added as a stone was a stone forever, and the way to get a galaxy
               was to delete it and add another. Which is not what a picker
               sitting in the panel looks like it does. Shown only for the
-              selected prop, because ten always-open selects is a panel nobody
-              can find the timeline under.
+              selected prop, because ten model buttons stacked up is a panel
+              nobody can find the timeline under.
             */}
             {isSelected && (
               <div className="flex flex-col gap-1 pl-2">
-                <PickGroups
-                  label="Is a"
-                  value={block.model}
-                  onChange={(model) =>
-                    patch({
-                      blocks: shot.blocks.map((one, i) => (i === index ? { ...one, model } : one)),
-                    })
-                  }
-                />
                 {/*
-                  Or typed, for the rest of the catalogue.
+                  The whole world catalogue, not a shortlist of it.
 
-                  The select above offers the palette and a couple of packs on
-                  purpose - fourteen hundred options is a control nobody can
-                  find anything in - but "we ship it and you cannot pick it" is
-                  the wrong end of that trade to land on. So the id is also a
-                  field: `cosmos/galaxy`, `park/fountain`, anything
-                  `isBuildable` says yes to. A name that is not one is left in
-                  the box rather than thrown away mid-word, and simply does not
-                  draw until it is finished - the same promise the model field
-                  makes everywhere else in this product.
+                  This was a select of the palette and two packs, with a "type
+                  an id" field under it for the other 1,300 - which is the
+                  arrangement you end up with when the control cannot search.
+                  `PickModel` can, so both are one button now and the field is
+                  gone with the reason for it.
                 */}
-                <ModelField
+                <PickModel
+                  label="Is a"
                   value={block.model}
                   onChange={(model) =>
                     patch({
@@ -978,16 +976,18 @@ function Props({
         )
       })}
 
-      <PickGroups label="Add" value={model} onChange={setModel} />
+      <PickModel label="Add" value={model} onChange={setModel} />
       <Add
         label="Add a prop"
         disabled={shot.blocks.length >= 120}
         onClick={() => {
-          // At the origin, on the floor. Somewhere visible beats somewhere
-          // clever: the first thing anybody does is drag it, and a prop that
-          // lands off-camera reads as a button that did nothing.
+          // Somewhere visible beats somewhere clever - which used to mean the
+          // origin, and stopped meaning it when the picker reached the whole
+          // catalogue. The origin is where the cast stands, and a rocket a
+          // third of a peep tall arrives behind a penguin. See `freeSpot`.
+          const spot = freeSpot(sceneAt(shot, 0))
           patch({
-            blocks: [...shot.blocks, { model, x: 0, top: 1, z: 0, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} }],
+            blocks: [...shot.blocks, { model, x: spot.x, top: 1, z: spot.z, rotation: 0, time: 0, scale: 1, tint: null, pitch: 0, roll: 0, tracks: {} }],
           })
           onSelect({ node: { kind: 'block', index: shot.blocks.length }, action: null })
         }}
@@ -1288,6 +1288,18 @@ function ActorInspector({
           </label>
         </>
       )}
+      {/* The lounge's bad-connection effect, on this actor on purpose - a
+          body that tears and shifts hue, as a peer with a failing link is
+          drawn in a room that has the option on. The playhead drives it, so a
+          recording is the same file twice. Zero drops the key. */}
+      <Slide
+        label="Glitch"
+        value={actor.glitch ?? 0}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(glitch) => set(glitch > 0 ? { glitch } : { glitch: undefined })}
+      />
 
       {/*
         Two pairs, because a face and a sentence are two bubbles.
@@ -1478,14 +1490,41 @@ function ActorInspector({
         onTracks={(tracks) => set({ tracks })}
       />
 
-      <Remove
-        onClick={() => {
-          onChange({ ...shot, cast: shot.cast.filter((_, i) => i !== index) })
-          onSelect({ node: { kind: 'peep', index: Math.max(0, index - 1) }, action: null })
-        }}
-      >
-        Remove peep
-      </Remove>
+      {/*
+        The two verbs that act on this actor rather than on the shot, on one
+        line at the foot of its panel.
+
+        A copy carries the whole performance - the moves, the keys, the pose and
+        the bubble heights - which is the point: a second body doing the same
+        thing a beat later is the commonest second body there is, and building
+        it by hand meant re-entering a dozen numbers and a list of actions from
+        memory. See `copyActor` for why it copies home rather than where the
+        playhead has them.
+
+        The new actor lands directly under the one it came from and is selected,
+        so the panel you are reading is now the copy's - move it, retime it, and
+        the original is untouched behind it.
+      */}
+      <div className="flex items-center gap-1">
+        <Duplicate
+          disabled={shot.cast.length >= MAX_CAST}
+          onClick={() => {
+            const copy = copyActor(actor, shot.cast.map((one) => one.name))
+            onChange({ ...shot, cast: insertAfter(shot.cast, index, copy) })
+            onSelect({ node: { kind: 'peep', index: index + 1 }, action: null })
+          }}
+        >
+          Duplicate peep
+        </Duplicate>
+        <Remove
+          onClick={() => {
+            onChange({ ...shot, cast: shot.cast.filter((_, i) => i !== index) })
+            onSelect({ node: { kind: 'peep', index: Math.max(0, index - 1) }, action: null })
+          }}
+        >
+          Remove peep
+        </Remove>
+      </div>
 
     </Section>
   )

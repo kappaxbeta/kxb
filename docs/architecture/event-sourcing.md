@@ -301,7 +301,7 @@ Action-layer invariants worth stating out loud:
 6. **Dual enforcement is avoided on purpose.** Capability ceilings are enforced
    only in SQL (`event_guest_may_write()`); the decider knowingly lets a host
    switch on something the platform ceiling forbids, and the database ANDs them.
-   See events.md §2.
+   See [events.md §2](../product/event-spaces.md).
 7. **No snapshots.** Every command replays the full stream (`store.ts:33-35`).
    Fine at current sizes; snapshotting is the named fix when a stream passes a
    few hundred events.
@@ -318,7 +318,7 @@ Action-layer invariants worth stating out loud:
    beginning to answer one number. So XP saves are planned as a row with
    last-write-wins, and a game that genuinely wants history asks for it through
    a separate `append` call rather than getting it by accident on every write.
-   See xp-scenes.md §3.3.
+   See [xp-scenes.md §3.3](../xp/scenes.md).
 9. **The platform actor escape hatch.** `command.platform: true` (backoffice
    only) bypasses exactly one check — `requireRole` — and never a space
    invariant like last-owner (`20260903000000_backoffice_stream_writes.sql`).

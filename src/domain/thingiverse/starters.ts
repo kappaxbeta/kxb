@@ -991,6 +991,168 @@ const platformer: StarterSet = {
 }
 
 /** Every set we ship, in the order the panel draws them. */
+// ---------------------------------------------------------------------------
+// Fireworks
+// ---------------------------------------------------------------------------
+
+/**
+ * A rocket you light, a tube to stand it in, and the burst it goes off as.
+ *
+ * ---------------------------------------------------------------------------
+ * Why a firework is four models and one machine
+ * ---------------------------------------------------------------------------
+ * Going off is a *sequence* - waiting, fizzing, climbing, opening, gone - and a
+ * state may swap the model it draws but not the material it draws with. So
+ * `scripts/build-fireworks.ts` ships each colour four times over: the rocket
+ * standing there, the same rocket with a lit fuse spitting sparks, the same
+ * rocket rising out of frame, and the burst. This machine is the order they
+ * come in.
+ *
+ * Each of those models answers to the clip name `idle`, and it means something
+ * different in each: still, fizzing, climbing, opening. That is the one trick
+ * worth knowing here, and it is not a trick about fireworks - a thing carries
+ * one list of `actions` for all of its states, so `{ always, play, idle }` is
+ * the only action a sequence like this can have. The model is what changes.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the tube shouts and does not fire
+ * ---------------------------------------------------------------------------
+ * The obvious launcher takes the rocket standing in it and sends *that* one up,
+ * which is one thing acting on another and is a promise nothing in a room can
+ * keep: a slot holds an item, and an item is a word rather than a thing with a
+ * state of its own (see `./craft`).
+ *
+ * What a room *can* do is shout, and everything standing in it hears. So the
+ * tube shouts "light the fuse" and every rocket in earshot lights - which is
+ * not a workaround, it is a firework display: you stand six of them about, you
+ * press one tube, and they all go. A rocket you want on its own answers **G**
+ * as well, which is the same word arriving from a hand rather than from a tube.
+ *
+ * ---------------------------------------------------------------------------
+ * Why they come back
+ * ---------------------------------------------------------------------------
+ * Six seconds after the burst fades a rocket is standing there again, ready.
+ * A firework that is gone for good is honest and it is also a thing somebody
+ * has to re-summon every time they want to show a friend - which is the same
+ * argument the shooting range's target makes, and the same answer.
+ */
+const FIREWORKS = 'fireworks'
+
+/** How long a fuse burns, how long the climb takes, and how long a burst hangs. */
+const FUSE_SECONDS = 1.6
+const CLIMB_SECONDS = 1.2
+const BURST_SECONDS = 1.6
+const BACK_SECONDS = 6
+
+/** The word the tube shouts and every rocket listens for. */
+const LIGHT = 'light the fuse'
+
+/**
+ * One rocket, in one colour.
+ *
+ * A function because the five of them differ in exactly two things - the name
+ * on the shelf and the three models it draws - and five hand-written copies of
+ * a five-state machine is five places to fix a timing somebody wants changed.
+ */
+function rocket(id: string, name: string, model: string): Starter {
+  return {
+    id,
+    name,
+    hint: 'G lights the fuse, or a tube shouts it. Up it goes, and it comes back.',
+    spec: item(FIREWORKS, `fireworks/${model}`, {
+      // The one action a sequence can have. See the note above.
+      actions: [{ when: 'always', deed: 'play', value: 'idle' }],
+      states: {
+        start: 'ready',
+        states: [
+          {
+            name: 'ready',
+            changes: [
+              { when: 'use', to: 'lit' },
+              { when: 'signal', to: 'lit', value: LIGHT },
+            ],
+          },
+          {
+            name: 'lit',
+            model: `fireworks/${model}_lit`,
+            emit: 'fuse lit',
+            // Drawn as a bar, because a lit fuse that shows nothing for a second
+            // and a half is a rocket that appears to have ignored you.
+            changes: [{ when: 'after', to: 'flying', seconds: FUSE_SECONDS, fill: true }],
+          },
+          {
+            name: 'flying',
+            model: `fireworks/${model}_flying`,
+            // Nothing to walk into: it is seven cells up by the end of this and
+            // its footprint is still on the ground it left.
+            blocking: false,
+            changes: [{ when: 'after', to: 'boom', seconds: CLIMB_SECONDS }],
+          },
+          {
+            name: 'boom',
+            model: `fireworks/${model.replace('rocket', 'burst')}`,
+            blocking: false,
+            emit: 'boom',
+            changes: [{ when: 'after', to: 'gone', seconds: BURST_SECONDS }],
+          },
+          {
+            name: 'gone',
+            hidden: true,
+            blocking: false,
+            changes: [{ when: 'after', to: 'ready', seconds: BACK_SECONDS }],
+          },
+        ],
+      },
+    }),
+  }
+}
+
+const fireworks: StarterSet = {
+  id: FIREWORKS,
+  title: 'Fireworks',
+  hint: 'Rockets in five colours, and a tube that sets every one of them off at once.',
+  things: [
+    rocket('rocket', 'Rocket', 'rocket'),
+    rocket('rocket-blue', 'Blue rocket', 'rocket_blue'),
+    rocket('rocket-green', 'Green rocket', 'rocket_jade'),
+    rocket('rocket-pink', 'Pink rocket', 'rocket_rose'),
+    rocket('rocket-purple', 'Purple rocket', 'rocket_violet'),
+    {
+      id: 'launch-tube',
+      name: 'Launch tube',
+      hint: 'Stand a rocket in it. G shouts "light the fuse" at the whole room.',
+      spec: fixture(FIREWORKS, 'fireworks/launch_tube', {
+        // Low, not at the mouth. A socket is where a thing's *origin* goes, and
+        // a rocket's origin is the bottom of its stick - so putting this at the
+        // rim would stand the rocket on top of the tube. Down here the stick
+        // disappears into the barrel and the body clears the rim, which is what
+        // a rocket in a tube looks like.
+        sockets: [{ name: 'mouth', at: { x: 0, y: 0.05, z: 0 }, turn: 0 }],
+        craft: {
+          slots: [
+            {
+              socket: 'mouth',
+              takes: ['rocket', 'blue rocket', 'green rocket', 'pink rocket', 'purple rocket'],
+            },
+          ],
+          recipes: [],
+        },
+        states: {
+          start: 'quiet',
+          states: [
+            { name: 'quiet', changes: [{ when: 'use', to: 'firing' }] },
+            {
+              name: 'firing',
+              emit: LIGHT,
+              changes: [{ when: 'after', to: 'quiet', seconds: 2 }],
+            },
+          ],
+        },
+      }),
+    },
+  ],
+}
+
 export const STARTER_SETS: readonly StarterSet[] = [
   range,
   baseball,
@@ -998,6 +1160,7 @@ export const STARTER_SETS: readonly StarterSet[] = [
   kitchen,
   lounge,
   controls,
+  fireworks,
 ]
 
 /** One set by id, or nothing. */

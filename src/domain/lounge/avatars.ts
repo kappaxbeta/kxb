@@ -160,6 +160,15 @@ export const AVATAR_CLIPS = {
 export type AvatarClip = (typeof AVATAR_CLIPS)[keyof typeof AVATAR_CLIPS]
 
 /**
+ * What the feet are doing while the rest of the body dances.
+ *
+ * The two moving clips only: standing still while dancing is the whole dance,
+ * and needs no second word. See `splitForFeet` in the lounge's canvas for what
+ * a body does with it.
+ */
+export type Gait = Extract<AvatarClip, 'walk' | 'run'>
+
+/**
  * A clip name off a blueprint, as one of the four this rig has.
  *
  * Null for anything else, including null itself. A blueprint's vocabulary is

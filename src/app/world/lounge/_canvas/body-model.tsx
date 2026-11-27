@@ -1,9 +1,11 @@
 'use client'
 
+import type { RefObject } from 'react'
 import type * as THREE from 'three'
+import type { GlitchUniforms } from '@/app/world/_canvas/body-shader'
 import { AvatarModel } from '@/app/world/lounge/_canvas/avatar-model'
 import { SkinModel } from '@/app/world/lounge/_canvas/skin-model'
-import { type AvatarClip, isSkinLook } from '@/domain/lounge/avatars'
+import { type AvatarClip, type Gait, isSkinLook } from '@/domain/lounge/avatars'
 
 /**
  * Whichever half of you is standing here.
@@ -22,6 +24,15 @@ export function BodyModel(props: {
   look: string
   clip?: AvatarClip
   /**
+   * What the legs do while `clip` is the dance - walking or running.
+   *
+   * Absent for a dance on the spot, and ignored for any other clip: it is the
+   * one case where a body does two things at once, and it is cut at the waist
+   * by `splitForFeet` rather than blended, so the arms keep cheering at full
+   * strength while the feet keep up.
+   */
+  feet?: Gait
+  /**
    * A clip the space made, built and handed down ready to play.
    *
    * An `AnimationClip` rather than a name, because resolving a name means
@@ -37,6 +48,8 @@ export function BodyModel(props: {
   fade?: number
   ignoreRay?: boolean
   rim?: THREE.Color | null
+  /** A bad connection drawn on the body, or null. See `wear` in ../_canvas/body-shader. */
+  glitch?: RefObject<GlitchUniforms> | null
 }) {
   const { look, ...rest } = props
   return isSkinLook(look) ? (

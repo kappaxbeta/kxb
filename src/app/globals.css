@@ -4271,7 +4271,19 @@ a.box:active,
 .corner-dock {
   position: fixed;
   right: calc(1rem + env(safe-area-inset-right, 0px));
-  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  /* Out from over a toolbar the page has docked along the bottom.
+   *
+   * `--docked-bar` is that toolbar's own height, published on the root by
+   * whoever draws it and absent - so 0px, the plain corner - on every other
+   * page. The reading aid is the first: on a phone its bar spans the whole
+   * width, so there is no corner left for the dock to sit in and the envelope
+   * landed exactly on the button that folds the bar back open.
+   *
+   * A variable rather than the `:has()` the rail rule uses, because this one
+   * has to know *how far*: the bar is two rows in English and four in German,
+   * and a fixed step would be wrong at one of them. See reading-aid.tsx. */
+  bottom: calc(1rem + var(--docked-bar, 0px) + env(safe-area-inset-bottom, 0px));
+  /* Above that bar's own layer, so the two never trade places mid-lift. */
   z-index: 40;
   display: flex;
   align-items: center;
@@ -5179,6 +5191,38 @@ a.box:active,
   width: 4rem;
   height: 4rem;
   font-size: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * The pen's one line
+ * ---------------------------------------------------------------------------
+ * The hint along the top edge while the pen is out, which is also the button
+ * that opens the spellbook - see world/_ink/ink-layer.tsx for why those are one
+ * control and not two.
+ *
+ * Quiet on purpose: it sits over a room somebody is playing in, and the ink
+ * they draw under it is the loud thing. The border only appears on hover, so
+ * the line reads as a caption until a cursor asks whether it is pressable.
+ * ------------------------------------------------------------------------- */
+.hud-ink-hint {
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: oklch(0.1 0.04 285 / 0.45);
+  backdrop-filter: blur(6px);
+  padding: 0.25rem 0.75rem;
+  font-family: var(--font-pixel);
+  font-size: 0.625rem;
+  line-height: 1.2;
+  color: var(--color-ink-muted);
+  text-align: center;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.hud-ink-hint:hover {
+  border-color: color-mix(in oklch, var(--color-accent-2) 45%, transparent);
+  color: var(--color-ink);
 }
 
 /* ---------------------------------------------------------------------------
@@ -9197,6 +9241,18 @@ body:has([data-look='dusk']) {
   margin-top: 1.25em;
 }
 
+/* Line breaks inside a paragraph are kept.
+ *
+ * For every book here today this is a no-op - not one of their paragraphs
+ * contains a newline, because a passage is a paragraph and the importer writes
+ * them one at a time. It exists for verse, where a line ending is the shape of
+ * the thing and breaking it at the measure instead would print a different
+ * poem. `pre-line` rather than `pre-wrap`: leading indentation in a source file
+ * is an accident of the file, not of the verse. */
+.oasis-prose p {
+  white-space: pre-line;
+}
+
 /* The scene break. A row of space with a mark in it rather than a rule across
  * the column - a horizontal line reads as "new section" and this is the same
  * scene continuing after a pause. */
@@ -9208,6 +9264,423 @@ body:has([data-look='dusk']) {
    * off centre by half of it. */
   text-indent: 0.6em;
   color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+ * The reading aid
+ * ---------------------------------------------------------------------------
+ * `.oasis-aid` is the prose drawn with a box round every word and one word
+ * lit - see `xo-universe/reading-aid/`. The boxes are drawn with an inset
+ * shadow rather than a border so a word's advance does not change when the
+ * aid comes on: the line still breaks where the plain prose broke.
+ *
+ * The lit word is a warm yellow mixed with the page, which reads as a
+ * highlighter in both themes without a second colour for dark mode. It is
+ * the one thing on the page that moves, and it moves by jumping - a
+ * transition sliding a box from word to word would be a moving object in the
+ * eye's path rather than a mark at the place to look. */
+.oasis-aid .oasis-word {
+  display: inline-block;
+  padding: 0 0.12em;
+  border-radius: 0.25em;
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 14%, transparent);
+  line-height: 1.4;
+}
+
+.oasis-aid .oasis-word[data-current] {
+  background: color-mix(in oklch, oklch(0.86 0.17 92) 75%, var(--background));
+  box-shadow: 0 0 0 2px oklch(0.74 0.17 78);
+  color: var(--foreground);
+  /* Bigger, by a transform rather than by a font-size.
+   *
+   * A transform does not reflow: the word occupies exactly the space it did
+   * before, so the line does not re-break and no other word moves when the
+   * cursor arrives. Growing it with `font-size` would shove the rest of the
+   * paragraph sideways on every step, which is the one thing prose being read
+   * must not do.
+   *
+   * `position: relative` and the z-index are what stop the grown box being
+   * overlapped by the neighbour drawn after it. */
+  position: relative;
+  z-index: 1;
+  transform: scale(1.14);
+}
+
+/* The one exception to the transform: somebody who has asked for less motion
+ * gets the same emphasis without the pop, because the cursor lands on a new
+ * word every second or two and each landing is a thing changing size. The
+ * colour still marks the place. */
+@media (prefers-reduced-motion: reduce) {
+  .oasis-aid .oasis-word[data-current] {
+    transform: none;
+  }
+}
+
+/* The face for readers who want it - see `components/fonts/dyslexic.ts`,
+ * including the measurement showing it covers Bulgarian as well as English
+ * and German. The prose serif stays behind it in the stack for anything it
+ * does not draw, so a missing glyph is a character in Times rather than a
+ * blank box. */
+/* Paper. The one light surface in an app that is otherwise dark everywhere.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the column and not the page
+ * ---------------------------------------------------------------------------
+ * The site's palette is dark by design and the root element says so - see the
+ * note beside `dark` in the root layout. This does not argue with that. It
+ * repaints the thing being read for as long as it is being read, which is a
+ * different job from theming a site: twenty minutes of prose is where a dark
+ * background actually costs somebody something, and a chapter is a column of
+ * text with a clear edge, so it can be paper while the page around it is not.
+ *
+ * The tokens are redeclared rather than the colours hard-coded, so the boxes,
+ * the highlight and the scene break - all of which mix against
+ * `--background` and `--foreground` - come out right without a paper variant
+ * of each one. That is the whole reason the rules above were written in
+ * `color-mix` against tokens instead of in literal colours.
+ *
+ * Ink is not pure black on not-quite-white paper: #111 on #faf8f4 is what a
+ * printed page is, and full-contrast black on white is the glare people turn
+ * a light theme on to escape.
+ */
+.oasis-paper {
+  --background: oklch(0.985 0.004 85);
+  --foreground: oklch(0.22 0.008 300);
+  --muted-foreground: oklch(0.52 0.01 300);
+  background: var(--background);
+  color: var(--foreground);
+  /* The column is a sheet, so it needs an edge and room inside it - without
+     the padding the boxed words sit hard against the paper's border. The
+     measure on `.oasis-prose` is 52ch, and the padding would eat into it, so
+     the sheet is widened by exactly what it pads. */
+  max-width: min(calc(52ch + 2.5rem), 100%);
+  padding: 1.5rem 1.25rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.4);
+}
+
+/* ---------------------------------------------------------------------------
+ * The sign
+ * ---------------------------------------------------------------------------
+ * The message somebody left on a shared link, drawn as a neon sign in the
+ * pixel face - see `xo-universe/sign/`.
+ *
+ * A neon letter is a white core with the colour outside it, not coloured
+ * text: a tube glows white where the gas is brightest and throws its colour
+ * onto everything around it, and text-shadow at three widths is that, cheaply
+ * and in one paint. Two hues alternating along the line is what keeps it from
+ * reading as a heading in a bright colour - real signs are built from a
+ * handful of tubes and the joins show.
+ *
+ * The switching-on is per letter, staggered from the component by
+ * `animation-delay`, and it stutters rather than fades because that is the
+ * thing everybody recognises: a sign that has to be persuaded. `backwards`
+ * holds each letter dark through its own delay, so the line lights up left to
+ * right instead of appearing all at once and then flickering.
+ */
+.xo-sign {
+  --xo-sign-a: oklch(0.72 0.29 330);
+  --xo-sign-b: oklch(0.82 0.19 195);
+  background: color-mix(in oklch, var(--background) 55%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--xo-sign-a) 45%, transparent),
+    0 0 24px -6px color-mix(in oklch, var(--xo-sign-a) 55%, transparent);
+}
+
+.xo-sign-letter {
+  display: inline-block;
+  color: #fff;
+  white-space: pre;
+  text-shadow:
+    0 0 2px #fff,
+    0 0 10px var(--xo-sign-a),
+    0 0 22px var(--xo-sign-a),
+    0 0 44px var(--xo-sign-a);
+  animation: xo-sign-on 620ms ease-out backwards;
+}
+
+/* Every other letter on the other tube. */
+.xo-sign-letter:nth-child(even) {
+  text-shadow:
+    0 0 2px #fff,
+    0 0 10px var(--xo-sign-b),
+    0 0 22px var(--xo-sign-b),
+    0 0 44px var(--xo-sign-b);
+}
+
+.xo-sign-name {
+  color: color-mix(in oklch, var(--xo-sign-b) 70%, white);
+  text-shadow: 0 0 12px var(--xo-sign-b);
+}
+
+@keyframes xo-sign-on {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  26% {
+    opacity: 0.2;
+  }
+  38% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Lit, with none of the persuading, for anybody who asked for less motion.
+ * The sign is the message, so it still has to be there - what goes is the
+ * stutter, which is a light flashing in the corner of somebody's eye. */
+@media (prefers-reduced-motion: reduce) {
+  .xo-sign-letter {
+    animation: none;
+  }
+}
+
+/* The sheet with the water behind it showing through - `xo-universe`'s XO
+ * Flow, see `reading-aid/water.tsx` and `reading-aid/flow.ts`.
+ *
+ * Paper is one flat surface by design, and over the ink piece a flat surface
+ * is a hole: the water runs to the edge of the column and stops, and the
+ * thing being read looks pasted onto it rather than floating in it. So the
+ * sheet thins with the flow, in the two steps the button walks - `semi`
+ * keeps a sheet and lets the colour through it, `full` keeps no sheet at all
+ * and the words are in the water.
+ *
+ * The blur is what makes either of them legible rather than merely pretty.
+ * The water is a moving picture with bright edges in it, and letters over a
+ * moving bright edge are unreadable at any alpha; blurred, the same water is
+ * a slow wash of colour, and prose sits on it the way it sits over a
+ * photograph in a magazine. `full` blurs harder precisely because it has no
+ * alpha left to hide behind - the blur is doing all of the work there, which
+ * is why that state is a look to read a page in rather than a book.
+ *
+ * `--background` rather than a literal colour, because `.oasis-paper`
+ * redeclares that token: one rule is a cream sheet on paper and a dark one
+ * without it, and neither needs its own variant.
+ */
+.oasis-aid[data-water] {
+  border-radius: 0.5rem;
+}
+
+.oasis-aid[data-water='semi'] {
+  background: color-mix(in oklch, var(--background) 62%, transparent);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+}
+
+.oasis-aid[data-water='full'] {
+  background: transparent;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* Without paper the column has no sheet of its own to thin, so this gives it
+ * one: enough ground under the words to read them by, and no edge, because a
+ * rectangle with a visible border over the water would be a card and the
+ * point is that the words are in the water. */
+.oasis-aid[data-water]:not(.oasis-paper) {
+  max-width: min(calc(52ch + 2.5rem), 100%);
+  padding: 1.5rem 1.25rem;
+}
+
+.oasis-aid[data-water='semi']:not(.oasis-paper) {
+  background: color-mix(in oklch, var(--background) 55%, transparent);
+}
+
+.oasis-dyslexic {
+  font-family: var(--font-dyslexic), var(--font-serif);
+  /* The face runs large on the body for its size, and the weighted bottoms
+   * need more air between lines than Times does. */
+  font-size: 1.05rem;
+  line-height: 1.9;
+}
+
+/* Only while the pick button is down does a word look like something to
+ * press; the rest of the time the prose keeps the text cursor. */
+.oasis-aid[data-pick] .oasis-word {
+  cursor: pointer;
+}
+
+.oasis-aid[data-pick] .oasis-word:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 45%, transparent);
+}
+
+/* The crank. A disc with one handle at its rim, turned by dragging round its
+ * centre. `touch-action: none` is what makes it usable on a phone: without
+ * it, the first move of a finger is claimed by the page as a scroll. */
+.oasis-crank {
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: none;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.oasis-crank:active {
+  cursor: grabbing;
+}
+
+.oasis-crank:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* The face, and the reason it is a rainbow.
+ *
+ * A flat disc with a dot on it does not read as a thing you turn - it reads
+ * as a radio button, and beside the doodle bar it read as a placeholder. A
+ * conic gradient fixes that by being *made of* angle: the colours sweep round
+ * under the finger as the face rotates, so the turning is visible across the
+ * whole control rather than only in the travel of one small dot. The hue you
+ * are looking at is the angle you have wound to.
+ *
+ * The last stop repeats the first. A conic gradient does not close its own
+ * loop, and without the repeat there is a hard seam at twelve o'clock that
+ * reads as a notch the knob keeps catching on.
+ *
+ * Same six hues as `.oasis-doodle`, in the same order, because they are the
+ * two controls in this bar that are for a hand rather than for aiming and
+ * they should look like a pair. */
+.oasis-crank-face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    oklch(0.72 0.19 25),
+    oklch(0.82 0.17 70),
+    oklch(0.88 0.17 100),
+    oklch(0.76 0.17 150),
+    oklch(0.7 0.15 230),
+    oklch(0.62 0.2 300),
+    oklch(0.72 0.19 25)
+  );
+}
+
+/* The hub. A knob with a plain colour wheel on it is a colour picker; the
+ * dished centre is what makes it a dial, and it gives the pointer somewhere
+ * to point from. Slightly translucent so a little of the colour under it
+ * still turns, rather than a dead grey plug. */
+.oasis-crank-face::after {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--background) 82%, transparent);
+  box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.18);
+}
+
+/* The pointer. White with a dark ring, which is the same problem the doodle
+ * bar's marker solves the same way: any single colour disappears somewhere on
+ * a rainbow, and this one passes over all six. */
+.oasis-crank-handle {
+  position: absolute;
+  top: 0.3rem;
+  left: 50%;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: -0.375rem;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow:
+    0 0 0 2px oklch(0.25 0.02 320),
+    0 1px 2px oklch(0 0 0 / 0.3);
+}
+
+/* Doodle mode's bar: the chapter, drawn the width of the screen.
+ *
+ * A rainbow because it is the one control here that is meant to be inviting
+ * rather than precise - see `doodle.tsx` for why it is the coarse one - and a
+ * stadium rather than a rectangle so it reads as a button somebody may press
+ * anywhere along, not as a track with a correct place to grab.
+ *
+ * 2.75rem tall, which is above the 44px touch target the rest of the app
+ * holds itself to, because the whole point of this control is that a hand
+ * that cannot hit a 16px slider thumb can hit this without aiming.
+ *
+ * `touch-action: none` for the same reason the crank has it: the first move
+ * of a finger along the bar is a drag of the cursor, and without this the
+ * browser hands it to the page as a scroll. */
+.oasis-doodle {
+  position: relative;
+  width: 100%;
+  height: 2.75rem;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    oklch(0.72 0.19 25),
+    oklch(0.82 0.17 70),
+    oklch(0.88 0.17 100),
+    oklch(0.76 0.17 150),
+    oklch(0.7 0.15 230),
+    oklch(0.62 0.2 300)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 20%, transparent);
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+.oasis-doodle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* The stepper's pips. Small, and the unfilled ones stay visible rather than
+ * disappearing, so the control reads as "three of five" rather than as three
+ * dots that might be all of them. */
+.oasis-pip {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--foreground) 22%, transparent);
+}
+
+.oasis-pip[data-on] {
+  background: var(--foreground);
+}
+
+/* Where the reading has got to: one dot, and nothing else drawn on the bar.
+ *
+ * The first version veiled the part not yet read, and on the dark page that
+ * mixed a dark background into saturated hues and turned two thirds of the
+ * bar to mud. A rainbow does not take an overlay. So the bar is left alone at
+ * full strength and the position is a single mark on top of it.
+ *
+ * Big - larger than the crank's pointer - because this is the control for a
+ * hand that does not want to aim, and the mark has to be findable at a
+ * glance while the finger is moving. White inside a dark ring for the reason
+ * the crank's pointer is: any one colour disappears somewhere along a
+ * rainbow, and this one passes over all six.
+ *
+ * `translateX(-50%)` centres it on its position so the dot at 0% and the dot
+ * at 100% both sit inside the bar's ends. */
+.oasis-doodle-dot {
+  position: absolute;
+  top: 50%;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-top: -0.95rem;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow:
+    0 0 0 2px oklch(0.25 0.02 320),
+    0 1px 4px oklch(0 0 0 / 0.4);
+  pointer-events: none;
 }
 
 /* The on-air light. Steady rather than blinking: it is a status, and a blink
@@ -9877,5 +10350,375 @@ html {
   .xo-mark-stars,
   .xo-mark-orbit {
     transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The LCD, for the two joke bibles
+ * ---------------------------------------------------------------------------
+ * Books five and six are drawn as a chat on a screen rather than as prose on a
+ * page - `app/xo-universe/lcd/screen.tsx` argues why. This is the whole of the
+ * look, and it is CSS rather than JS on purpose: the reveal is an animation
+ * with a per-line delay, so the text is all in the HTML and a reader with no
+ * JavaScript, or with reduced motion asked for, gets the chapter rather than a
+ * blank rectangle.
+ *
+ * The palette is fixed rather than themed. Every other surface here follows
+ * the reader's light or dark preference, and this one does not, because the
+ * thing being drawn is a lit display in a dark case - a "light mode LCD" is a
+ * calculator, not a screen with something on it. It is the only place in the
+ * stylesheet that opts out, and this paragraph is the reason it is allowed to.
+ */
+.lcd {
+  --lcd-ground: oklch(0.19 0.03 168);
+  --lcd-lit: oklch(0.88 0.14 168);
+  --lcd-dim: oklch(0.62 0.08 168);
+  /* The two sides of the colour fringe. Cyan and magenta rather than red and
+   * blue: on a green ground those two are the ones that stay legible when they
+   * are only a pixel out, which is what a fringe is. */
+  --lcd-fringe-a: oklch(0.78 0.16 200);
+  --lcd-fringe-b: oklch(0.72 0.2 340);
+
+  max-width: min(60ch, 100%);
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: var(--lcd-ground);
+  /* A case around the glass: a dark rim, then the glow the screen throws on
+   * it. Both inset, so the element stays one box and nothing has to be
+   * positioned. */
+  box-shadow:
+    inset 0 0 0 1px oklch(0.32 0.03 168),
+    inset 0 0 3rem oklch(0.24 0.05 168),
+    0 1rem 3rem -1rem oklch(0.1 0.02 168 / 0.6);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Scanlines. A repeating gradient rather than an image, and pinned to device
+ * pixels with a hairline so it does not turn into a moiré on a 2x screen. */
+.lcd::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    oklch(0 0 0 / 0.18) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.lcd-screen > * + * {
+  margin-top: 0.5rem;
+}
+
+/* Every line arrives rather than being there. The delay is set inline, per
+ * line, by the component; this is only the movement. */
+.lcd-say,
+.lcd-magic,
+.lcd-break {
+  animation: lcd-arrive 0.42s both;
+}
+
+@keyframes lcd-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+}
+
+.lcd-say {
+  color: var(--lcd-lit);
+  /* The bar down the left is the speaker. There is only one speaker in either
+   * book, so it is a mark rather than a name - a label repeated forty times is
+   * a label nobody reads. */
+  border-left: 2px solid var(--lcd-dim);
+  padding-left: 0.75rem;
+  text-wrap: pretty;
+}
+
+/* A charged word, alone on its line: the noise the universe answers with.
+ * Centred, spaced out, and split into its colour fringes. */
+.lcd-magic {
+  margin-block: 1.25rem;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  /* The letter-spacing is applied after every character including the last,
+   * which pushes a centred line half a space to the left. Pulling it back is
+   * the standard fix and it has to be here rather than on the parent. */
+  text-indent: 0.35em;
+  font-weight: 700;
+  color: var(--lcd-lit);
+}
+
+/* A charged word that was not worth cutting out, flaring where it stands.
+ *
+ * Weight and brightness only - no colour fringe. It had one, and at body size
+ * the two offset copies met in the middle of the glyphs and read as a
+ * strikethrough: `physic` looked like a word that had been crossed out rather
+ * than one that had been lit. The offset that makes a fringe on a word set at
+ * 0.35em of tracking is a smudge on one set inline at 0.95rem.
+ *
+ * That leaves the two treatments doing different jobs, which is the better
+ * design anyway: the fringe is what happens when a word *lands*, and a word
+ * that stays in its sentence glows instead. */
+.lcd-flare {
+  font-weight: 700;
+  color: oklch(0.95 0.1 168);
+  text-shadow: 0 0 0.5rem oklch(0.88 0.14 168 / 0.7);
+}
+
+/* The fringe: the same word twice more, a hair to each side, in the two fringe
+ * colours, *behind* the lit one.
+ *
+ * Behind is the entire trick and the first version got it wrong. Drawn on top
+ * with `mix-blend-mode: screen` the two copies simply added themselves to an
+ * already near-white word and the result was a white blob with no colour in it
+ * at all - which is what a screenshot showed and no amount of reading the rule
+ * would have. `z-index: -1` under an opaque parent leaves exactly the sliver
+ * either side that a misconverged screen shows, which is the whole effect.
+ *
+ * The glow came down with it, from 1.5rem to 0.5rem, for the same reason: a
+ * halo that wide washes the fringes out from the other direction.
+ *
+ * `data-text` carries the copy, so the word is in the DOM once for a screen
+ * reader and for find-on-page - a pseudo-element's content is not in the
+ * accessibility tree, so the duplicates are hidden by construction. */
+.lcd-magic span {
+  position: relative;
+  display: inline-block;
+  z-index: 0;
+  text-shadow: 0 0 0.5rem oklch(0.88 0.14 168 / 0.7);
+}
+
+.lcd-magic span::before,
+.lcd-magic span::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  pointer-events: none;
+  text-shadow: none;
+}
+
+.lcd-magic span::before {
+  color: var(--lcd-fringe-a);
+  transform: translateX(-0.08em);
+}
+
+.lcd-magic span::after {
+  color: var(--lcd-fringe-b);
+  transform: translateX(0.08em);
+}
+
+/* A scene break on a screen is a gap with a mark in it, the way it is in the
+ * prose - not a rule across the glass. */
+.lcd-break {
+  height: 1.5rem;
+  background: radial-gradient(circle at center, var(--lcd-dim) 0 1px, transparent 1px)
+    center / 0.75rem 100% repeat-x;
+  opacity: 0.5;
+}
+
+/* Reduced motion: everything is where it lands, immediately.
+ *
+ * `animation: none` rather than a zero duration, because the animation is
+ * `both` - it holds its start frame until its delay elapses, so a zero
+ * duration would still leave every line invisible for up to four seconds. The
+ * fringe stays; it is a colour, not a movement. */
+@media (prefers-reduced-motion: reduce) {
+  .lcd-say,
+  .lcd-magic,
+  .lcd-break {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The tablet, for book seven
+ * ---------------------------------------------------------------------------
+ * Eleven commandments drawn as a number and a line - `app/xo-universe/keynote/
+ * stage.tsx` argues why that is neither the prose measure nor the LCD. This is
+ * the whole of the look.
+ *
+ * Unlike the LCD next door, this one *does* follow the reader's theme. The LCD
+ * opts out because the thing it draws is a lit display in a dark case and a
+ * light-mode version of that is a calculator. A tablet of commandments has no
+ * such excuse: it is ink on a ground, and ink on a ground is what the theme is
+ * for. So everything structural here comes from the page's own tokens and the
+ * only fixed colours are the six stripes, which are a logo and therefore not
+ * the theme's business.
+ *
+ * The stripes do get a second set on a dark ground, and that is not a theme -
+ * it is legibility. The print purple and blue sit at about L 0.43 and 0.53,
+ * which is a readable numeral on paper and a smudge on near-black, and a
+ * numeral that cannot be read is a missing label rather than a quiet one.
+ */
+.kn {
+  /* The 1977 stripes, in the order they are on the logo. */
+  --kn-1: oklch(0.58 0.16 142);
+  --kn-2: oklch(0.66 0.14 77);
+  --kn-3: oklch(0.65 0.17 50);
+  --kn-4: oklch(0.54 0.2 27);
+  --kn-5: oklch(0.43 0.17 325);
+  --kn-6: oklch(0.53 0.13 238);
+
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: min(46rem, 100%);
+}
+
+/* A class and not `prefers-color-scheme`, because that is how this app decides:
+ * the theme is stamped as `.dark` on the root and the media query is never
+ * consulted. Reaching for the media query here would light a dark-OS reader's
+ * stripes for a dark ground while the page around them was still white. */
+.dark .kn {
+  --kn-1: oklch(0.79 0.17 142);
+  --kn-2: oklch(0.85 0.15 85);
+  --kn-3: oklch(0.78 0.16 55);
+  --kn-4: oklch(0.69 0.19 22);
+  --kn-5: oklch(0.64 0.16 325);
+  --kn-6: oklch(0.75 0.13 230);
+}
+
+/* One class per stripe, used twice: as ink on a numeral and as fill in the
+ * rule. Splitting the two uses by context rather than by class is what keeps
+ * the numbers and the rule provably the same six values - there is nowhere
+ * for a seventh to be introduced. */
+.kn-stripe-1 { color: var(--kn-1); }
+.kn-stripe-2 { color: var(--kn-2); }
+.kn-stripe-3 { color: var(--kn-3); }
+.kn-stripe-4 { color: var(--kn-4); }
+.kn-stripe-5 { color: var(--kn-5); }
+.kn-stripe-6 { color: var(--kn-6); }
+
+/* The rule: the six, full width, thin. The only ornament on the page. */
+.kn-rule {
+  display: flex;
+  height: 0.4375rem;
+  overflow: hidden;
+}
+
+.kn-rule > .kn-stripe {
+  flex: 1;
+  background: currentColor;
+  transform-origin: left center;
+  animation: kn-wipe 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Scoped to the rule, so a numeral wearing the same colour class does not
+ * inherit a delay meant for a stripe. */
+.kn-rule > .kn-stripe-1 { animation-delay: 0.05s }
+.kn-rule > .kn-stripe-2 { animation-delay: 0.1s }
+.kn-rule > .kn-stripe-3 { animation-delay: 0.15s }
+.kn-rule > .kn-stripe-4 { animation-delay: 0.2s }
+.kn-rule > .kn-stripe-5 { animation-delay: 0.25s }
+.kn-rule > .kn-stripe-6 { animation-delay: 0.3s }
+
+@keyframes kn-wipe {
+  from { transform: scaleX(0); }
+}
+
+.kn-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.kn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A hairline between commandments rather than a card around each. Eleven
+ * cards is eleven objects on a page that holds one thing. */
+.kn-item {
+  display: grid;
+  grid-template-columns: 3.25rem 1fr;
+  gap: 0 clamp(1rem, 3vw, 1.75rem);
+  padding: clamp(1.5rem, 3.5vw, 2rem) 0;
+  border-top: 1px solid var(--border);
+  animation: kn-arrive 0.42s both;
+}
+
+.kn-list > .kn-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@keyframes kn-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+}
+
+.kn-number {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-weight: 700;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  padding-top: 0.15em;
+}
+
+/* Large and thin, which is the whole of the keynote reference - a line meant
+ * to be read from the back of a room. `text-wrap: pretty` rather than
+ * `balance`: the first commandment is three lines long and balancing it would
+ * centre-weight a sentence that is supposed to run on. */
+.kn-word {
+  margin: 0;
+  font-size: clamp(1.375rem, 4.4vw, 2.125rem);
+  font-weight: 200;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  color: var(--foreground);
+  text-wrap: pretty;
+}
+
+/* The gap a scene break makes, with the six in it again at a quarter of the
+ * weight. What it separates here is the tenth commandment from the eleventh,
+ * which the tenth has just finished saying does not exist. */
+.kn-turn {
+  height: 2px;
+  margin-block: clamp(2rem, 6vw, 3.5rem);
+  background: linear-gradient(
+    to right,
+    var(--kn-1) 0 16.66%,
+    var(--kn-2) 16.66% 33.33%,
+    var(--kn-3) 33.33% 50%,
+    var(--kn-4) 50% 66.66%,
+    var(--kn-5) 66.66% 83.33%,
+    var(--kn-6) 83.33% 100%
+  );
+  opacity: 0.45;
+}
+
+@media (max-width: 26rem) {
+  .kn-item {
+    grid-template-columns: 2.5rem 1fr;
+  }
+
+  .kn-number {
+    font-size: 1.125rem;
+  }
+}
+
+/* One media query, no state to keep in step - the same deal the LCD makes.
+ * `animation: none` rather than a zero duration, because these are `both` and
+ * a zero-duration `both` still applies the `from` frame. */
+@media (prefers-reduced-motion: reduce) {
+  .kn-rule > .kn-stripe,
+  .kn-item {
+    animation: none;
   }
 }

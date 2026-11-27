@@ -6,7 +6,7 @@ together. `xp` is the creator suite on top of it — *"Everything in xo, and the
 XP suite on top."*
 
 The two are **not layers of one engine**, and that is the decision to know
-before touching either. xp/creator.md §1.2 chose *copy, don't
+before touching either. [xp/creator.md](../xp/creator.md) §1.2 chose *copy, don't
 import*, and §16.2 says to assume the lounge and the XP engine never converge:
 *"two engines that have drifted for six months do not merge back."* If the XP
 engine turns out to be strictly better, the honest move is a deliberate rewrite
@@ -42,11 +42,11 @@ than in one place, because that is where the decisions were made:
 | Question | Where |
 |---|---|
 | How presence and movement go over the wire, and why 8 Hz | [architecture/netcode.md](../architecture/netcode.md) |
-| What happens when a lot of people arrive | architecture/scaling.md, performancestudy/ |
+| What happens when a lot of people arrive | [architecture/scaling.md](../architecture/scaling.md), [performancestudy/](../performancestudy/) |
 | How a command becomes events, and which CQRS rules are broken on purpose | [architecture/event-sourcing.md](../architecture/event-sourcing.md) |
-| Running an event in a space, on one anonymous link | product/event-spaces.md |
-| What an operator and a guest actually do | product/manual.md |
-| How a space resolves to a subdomain | architecture/subdomains.md |
+| Running an event in a space, on one anonymous link | [product/event-spaces.md](../product/event-spaces.md) |
+| What an operator and a guest actually do | [product/manual.md](../product/manual.md) |
+| How a space resolves to a subdomain | [architecture/subdomains.md](../architecture/subdomains.md) |
 | Cameras in a world: how a picture crosses, and what gates it | [faces.md](faces.md), [operations/relay.md](../operations/relay.md) |
 
 **This README is a map, not a manual.** If xo grows a decision that needs

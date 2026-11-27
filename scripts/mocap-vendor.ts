@@ -1,5 +1,5 @@
 /**
- * MediaPipe's pose landmarker, copied into `public/`.
+ * MediaPipe's vision tasks, copied into `public/`.
  *
  * Same argument as `three:vendor` and `xp:vendor`: a CDN would be one line and
  * an app that stops working when somebody else's DNS does. The difference here
@@ -7,10 +7,10 @@
  * model file, and the model is not in the npm package at all. Google ships it
  * from a bucket, so this script fetches it once and writes it beside the wasm.
  *
- * The output is ignored by git (see `.gitignore`): fifteen megabytes of build
- * output that is a pure function of two URLs and a version number. Run
- * `bun run mocap:vendor` after a fresh clone, or the capture page will tell you
- * to.
+ * The output is ignored by git (see `.gitignore`): twenty-odd megabytes of
+ * build output that is a pure function of three URLs and a version number. Run
+ * `bun run mocap:vendor` after a fresh clone, or the pages that want it - the
+ * capture page, and hand mode's camera - will tell you to.
  *
  * ---------------------------------------------------------------------------
  * It also runs in `bun run build`, which puts a fetch in the release path
@@ -49,11 +49,18 @@ const WASM_FILES = [
 ]
 
 /**
- * The two models the page offers, under the names it asks for them by.
+ * The models, under the names the pages ask for them by.
  *
- * `lite` runs on anything and is the one a laptop webcam should use; `full` is
- * visibly steadier in depth - which is the axis a single camera is worst at -
- * and is worth its extra four megabytes on a machine that can keep up.
+ * Two of them are the body, for the capture page. `lite` runs on anything and
+ * is the one a laptop webcam should use; `full` is visibly steadier in depth -
+ * which is the axis a single camera is worst at - and is worth its extra four
+ * megabytes on a machine that can keep up.
+ *
+ * The third is a *hand*, for hand mode's camera (`world/_hand/landmarker.ts`).
+ * It is here rather than in a vendor script of its own because the expensive
+ * half of this directory is the wasm runtime, and both tasks load the same one
+ * out of the same `wasm/` fileset. Two scripts would mean two copies of it, or
+ * one script quietly depending on the other having run.
  */
 const MODELS: [name: string, url: string][] = [
   [
@@ -63,6 +70,10 @@ const MODELS: [name: string, url: string][] = [
   [
     'pose_landmarker_full.task',
     'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+  ],
+  [
+    'hand_landmarker.task',
+    'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
   ],
 ]
 
@@ -88,7 +99,7 @@ for (const [name, url] of MODELS) {
   console.log(`  ${path}`)
 }
 
-console.log(`mocap vendored into ${OUT}`)
+console.log(`vision tasks vendored into ${OUT}`)
 
 /**
  * One model, with the retries a build deserves.
@@ -112,7 +123,7 @@ async function download(url: string): Promise<Uint8Array> {
     }
   }
   throw new Error(
-    `Could not fetch ${url}: ${last}. The capture page needs it; re-run the build, ` +
+    `Could not fetch ${url}: ${last}. A page here needs it; re-run the build, ` +
       'or commit the model if this keeps happening.',
   )
 }

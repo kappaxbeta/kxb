@@ -1,11 +1,13 @@
 'use client'
 
 import { useAnimations, useGLTF } from '@react-three/drei'
-import { useEffect, useMemo, useRef } from 'react'
+import { type RefObject, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { type GlitchUniforms, wear } from '@/app/world/_canvas/body-shader'
+import { LEGS, splitForFeet, UPPER } from '@/app/world/lounge/_canvas/feet'
 import { lead } from '@/app/world/lounge/_canvas/lead'
-import { type AvatarClip } from '@/domain/lounge/avatars'
+import { type AvatarClip, type Gait } from '@/domain/lounge/avatars'
 
 /**
  * A bought skin, standing in the lounge.
@@ -33,11 +35,15 @@ type SkinModelProps = {
   /** A qualified catalogue id: `adventurers/Knight`. */
   model: string
   clip?: AvatarClip
+  /** What the legs do while `clip` is the dance. See `BodyModel.feet`. */
+  feet?: Gait
   /** A clip the space made, ready to play. See `BodyModel`. */
   pose?: THREE.AnimationClip | null
   fade?: number
   ignoreRay?: boolean
   rim?: THREE.Color | null
+  /** A bad connection drawn on the body, or null. See `AvatarModel.glitch`. */
+  glitch?: RefObject<GlitchUniforms> | null
 }
 
 /**
@@ -107,10 +113,12 @@ export function SkinModel(props: SkinModelProps) {
 function SkinBody({
   model,
   clip = 'idle',
+  feet,
   pose = null,
   fade = 0.2,
   ignoreRay = false,
   rim = null,
+  glitch = null,
 }: SkinModelProps) {
   /**
    * The catalogue's path scheme is its id - `adventurers/Knight` is that file -
@@ -125,10 +133,22 @@ function SkinBody({
   const movement = useGLTF(CLIP_FILES.movement)
   const simulation = useGLTF(CLIP_FILES.simulation)
 
-  const animations = useMemo(
-    () => [...general.animations, ...movement.animations, ...simulation.animations],
-    [general.animations, movement.animations, simulation.animations],
-  )
+  /**
+   * The pack's clips, and the dance cut at the waist. See `splitForFeet`.
+   *
+   * The halves are built here, once, and ride in the same array - so they are
+   * bound by the same `useAnimations` call as the whole clips and the array
+   * keeps one identity for the life of the body, which the note below is
+   * about.
+   */
+  const animations = useMemo(() => {
+    const whole = [...general.animations, ...movement.animations, ...simulation.animations]
+    const named = (name: string) => whole.find((one) => one.name === name)
+    const gaits = [named(RIG_CLIP.walk), named(RIG_CLIP.run)].filter(
+      (one): one is THREE.AnimationClip => one !== undefined,
+    )
+    return [...whole, ...splitForFeet(gaits, named(RIG_CLIP.dance))]
+  }, [general.animations, movement.animations, simulation.animations])
 
   /**
    * `SkeletonUtils.clone`, not `scene.clone(true)`.
@@ -150,51 +170,11 @@ function SkinBody({
   }, [dressed.scene, ignoreRay])
 
   /**
-   * The party rim, on this body's own materials.
+   * The party rim and the glitch, on this body's own materials.
    *
-   * Same argument and the same shader as `AvatarModel`'s: clones share
-   * materials, so without copying first one person lighting up lights up
-   * everybody wearing that skin, in their colour.
+   * Same argument as `AvatarModel`'s, and the same patch: see `wear`.
    */
-  useEffect(() => {
-    if (!rim) return
-
-    const restore: { mesh: THREE.Mesh; material: THREE.Material | THREE.Material[] }[] = []
-
-    body.traverse((node) => {
-      const mesh = node as THREE.Mesh
-      if (!mesh.isMesh) return
-
-      const source = mesh.material
-      if (Array.isArray(source)) return
-
-      const material = source.clone()
-      material.onBeforeCompile = (shader) => {
-        shader.uniforms.uRimColour = { value: rim }
-        shader.fragmentShader = shader.fragmentShader
-          .replace('#include <common>', `#include <common>\nuniform vec3 uRimColour;`)
-          .replace(
-            '#include <dithering_fragment>',
-            `#include <dithering_fragment>
-  float rimFacing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  float rimBand = pow(1.0 - rimFacing, 2.4);
-  gl_FragColor.rgb += uRimColour * rimBand * 1.6;`,
-          )
-      }
-      material.needsUpdate = true
-
-      restore.push({ mesh, material: source })
-      mesh.material = material
-    })
-
-    return () => {
-      for (const entry of restore) {
-        const worn = entry.mesh.material
-        entry.mesh.material = entry.material
-        if (!Array.isArray(worn)) worn.dispose()
-      }
-    }
-  }, [body, rim])
+  useEffect(() => wear(body, { rim, glitch: glitch?.current ?? null }), [body, rim, glitch])
 
   const group = useRef<THREE.Group>(null)
 
@@ -225,6 +205,17 @@ function SkinBody({
   /** What is playing now, so the next thing can fade *from* it. */
   const playing = useRef<THREE.AnimationAction | null>(null)
 
+  /**
+   * The dance's top half, while the feet are doing something else.
+   *
+   * Its own ref rather than a cleanup, because the effect below re-runs when
+   * the feet change from a walk to a run, and a cleanup that faded the arms out
+   * so the next run could fade them back in would dip the whole upper body
+   * into the bind pose for a fifth of a second every time somebody sped up.
+   * Kept running across those changes; swapped only when the answer changes.
+   */
+  const upperPlaying = useRef<THREE.AnimationAction | null>(null)
+
   useEffect(() => {
     /**
      * The gait, the pose, or both.
@@ -235,7 +226,24 @@ function SkinBody({
      * is a whole body and replaces the gait outright.
      */
     const layered = pose?.blendMode === THREE.AdditiveAnimationBlendMode
-    const gait = !pose || layered ? actions[RIG_CLIP[clip]] : null
+    const wholeBody = !pose || layered
+
+    /**
+     * Dancing on the move: the legs walk or run, the rest keeps dancing.
+     *
+     * Two half clips at full weight rather than a blend of two whole ones -
+     * see `splitForFeet` for why a blend reads as a shrug. The legs half goes
+     * through `lead` like any gait, so it fades from and to whatever the feet
+     * were doing; the upper half rides on top and is kept in its own ref.
+     */
+    const onTheMove = clip === 'dance' && feet !== undefined && wholeBody
+    const gait = onTheMove
+      ? actions[RIG_CLIP[feet] + LEGS]
+      : wholeBody
+        ? actions[RIG_CLIP[clip]]
+        : null
+    const upper = onTheMove ? (actions[RIG_CLIP.dance + UPPER] ?? null) : null
+    const stepping = onTheMove ? feet : clip
 
     /**
      * The space's own clip, bound here rather than added to the list above.
@@ -252,8 +260,16 @@ function SkinBody({
     if (gait) {
       // Set before playing, so the first frame is already at the right cadence
       // rather than stepping once slowly and then catching up.
-      gait.setEffectiveTimeScale(CLIP_RATE[clip])
+      gait.setEffectiveTimeScale(CLIP_RATE[stepping])
       lead(gait, playing, fade)
+    }
+    if (upperPlaying.current !== upper) {
+      upperPlaying.current?.fadeOut(fade)
+      if (upper) {
+        upper.setEffectiveTimeScale(CLIP_RATE.dance)
+        upper.reset().fadeIn(fade).play()
+      }
+      upperPlaying.current = upper
     }
     if (extra) {
       // A space's own clip runs at the speed it was keyed at: the rate table is
@@ -271,7 +287,7 @@ function SkinBody({
     return () => {
       if (layered) extra?.fadeOut(fade)
     }
-  }, [actions, clip, fade, mixer, pose])
+  }, [actions, clip, fade, feet, mixer, pose])
 
   return (
     <group ref={group} scale={SKIN_SCALE}>

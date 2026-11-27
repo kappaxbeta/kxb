@@ -1014,9 +1014,9 @@ export function WorldBuilder({
           onClose={() => setPicking(false)}
           /*
            * A space picks from the blocks its world can actually keep; the
-           * backoffice picks from everything we ship. See `blocksOnly`.
+           * backoffice picks from everything we ship. See `PickerScope`.
            */
-          blocksOnly={scope.kind === 'space'}
+          scope={scope.kind === 'space' ? 'blocks' : 'everything'}
         />
       )}
     </div>

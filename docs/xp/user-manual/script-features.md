@@ -5,7 +5,7 @@ from. The third of the user-manual inventories, beside
 [editor-features.md](editor-features.md) and
 [runtime-features.md](runtime-features.md) — same rules: a flat list of what is
 built, not what is planned. The argument for each decision is in
-[../manual.md](../manual.md) §6.5 and ../creator.md §10; this
+[../manual.md](../manual.md) §6.5 and [../creator.md](../creator.md) §10; this
 is the list to write a user-facing manual from.
 
 Source of truth for every claim: `packages/xp/src/rules/script.ts`,
@@ -233,7 +233,7 @@ it got there.
 | `world.tick` | Frames since the start |
 | `world.time` | Seconds. **Already one `dt` in by the first `onTick`** — a cooldown seeded at 0 fires 3 times in 3 seconds, not 4 |
 | `world.seed` | The number the whole room was told, for a stream you keep yourself |
-| `world.random()` | `0, 1)`, like the function it replaces |
+| `world.random()` | `[0, 1)`, like the function it replaces |
 | `world.roll(n)` | A die. `roll(6)` is 1–6, `roll()` is 6 |
 | `world.randomInt(a, b)` | **Inclusive at both ends**, because `randomInt(1, 7)` is a bug somebody writes once a project |
 | `world.pick(list)` | One of them. `undefined` for an empty list — a loot table that ran out is not a broken script |
@@ -257,7 +257,7 @@ it got there.
   forever after. Addressed instead of advanced, a client that was wrong about how
   many rolls a frame contained is wrong for one frame.
 - It is dice and jitter, **not a secret** — every client can compute the next
-  one. Hidden state is [server authority.
+  one. Hidden state is [server authority](../server-authority.md).
 
 > **The level's data is not reachable from `onTrigger`.** `world.get` reads 0 and
 > `world.set`/`add`/`spend` do nothing, silently, for the whole of that hook —
@@ -592,7 +592,7 @@ say so.
 - **Push you.** Being carried is standing on top of something. A block moving
   *into* you stops you, like a wall that happens to be somewhere else next frame.
 - **Keep a secret.** Everything a script computes, every client can recompute.
-  Hidden state is server authority.
+  Hidden state is [server authority](../server-authority.md).
 - **Reach another script's hooks.** The four names are passed in rather than read
   off a global, so a script that shadows `self` breaks only itself.
 
@@ -604,11 +604,11 @@ Proposals, not features — see the linked design docs before promising any of
 these:
 
 - An expression language for rules, so that computing does not require a script
-  (../creator.md §10)
+  ([../creator.md](../creator.md) §10)
 - Scripts reacting to *why* a match ended — recorded as known-deferred in
   `packages/xp/src/rules/triggers.ts` beside the `finished` event: it arrives as a way
   to read match-level facts (the clock, the score, the winner) designed once,
   rather than as three event names
 - Server-side scripts, or any script the client cannot reproduce
-  (../server-authority.md)
-- AI-written scripts (../ai-integration.md)
+  ([../server-authority.md](../server-authority.md))
+- AI-written scripts ([../ai-integration.md](../ai-integration.md))

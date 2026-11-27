@@ -22,6 +22,21 @@ const eslintConfig = defineConfig([
     "public/xp/vendor/**",
 
     /**
+     * The same bargain one directory over, and it bites harder because these
+     * files are gitignored: `bun run mocap:vendor` fetches MediaPipe's wasm
+     * glue, and linting it reports twelve errors - `require()`, `this`
+     * aliasing, and a `GLctx.useProgram` call the React hooks rule reads as a
+     * hook - about generated Emscripten output nobody here wrote.
+     *
+     * CI never sees any of it, because /public/mocap is not in the repository.
+     * So the only thing that rule was doing was making a clean tree lint red
+     * for whoever had run the vendor script, and disagreeing with the CI that
+     * decides whether a commit may ship. A local check that says something
+     * different from the gate is worse than no local check.
+     */
+    "public/mocap/**",
+
+    /**
      * Every Next.js build directory this repo has or will have.
      *
      * One glob, and it is the third time this lesson has been paid for.

@@ -646,6 +646,10 @@ export function useControlsPanel(): {
       // something to type into. See `isTyping`.
       if (isTyping(event)) return
 
+      // And stand aside for anything that has already claimed this key in the
+      // capture phase - hand mode does exactly that with five of them.
+      if (event.defaultPrevented) return
+
       // Pointer lock has to go first. The panel is unreadable and unclickable
       // with the cursor still captured by the canvas, and Esc - the only other
       // way out - would then be read by the panel as "close me".

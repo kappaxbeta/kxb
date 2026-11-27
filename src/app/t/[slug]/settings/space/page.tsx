@@ -5,6 +5,8 @@ import { EventHeaderForm } from '@/app/t/[slug]/settings/event-header-form'
 import { SettingsForm } from '@/app/t/[slug]/settings/settings-form'
 import { BankCard } from '@/app/t/[slug]/settings/space/bank-card'
 import { ExtrasCard } from '@/app/t/[slug]/settings/space/extras-card'
+import { XoinCard } from '@/app/t/[slug]/settings/space/xoin-card'
+import { SpellsCard } from '@/app/t/[slug]/settings/space/spells-card'
 import { StorageCard } from '@/app/t/[slug]/settings/space/storage-card'
 import { listBanners } from '@/domain/events/banners'
 import { linkProblem } from '@/domain/guests/application'
@@ -16,7 +18,7 @@ import { findPublicTenant } from '@/domain/tenants/queries'
 import { spaceXpBytes, storeOverview } from '@/domain/xps/queries'
 import { env } from '@/lib/env'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { hasTier, requireTenant } from '@/lib/tenant'
+import { castReach, hasTier, requireTenant } from '@/lib/tenant'
 import { CAPS } from '@/lib/xp-formats'
 import { readLocale } from '@/app/i18n/preference'
 import { settingsDict } from '@/app/i18n/settings'
@@ -214,6 +216,16 @@ export default async function SpaceSettingsPage({
       />
 
       {/*
+        Who may set off something everybody in the room sees.
+
+        A card of its own rather than another switch in the form above, because
+        it is the only setting on this page with three answers instead of two -
+        and because what it governs is not a surface the space turns on, it is
+        how loud its people are allowed to be in a room they share.
+      */}
+      <SpellsCard slug={slug} initial={castReach(context)} canEdit={isOwnerOrAdmin} />
+
+      {/*
         Last, under the things somebody came here to change. Nothing on this
         card is a control — it is the space read back to whoever runs it, and a
         page reads better when what you can do comes before what is true.
@@ -235,6 +247,15 @@ export default async function SpaceSettingsPage({
         has *taken* reads before money a member might spend. See <BankCard>.
       */}
       <BankCard slug={slug} />
+
+      {/*
+        The market, between the space's own till and the shelf of things to buy,
+        which is where it belongs: it is a place coins go, and the mode it is in
+        decides whether it is one at all. Behind the flag, because a space that
+        has not asked for a market should not be shown a switch that opens one.
+        See <XoinCard>.
+      */}
+      {context.features.xoin && <XoinCard slug={slug} canEdit={isOwnerOrAdmin} />}
 
       <ExtrasCard slug={slug} />
 

@@ -445,6 +445,8 @@ export default async function TenantLayout({
                         touched this has not asked for the rule.
                       */
                       stamina: context.tenant.capabilities.stamina ?? false,
+                      /* Off by default for the same reason. See the capability. */
+                      glitch: context.tenant.capabilities.glitch ?? false,
                   }}
                   username={username}
                   email={user.email ?? railDict(locale).account.signedIn}

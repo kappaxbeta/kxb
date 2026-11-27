@@ -71,6 +71,16 @@ export interface BoardPostView {
    */
   image: string | null
   /**
+   * The drawing pinned with it, in the pen's own format, or null.
+   *
+   * Unlike the scene and the picture there is nothing to resolve and nothing
+   * that can have gone missing: the note *is* the string, so what a card gets
+   * here is what the poster drew. A string this reader's copy of the pen cannot
+   * parse draws nothing, which looks exactly like a notice with no drawing -
+   * see `<InkNote>`.
+   */
+  ink: string | null
+  /**
    * Did the person looking at this write it?
    *
    * Here rather than compared by handle on the client, because a handle is a
@@ -101,7 +111,7 @@ export async function listBoardPosts(
   const { data, error } = await supabase
     .from('board_posts_read_model')
     .select(
-      'id, body, pinned, reactions, edited, scene_id, image_slug, created_by, created_at, updated_at',
+      'id, body, pinned, reactions, edited, scene_id, image_slug, ink, created_by, created_at, updated_at',
     )
     .eq('tenant_id', tenantId)
     .eq('deleted', false)
@@ -140,6 +150,7 @@ export async function listBoardPosts(
     edited: row.edited,
     scene: row.scene_id ? (scenes.get(row.scene_id) ?? null) : null,
     image: row.image_slug ? `/api/uploads/${row.image_slug}` : null,
+    ink: row.ink ?? null,
     mine: row.created_by === viewerId,
   }))
 }

@@ -808,6 +808,43 @@ export function perfDisplayOn(context: TenantContext): boolean {
 }
 
 /**
+ * How far a word written in this space's rooms travels.
+ *
+ * Three positions on one ladder, read off two capabilities - see `spells` in
+ * domain/tenants/events.ts for why it is stored that way rather than as a
+ * column of its own.
+ *
+ * `spells` follows the usual "absent means on" rule, because members have been
+ * able to do this since the pen shipped and a space that never touched the
+ * switch must not have it taken away by a deploy. `spells_guests` is the
+ * exception that `perf_display` also makes and for the same reason: nobody has
+ * ever been able to do it, so nobody gets it by default.
+ */
+export type CastReach = 'admins' | 'members' | 'everyone'
+
+export function castReach(context: TenantContext): CastReach {
+  if (!(context.tenant.capabilities.spells ?? true)) return 'admins'
+  return (context.tenant.capabilities.spells_guests ?? false) ? 'everyone' : 'members'
+}
+
+/**
+ * May *this* person cast one.
+ *
+ * Owners and admins always may: the setting is what a space says about
+ * everybody else, and a switch that could lock its own staff out is a switch
+ * somebody has to be let back in from.
+ *
+ * A refusal is not silence. The scene still draws the caster their own beam and
+ * their own rainbow and simply sends nothing - see `spell` in lounge-scene.tsx.
+ */
+export function mayCast(context: TenantContext): boolean {
+  if (hasRole(context, ['owner', 'admin'])) return true
+  const reach = castReach(context)
+  if (reach === 'admins') return false
+  return reach === 'everyone' || !isGuest(context)
+}
+
+/**
  * Assert the caller holds one of `allowed` before doing something.
  *
  * This is a *fast path*, not the authorization boundary. The real check is in

@@ -73,7 +73,7 @@ export type CoinsBanked = DomainEvent<
      * it, `bank-grant-out` when they simply paid in, `channel` when they
      * opened an episode of one of the space's shows that charges to read.
      */
-    reason: 'needs' | 'room-entry' | 'bank-grant-out' | 'channel'
+    reason: 'needs' | 'room-entry' | 'bank-grant-out' | 'channel' | 'xoin-fee'
     /** What was paid for. "a sandwich", "a bandage", the room's name. */
     what?: string
     /** The same id on both halves, so a movement can be found from either end. */

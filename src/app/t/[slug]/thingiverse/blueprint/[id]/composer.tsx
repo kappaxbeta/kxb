@@ -8,6 +8,7 @@ import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
 import { attempt } from '@/app/components/connection'
 import { fill } from '@/app/i18n/fill'
 import type { WorkspaceDict } from '@/app/i18n/workspace'
+import { ModelPicker } from '@/app/t/[slug]/thingiverse/blueprint/[id]/model-picker'
 import { type BoxHandle, Stage } from '@/app/t/[slug]/thingiverse/blueprint/[id]/stage'
 import { BodyStage } from '@/app/world/_canvas/body-stage'
 import {
@@ -29,7 +30,7 @@ import {
 } from '@/domain/thingiverse/motion'
 import { Rig } from '@/app/world/shots/pieces'
 import { AVATAR_CLIPS } from '@/domain/lounge/avatars'
-import { findParts, renameBlueprint, reshapeBlueprint } from '@/domain/thingiverse/actions'
+import { renameBlueprint, reshapeBlueprint } from '@/domain/thingiverse/actions'
 import {
   type BlueprintPart,
   type BlueprintSpec,
@@ -49,7 +50,7 @@ import {
   type Socket,
   socketsOf,
 } from '@/domain/thingiverse/blueprint'
-import { type ModelHit, modelLabel, thumbnailFor } from '@/domain/thingiverse/models'
+import { modelLabel, thumbnailFor } from '@/domain/thingiverse/models'
 import {
   CHANGE_WHENS,
   type Change,
@@ -521,9 +522,9 @@ export function Composer({
             />
 
             {parts.length < MAX_PARTS && (
-              <AddPiece
+              <ModelPicker
                 slug={slug}
-                c={c}
+                t={t}
                 heading={c.addPiece}
                 onAdd={(model) => {
                   change({ parts: [...parts, freshPart(model)] })
@@ -549,9 +550,9 @@ export function Composer({
               a grip is pointing at.
             */}
             {selected !== null && (
-              <AddPiece
+              <ModelPicker
                 slug={slug}
-                c={c}
+                t={t}
                 heading={fill(c.swapFor, {
                   where:
                     selected === -1 ? modelLabel(spec.model) : modelLabel(parts[selected].model),
@@ -616,6 +617,7 @@ export function Composer({
               price={vehiclePrice}
               onChange={change}
               c={c}
+              t={t}
               previewDriver={previewDriver}
               onPreviewDriver={setPreviewDriver}
             />
@@ -636,7 +638,7 @@ export function Composer({
               onPreview={setPreviewClip}
             />
 
-            <Fighting slug={slug} spec={spec} onChange={change} c={c} />
+            <Fighting slug={slug} spec={spec} onChange={change} c={c} t={t} />
 
             <Crafting spec={spec} sockets={allSockets} onChange={change} c={c} />
 
@@ -830,102 +832,6 @@ function Row({
       </button>
       {on && <div className="space-y-1.5 border-t border-line/50 p-2">{children}</div>}
     </div>
-  )
-}
-
-/**
- * Adding a piece.
- *
- * The search runs on the server (`findParts`) rather than against an imported
- * catalogue, because importing it would ship 5,770 entries to every browser
- * that opens this. The results are a grid of pictures: which crate you want is
- * a question about what it looks like, and its id answers that for nobody.
- */
-function AddPiece({
-  slug,
-  onAdd,
-  c,
-  /**
-   * What the section calls itself, and what pressing a tile does.
-   *
-   * The same picker serves both jobs it has - putting a new piece on, and
-   * changing the model of the one you have selected - because the *act* is
-   * identical: type a word, look at pictures, press one. Two copies would be
-   * two search boxes that drift apart the first time either gets a filter.
-   */
-  heading,
-}: {
-  slug: string
-  onAdd: (model: string) => void
-  c: WorkspaceDict['thingiverse']['composer']
-  heading: string
-}) {
-  const [query, setQuery] = useState('')
-  const [hits, setHits] = useState<ModelHit[] | null>(null)
-  const [looking, start] = useTransition()
-
-  const look = () =>
-    start(async () => {
-      const found = await findParts(slug, query)
-      setHits(found)
-    })
-
-  return (
-    <section className="space-y-2">
-      <Heading>{heading}</Heading>
-
-      <div className="flex gap-1.5">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return
-            event.preventDefault()
-            look()
-          }}
-          placeholder={c.searchPieces}
-          aria-label={c.searchPieces}
-          className="min-w-0 flex-1 rounded-lg border border-line/60 bg-surface px-2 py-1.5 text-xs text-ink placeholder:text-ink-muted"
-        />
-        <button
-          type="button"
-          onClick={look}
-          disabled={looking}
-          className="shrink-0 rounded-lg border border-line/60 px-2.5 py-1.5 text-xs text-ink transition hover:bg-surface-raised disabled:opacity-40"
-        >
-          {looking ? c.looking : c.look}
-        </button>
-      </div>
-
-      {hits !== null &&
-        (hits.length === 0 ? (
-          <p className="text-[11px] text-ink-muted">{fill(c.noPieces, { q: query.trim() })}</p>
-        ) : (
-          <ul className="grid grid-cols-3 gap-1.5">
-            {hits.map((hit) => (
-              <li key={hit.id}>
-                <button
-                  type="button"
-                  onClick={() => onAdd(hit.id)}
-                  title={hit.id}
-                  className="w-full rounded-lg border border-line/60 bg-surface p-1 transition hover:border-accent/50 hover:bg-surface-raised"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={thumbnailFor(hit.id)}
-                    alt=""
-                    loading="lazy"
-                    className="aspect-square w-full rounded bg-surface-raised object-contain"
-                  />
-                  <span className="mt-1 block truncate text-[10px] text-ink-muted">
-                    {hit.label}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ))}
-    </section>
   )
 }
 
@@ -1415,6 +1321,8 @@ function Vehicle({
   spec,
   onChange,
   c,
+  /** Only for the model picker, which names the packs off the wider dict. */
+  t,
   price,
   previewDriver,
   onPreviewDriver,
@@ -1423,6 +1331,7 @@ function Vehicle({
   spec: BlueprintSpec
   onChange: (patch: Partial<BlueprintSpec>) => void
   c: WorkspaceDict['thingiverse']['composer']
+  t: WorkspaceDict['thingiverse']
   /** What ticking the box costs. See `Composer`. */
   price: number
   /** Whether the viewport is standing a body up in the first seat. */
@@ -1600,9 +1509,9 @@ function Vehicle({
           ))}
 
           {wheels.length < MAX_WHEELS && (
-            <AddPiece
+            <ModelPicker
               slug={slug}
-              c={c}
+              t={t}
               heading={c.addWheel}
               onAdd={(model) =>
                 onChange({ vehicle: { ...vehicle, wheels: [...wheels, freshWheel(model)] } })
@@ -2656,11 +2565,14 @@ function Fighting({
   spec,
   onChange,
   c,
+  /** Only for the model picker, which names the packs off the wider dict. */
+  t,
 }: {
   slug: string
   spec: BlueprintSpec
   onChange: (patch: Partial<BlueprintSpec>) => void
   c: WorkspaceDict['thingiverse']['composer']
+  t: WorkspaceDict['thingiverse']
 }) {
   const fight = spec.fight
   const set = (next: FightSpec | undefined) => onChange({ fight: next })
@@ -2853,9 +2765,9 @@ function Fighting({
                 is, so somebody who has learned the piece browser has learned
                 this too.
               */}
-              <AddPiece
+              <ModelPicker
                 slug={slug}
-                c={c}
+                t={t}
                 heading={fill(c.swapFor, { where: modelLabel(fight.weapon.shot.model) })}
                 onAdd={(model) =>
                   set({

@@ -78,7 +78,7 @@ export async function payIntoBank(
   supabase: Client,
   tenantId: string,
   payer: string,
-  movement: { amount: number; reason: 'needs' | 'room-entry' | 'channel'; what: string },
+  movement: { amount: number; reason: 'needs' | 'room-entry' | 'channel' | 'xoin-fee'; what: string },
 ): Promise<DepositResult> {
   if (!(await economyOn(supabase, tenantId))) return { ok: true }
 

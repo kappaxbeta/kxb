@@ -12,8 +12,8 @@ locally but is flaky with two people in the room". It is written against
 battle aggregate in `src/domain/battle/`.
 
 Capacity planning is not here — rooms, caps, overflow and the per-tenant budget
-live in events.md §6, and the deployment topology in
-scaling.md §2.
+live in [events.md §6](../product/event-spaces.md), and the deployment topology in
+[scaling.md §2](scaling.md).
 
 ---
 
@@ -520,7 +520,7 @@ the reboot that caused it. Full detail, including what a lost limit looks like
 from the outside, is in
 [operations/realtime-limits.md](../operations/realtime-limits.md). The
 `TenantNotFound` symptom when the row is missing entirely is in
-events.md.
+[events.md](../product/event-spaces.md).
 
 ---
 

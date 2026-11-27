@@ -549,6 +549,34 @@ export const FEATURES = {
    */
   economy: { label: 'The coin economy', fallback: false },
   /**
+   * The xoin market: the cartridge, and the space's own market behind it.
+   *
+   * `docs/product/xoin.md`. `false`, like every flag guarding new surface, and
+   * here the direction carries more than usual because of what the feature is
+   * shaped like. A market that appeared in a space because a resolver blipped
+   * would be a market somebody traded in, and the position they took would
+   * still be there when it blipped back.
+   *
+   * ---------------------------------------------------------------------------
+   * What this gates, and what the *mode* gates
+   * ---------------------------------------------------------------------------
+   * This is the whole feature: the cartridge on the shelf, the market behind
+   * it, the settings card. It is deliberately not the question of whether real
+   * coins are at stake - that is the market's `mode`, which a space sets and
+   * which defaults to `demo`. The two are separate on purpose:
+   *
+   *   - a space that switches this on gets a game, and nothing of anybody's is
+   *     at risk until somebody chooses a mode that says otherwise;
+   *   - a space in `asset` or `currency` needs `economy` on as well, because
+   *     those modes move coins and `economy` is the switch that says a space
+   *     takes coins seriously at all. `rulesOf` in `@kxb/xoin` is where that
+   *     dependency is written down, and `requireXoin` is where it is enforced.
+   *
+   * So this flag never by itself puts a coin at risk, which is what makes it
+   * safe to switch on for a space that wants to look.
+   */
+  xoin: { label: 'Xoin market', fallback: false },
+  /**
    * The XO Universe channel: Project Oasis, and the nav tab that opens it.
    *
    * `true`, which is the opposite direction to `agents`, `battle` and

@@ -28,6 +28,7 @@ export const boardProjection: Projection<BoardEvent> = {
           pinned: event.data.pinned,
           scene_id: event.data.sceneId ?? null,
           image_slug: event.data.imageSlug ?? null,
+          ink: event.data.ink ?? null,
           reactions: {},
           edited: false,
           deleted: false,
@@ -89,6 +90,8 @@ type BoardPostRow = {
   scene_id: string | null
   /** An upload slug, or null. Not a foreign key either, and for the same reason. */
   image_slug: string | null
+  /** A drawing, in the pen's own format. The whole thing, not a reference. */
+  ink: string | null
   reactions: Reactions
   edited: boolean
   deleted: boolean

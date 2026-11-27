@@ -48,15 +48,19 @@
     "xp:bench": "bun run scripts/xp-bench.ts",
     "xp:e2e": "playwright test",
     "xp:e2e:head": "--HEAD playwright test",
-    "test:core": "./tools/test-core.sh"
+    "test:core": "./tools/test-core.sh",
+    "fireworks": "bun run scripts/build-fireworks.ts",
+    "xp:recolour": "bun run scripts/xp-recolour.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@base-ui/react": "^1.6.0",
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@kxb/community": "workspace:*",
     "@kxb/dream-restaurant": "workspace:*",
     "@kxb/maumau": "workspace:*",
     "@kxb/peepz-world": "workspace:*",
+    "@kxb/xoin": "workspace:*",
     "@kxb/xp": "workspace:*",
     "@mediapipe/tasks-vision": "0.10.17",
     "@react-three/drei": "^10.7.7",

@@ -56,6 +56,32 @@ export const EARN_REASONS = [
   /** Played for, and worth `VOUCHER_COINS`. */
   'voucher',
   /**
+   * A xoin position sold back to the market.
+   *
+   * On `MINTS`, which looks alarming next to a list this document keeps
+   * deliberately short, so the reason it is safe is worth stating: the pool's
+   * coin balance is not a purse anywhere, it is a number in the market's own
+   * stream, and `packages/xoin`'s constant product guarantees arithmetically
+   * that it can never pay out more than was paid in. So `xoin-buy` burns and
+   * this mints, and over a market's whole life the second is provably no larger
+   * than the first.
+   *
+   * The alternative was to hold the pool's coins in the space's bank, minting
+   * nothing. It was rejected because an owner can spend the bank, and a bank
+   * spent down is a market that cannot honour the next sale - the backing for
+   * everybody's position quietly gone. See `docs/product/xoin.md`.
+   */
+  'xoin-sell',
+  /**
+   * A buy that took the coins and could not write the trade.
+   *
+   * The compensating half of the ordering in `docs/product/xoin.md` §5.2. Rare
+   * - it needs the market stream to stay contended through every retry - and
+   * on `MINTS` for the same reason `xoin-sell` is: the coins are going back
+   * where they came from, and the burn that took them is already in the log.
+   */
+  'xoin-refund',
+  /**
    * Put there by an operator.
    *
    * The correction path, and the only movement in this economy with no game
@@ -115,6 +141,28 @@ export const SPEND_REASONS = [
   'bank-grant-out',
   /** Bought inside the homestead - furniture, ground, a summoned thing. */
   'homestead',
+  /**
+   * Coins put into the xoin market to buy a position.
+   *
+   * Burns, and its counterpart is `xoin-sell`. See the note there for why a
+   * mint/burn pair is the right shape for a pool rather than a transfer to some
+   * account, and why that does not make this a way to inflate a space.
+   *
+   * Note this is only the pool's share. The house's cut on the same trade is
+   * `xoin-fee`, which is a transfer to the space's bank and mints nothing.
+   */
+  'xoin-buy',
+  /**
+   * The house's cut on a xoin trade, one percent, into the space's bank.
+   *
+   * A separate reason from `xoin-buy` rather than folded into it, and the
+   * reason is the one `room-entry` gives for not being a flavour of `needs`:
+   * the two halves of a trade go to different places, and a single reason would
+   * put a line in a purse history that no reader could take apart afterwards.
+   * It is also the line that tells an operator whether a space's market is
+   * acting as the drain economy.md §6.1 wants.
+   */
+  'xoin-fee',
 ] as const
 
 export type EarnReason = (typeof EARN_REASONS)[number]
@@ -142,6 +190,8 @@ export const MINTS = [
   'accepted',
   'voucher',
   'operator',
+  'xoin-sell',
+  'xoin-refund',
 ] as const satisfies readonly EarnReason[]
 
 /** The reasons that destroy coins outright, rather than paying somebody. */
@@ -150,6 +200,7 @@ export const BURNS = [
   'revive',
   'quota',
   'submission',
+  'xoin-buy',
 ] as const satisfies readonly SpendReason[]
 
 const MINT_SET: ReadonlySet<string> = new Set(MINTS)
@@ -196,4 +247,8 @@ export const REASON_LABELS: Record<EarnReason | SpendReason, string> = {
   voucher: 'a voucher',
   operator: 'put right by us',
   homestead: 'spent at home',
+  'xoin-buy': 'bought xoin',
+  'xoin-sell': 'sold xoin',
+  'xoin-fee': 'the market\'s cut',
+  'xoin-refund': 'a xoin trade that did not go through',
 }

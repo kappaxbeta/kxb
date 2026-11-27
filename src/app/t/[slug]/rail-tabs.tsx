@@ -22,6 +22,7 @@ import { doorActions, useDoor } from '@/app/world/_stores/door-store'
 import { useThingiverse } from '@/app/world/_stores/thing-store'
 import { FrontDoorControls } from '@/app/world/_canvas/room-door'
 import { useParty } from '@/app/world/_stores/party-store'
+import { GlitchSwitch } from '@/app/t/[slug]/glitch-switch'
 import { StaminaSwitch } from '@/app/t/[slug]/stamina-switch'
 import { useRainbowSwitch } from '@/app/world/_stores/rainbow-store'
 import { useStuck } from '@/lib/stuck-store'
@@ -59,6 +60,7 @@ export function RailTabs({
   hasChat,
   hasThings,
   stamina,
+  glitch,
   hasPlay,
   hasRadio,
   rooms,
@@ -92,6 +94,8 @@ export function RailTabs({
   hasThings: boolean
   /** Whether this space charges for running. See `StaminaSwitch`. */
   stamina: boolean
+  /** Whether a bad connection is drawn as a glitch here. See `GlitchSwitch`. */
+  glitch: boolean
   /**
    * Can this space open an XP where it stands?
    *
@@ -477,6 +481,7 @@ export function RailTabs({
                 belong to a house they are nowhere near. */}
             <PartySwitch />
             <StaminaSwitch slug={slug} on={stamina} canSet={canManageRooms} />
+            <GlitchSwitch slug={slug} on={glitch} canSet={canManageRooms} />
             {/*
               And which animal you are, offered to guests as well as members.
 

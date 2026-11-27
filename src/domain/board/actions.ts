@@ -140,8 +140,9 @@ export async function publishPost(
   pinned = false,
   sceneId: string | null = null,
   imageSlug: string | null = null,
+  ink: string | null = null,
 ): Promise<ActionResult<{ id: string }>> {
-  const parsed = publishPostSchema.safeParse({ body, pinned, sceneId, imageSlug })
+  const parsed = publishPostSchema.safeParse({ body, pinned, sceneId, imageSlug, ink })
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid notice' }
   }
@@ -226,6 +227,13 @@ export async function publishPost(
       pinned: admin ? (parsed.data.pinned ?? false) : false,
       sceneId: attached,
       imageSlug: picture,
+      /*
+        Straight through, unlike the two above it. There is nothing to look up:
+        a note is not a reference to a row somebody might not be allowed to
+        read, it is the drawing, and the schema has already said it is short
+        enough to keep.
+      */
+      ink: parsed.data.ink ?? null,
     }),
     { guard: attached || picture ? 'member' : 'admin' },
   )

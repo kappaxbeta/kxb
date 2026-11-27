@@ -630,6 +630,7 @@ export type Database = {
           edited: boolean
           id: string
           image_slug: string | null
+          ink: string | null
           pinned: boolean
           reactions: Json
           scene_id: string | null
@@ -645,6 +646,7 @@ export type Database = {
           edited?: boolean
           id: string
           image_slug?: string | null
+          ink?: string | null
           pinned?: boolean
           reactions?: Json
           scene_id?: string | null
@@ -660,6 +662,7 @@ export type Database = {
           edited?: boolean
           id?: string
           image_slug?: string | null
+          ink?: string | null
           pinned?: boolean
           reactions?: Json
           scene_id?: string | null
@@ -864,6 +867,7 @@ export type Database = {
           major: number
           minor: number
           number: number
+          outline: string
           patch: number
           price: number
           season_id: string
@@ -880,6 +884,7 @@ export type Database = {
           major?: number
           minor?: number
           number: number
+          outline?: string
           patch?: number
           price?: number
           season_id: string
@@ -896,6 +901,7 @@ export type Database = {
           major?: number
           minor?: number
           number?: number
+          outline?: string
           patch?: number
           price?: number
           season_id?: string
@@ -3692,6 +3698,7 @@ export type Database = {
           price_cents: number
           tier: string
           updated_at: string
+          variant_of: string | null
           voucher_cost: number
         }
         Insert: {
@@ -3703,6 +3710,7 @@ export type Database = {
           price_cents?: number
           tier?: string
           updated_at?: string
+          variant_of?: string | null
           voucher_cost?: number
         }
         Update: {
@@ -3714,9 +3722,18 @@ export type Database = {
           price_cents?: number
           tier?: string
           updated_at?: string
+          variant_of?: string | null
           voucher_cost?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "skins_variant_of_fkey"
+            columns: ["variant_of"]
+            isOneToOne: false
+            referencedRelation: "skins"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       space_avatars: {
         Row: {
@@ -5035,6 +5052,96 @@ export type Database = {
             foreignKeyName: "world_spawns_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xoin_holdings: {
+        Row: {
+          returned: number
+          specks: number
+          spent: number
+          tenant_id: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          returned?: number
+          specks?: number
+          spent?: number
+          tenant_id: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Update: {
+          returned?: number
+          specks?: number
+          spent?: number
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xoin_holdings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xoin_holdings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants_read_model"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xoin_markets: {
+        Row: {
+          coins: number
+          mode: string
+          opened_at: string
+          specks: number
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          coins: number
+          mode?: string
+          opened_at: string
+          specks: number
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Update: {
+          coins?: number
+          mode?: string
+          opened_at?: string
+          specks?: number
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xoin_markets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "backoffice_workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xoin_markets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
             referencedRelation: "tenants_read_model"
             referencedColumns: ["id"]
           },

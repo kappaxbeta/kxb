@@ -269,6 +269,22 @@ export async function setStamina(slug: string, on: boolean): Promise<ActionResul
 }
 
 /**
+ * Whether a bad connection is drawn as a glitch, set from inside the room.
+ *
+ * `setStamina`'s twin, and not revalidating for exactly its reason: this is a
+ * switch in a rail beside a running world, and the world must not remount.
+ * The rail publishes the new value into `glitch-store` instead.
+ */
+export async function setGlitch(slug: string, on: boolean): Promise<ActionResult> {
+  return dispatch(slug, (actorId) => ({
+    type: 'SetSpaceCapability',
+    actorId,
+    capability: 'glitch',
+    enabled: on,
+  }))
+}
+
+/**
  * Invite somebody, by username or by email address.
  *
  * The interesting work is deciding *how* to record the addressee, and it is the

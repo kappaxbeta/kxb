@@ -1,11 +1,7 @@
 'use client'
 
-import { ChevronDown, type LucideIcon, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, CopyPlus, type LucideIcon, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { PACK_MODELS } from '@/domain/builder/catalogue.generated'
-import { isBuildable, labelOf } from '@/domain/builder/catalogue'
-import { PACKS } from '@/domain/builder/packs'
-import { isKnownModel, PALETTE_GROUPS } from '@/domain/lounge/palette'
 import { lookLabel, STUDIO_CAST_GROUPS } from '@/domain/studio/scene'
 import { emoteTileStyle } from '@/domain/world/emotes'
 
@@ -508,36 +504,31 @@ export function Pick({
 }
 
 /**
- * The block palette, in its own groups - fifty-eight names in one flat list is
- * unusable - followed by the packs a still may now also reach.
- *
- * ---------------------------------------------------------------------------
- * Why the whole catalogue is not in here
- * ---------------------------------------------------------------------------
- * `parseScene` will accept any of the 1,394 models the builder builds worlds
- * out of, and this select offers a handful of them. That is not an oversight
- * and the two should not be made to agree: what a document may *contain* is a
- * safety question, answered by the widest honest list, and what a dropdown may
- * *offer* is a usability one, answered by the shortest useful list. Fourteen
- * hundred `<option>` elements is a control nobody can find anything in, and the
- * scroll alone is a second of layout.
- *
- * So the packs listed here are the ones that make sense standing in a shot on
- * their own, and anything else in the catalogue is reachable by editing the
- * link - which is what the studio's document being a URL is for.
- */
-const PROP_PACKS: readonly string[] = ['cosmos']
-
-/**
  * Whether a model brings an animation with it.
  *
  * Asked of the *pack* rather than of the file, because the panel cannot fetch a
- * glTF to find out and must not stall a slider on a network round trip. Only
- * `cosmos` ships clips today, and this is the one honest place to say so - a
- * per-model list would go stale the first time a pack is replaced, and reading
- * the file would make an inspector async for a label.
+ * glTF to find out and must not stall a slider on a network round trip. It is
+ * the one honest place to say so - a per-model list would go stale the first
+ * time a pack is replaced, and reading the file would make an inspector async
+ * for a label.
+ *
+ * Three, and it is the whole list: of the 1,422 models in the catalogue, only
+ * `cosmos`, `fireworks` and `peeps` ship an animation - checked pack by pack
+ * rather than assumed, because the answer is not "the ones that look like they
+ * move" (a park swing carries nothing). Two of those we wrote: the galaxy
+ * turns, and a firework fizzes, climbs or opens depending on which of its four
+ * states you placed. `Block` poses whichever clip is called `spin` or `idle` at
+ * the block's own `time`, so the phase slider is the control that says how far
+ * into the fizz this one is.
+ *
+ * `peeps` is here because a peep may now be *placed* as a prop, which is a door
+ * the whole-catalogue picker opened. The cast list is still where you put one
+ * that is meant to be somebody - it has a clip picker and a pose panel, and
+ * this has a phase slider - but a peep standing in the background as scenery is
+ * a real thing to want, and it should not be the one prop whose idle is frozen
+ * at zero.
  */
-const CLIPPED_PACKS = new Set(['cosmos'])
+const CLIPPED_PACKS = new Set(['cosmos', 'fireworks', 'peeps'])
 
 export function hasClip(model: string): boolean {
   const cut = model.indexOf('/')
@@ -596,104 +587,10 @@ export function Tint({
 }
 
 /**
- * The same choice, typed.
- *
- * A `pack/name` out of the world catalogue, for the models `PickGroups` does
- * not list. Kept as its own local string while somebody is mid-word: writing
- * every keystroke straight through would send `c`, `co`, `cos` … to the
- * document, and since none of those is a model the scene would blank on the
- * first letter and come back on the last. So the box holds what was typed, the
- * document only hears about a name the catalogue actually has, and the border
- * says which of the two you are looking at.
- */
-export function ModelField({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (value: string) => void
-}) {
-  const [typed, setTyped] = useState(value)
-  // Re-seeded when the selection changes underneath, so clicking another prop
-  // shows that prop's id rather than the last thing typed into the old one.
-  const [seed, setSeed] = useState(value)
-  if (seed !== value) {
-    setSeed(value)
-    setTyped(value)
-  }
-
-  const known = isKnownModel(typed) || isBuildable(typed)
-
-  return (
-    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-      or type an id
-      <input
-        value={typed}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        placeholder="cosmos/galaxy"
-        onChange={(event) => {
-          const next = event.target.value.trim()
-          setTyped(next)
-          if (isKnownModel(next) || isBuildable(next)) {
-            setSeed(next)
-            onChange(next)
-          }
-        }}
-        className={`rounded-lg border bg-secondary px-2 py-1 font-mono text-sm text-foreground ${
-          known ? 'border-border' : 'border-destructive/60'
-        }`}
-      />
-    </label>
-  )
-}
-
-export function PickGroups({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-      {label}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="rounded-lg border border-border bg-secondary px-2 py-1 text-sm text-foreground"
-      >
-        {PALETTE_GROUPS.map((group) => (
-          <optgroup key={group.name} label={group.name}>
-            {group.models.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-        {PROP_PACKS.map((packId) => (
-          <optgroup key={packId} label={PACKS[packId].label}>
-            {(PACK_MODELS[packId] ?? []).map((name) => (
-              <option key={name} value={`${packId}/${name}`}>
-                {labelOf(name)}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-    </label>
-  )
-}
-
-/**
  * The whole cast - peeps and the rigged looks - in one grouped select.
  *
- * The same shape `PickGroups` gives the block palette, and for the same
- * reason: thirty-six bodies in one flat list is a select nobody can scan, and
+ * The same shape the block picker used to give the palette, and for the same
+ * reason: thirty-eight bodies in one flat list is a select nobody can scan, and
  * the packs are the grouping everybody already thinks in. The option label is
  * the body's name alone (`Knight`, not `adventurers/Knight`); the value stays
  * the qualified id the document stores.
@@ -754,6 +651,41 @@ export function Add({
     >
       <Icon className="size-3.5" aria-hidden />
       {label}
+    </button>
+  )
+}
+
+/**
+ * "One more of these", at the foot of a thing's own controls.
+ *
+ * Beside `Remove` rather than up beside `Add`, because the two verbs it sits
+ * between are the ones that need a subject: add makes a default body, and
+ * remove and duplicate both act on *this* one. Drawn in the panel's own ink
+ * instead of the accent - the button that matters in a section is the one that
+ * makes something new from nothing, and two fuchsia calls to action in the same
+ * column is a section with no emphasis at all.
+ *
+ * `disabled` is the same cap `Add` obeys: a studio holds twenty-four bodies,
+ * and a copy is a body.
+ */
+export function Duplicate({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="mt-1 flex items-center gap-1.5 self-start rounded-lg px-1.5 py-1 text-xs text-ink-muted transition hover:bg-surface-raised/70 hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted"
+    >
+      <CopyPlus className="size-3.5" aria-hidden />
+      {children}
     </button>
   )
 }

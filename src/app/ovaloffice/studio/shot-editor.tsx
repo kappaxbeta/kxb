@@ -25,7 +25,9 @@ import { downloadText } from '@/app/ovaloffice/studio/capture'
 import { canRecord, captureNote, FFMPEG_HINT, record } from '@/app/ovaloffice/studio/record'
 import { useClientCapability } from '@/lib/use-client-capability'
 import { captureAlpha, type AlphaFormat } from '@/app/ovaloffice/studio/frames'
+import { BACK_PARAM, backSlot } from '@/app/ovaloffice/studio/handoff'
 import { SavePanel } from '@/app/ovaloffice/studio/save-panel'
+import { SendBack } from '@/app/ovaloffice/studio/send-back'
 import type { ImportableWorld } from '@/app/ovaloffice/studio/world-picker'
 import { Backdrop } from '@/app/world/shots/pieces'
 import {
@@ -136,8 +138,18 @@ export function ShotEditor({
   scene,
   worlds = [],
   blueprints = [],
+  back,
 }: {
   initial: ShotSpec
+  /**
+   * The slot a page is waiting on, when this tab was opened by one.
+   *
+   * Straight off the address, so it survives a reload of the studio - somebody
+   * who spends an hour in here and refreshes once still has a way home. See
+   * `handoff.ts`, and `address` below for how it stays in the URL while the
+   * editor rewrites the document into it.
+   */
+  back?: string | null
   /** Worlds that can be pulled in as a set, same list the picture studio offers. */
   worlds?: ImportableWorld[]
   /**
@@ -169,6 +181,22 @@ export function ShotEditor({
   }
 }) {
   const [shot, setShot] = useState(initial)
+
+  /**
+   * The slot somebody is waiting on, and the address that keeps saying so.
+   *
+   * The editor rewrites its own query as the document changes - three places
+   * below - and every one of them used to write the whole query string. A
+   * studio opened to send a shot home would lose the way home on the first
+   * keystroke, and the person would find out about it an hour later when there
+   * was no button. So the address is built here, once, and the slot rides
+   * along with whatever the document is currently called.
+   */
+  const slot = backSlot(back)
+  const address = useCallback(
+    (query: string) => (slot ? `${query}&${BACK_PARAM}=${slot}` : query),
+    [slot],
+  )
 
   /**
    * What the address bar last identified this document by.
@@ -418,13 +446,13 @@ export function ShotEditor({
       if (keptRef.current !== null) return
 
       const next = encodeShot(shot)
-      window.history.replaceState(null, '', `?v=${next}`)
+      window.history.replaceState(null, '', address(`?v=${next}`))
       // The address has moved, so what a draft continues has moved with it.
       written.current = next
       park(DRAFT_KEY, next, shot)
     }, 300)
     return () => clearTimeout(timer)
-  }, [shot])
+  }, [shot, address])
 
   /**
    * A save landed, or somebody asked for a copy.
@@ -445,15 +473,15 @@ export function ShotEditor({
       // than the scene it was a copy of.
       const next = encodeShot(shotRef.current)
       written.current = next
-      window.history.replaceState(null, '', `?v=${next}`)
+      window.history.replaceState(null, '', address(`?v=${next}`))
     } else {
       written.current = keptAddress(id)
-      window.history.replaceState(null, '', `?scene=${id}`)
+      window.history.replaceState(null, '', address(`?scene=${id}`))
     }
 
     park(DRAFT_KEY, written.current, shotRef.current)
     setKept(id)
-  }, [])
+  }, [address])
 
   /**
    * The panel's copy of the playhead.
@@ -1257,6 +1285,11 @@ export function ShotEditor({
             aria-label="File name"
             className="col-span-2 rounded-lg border border-border bg-transparent px-3 py-2 text-sm sm:w-32"
           />
+          {/* First, and only when a page is waiting on it - see `SendBack`.
+              Everything else in this row makes a file; this one answers the
+              question the tab was opened to answer. */}
+          {slot ? <SendBack slot={slot} shot={shot} /> : null}
+
           <RecordButton
             onClick={shoot}
             ready={ready}

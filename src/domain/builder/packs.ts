@@ -129,6 +129,16 @@ const ROSARIO = {
     'https://sketchfab.com/3d-models/money-makes-the-world-go-round-095ba2f03768457b8cec0da88ce25196',
 } as const
 
+/**
+ * The pack that is entirely ours: no texture borrowed, nothing to credit.
+ *
+ * `cosmos` is CC-BY because half of it is somebody else's plate. The fireworks
+ * are flat colour and arithmetic all the way down - see
+ * `scripts/build-fireworks.ts` - so they are CC0 like the kits around them, and
+ * the author is the same `kxb` the xp shapes pack already signs itself with.
+ */
+const OURS = { author: 'kxb', licence: 'CC0', source: 'https://kxb.team' } as const
+
 export const PACKS: Record<string, Pack> = {
   bb10: { label: 'Blocks', path: '/xo/bb10/gltf', ext: '.gltf', scale: 0.5, lift: 0.5, ...KAY },
   peeps: {
@@ -180,6 +190,19 @@ export const PACKS: Record<string, Pack> = {
    * air. See `HOVER` in scripts/build-galaxy.ts.
    */
   cosmos: { label: 'Cosmos', path: '/xo/cosmos', ext: '.glb', scale: 1, lift: 0, ...ROSARIO },
+  /**
+   * Written like the galaxy, and standing on the ground unlike it.
+   *
+   * `scale: 1` because the models are authored in cells: a rocket is just over
+   * one cell tall and a third of one wide, which is a firework somebody could
+   * pick up rather than a prop the size of a person.
+   *
+   * `lift: 0` because they rest on y=0 already - the stick is the bottom of the
+   * geometry. The one model here that hangs in the air is `burst`, and it does
+   * it the way the galaxy does: in its own vertices, so a burst scaled to 4
+   * opens wider rather than six cells further up.
+   */
+  fireworks: { label: 'Fireworks', path: '/xo/fireworks', ext: '.glb', scale: 1, lift: 0, ...OURS },
 }
 
 /**
@@ -202,6 +225,7 @@ export const PACK_ORDER = [
   'bakerygoods',
   'restaurant',
   'cosmos',
+  'fireworks',
 ] as const
 
 /** Split `pack/name` into its two halves, or null if it is not one. */

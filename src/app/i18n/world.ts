@@ -76,6 +76,17 @@ export interface WorldDict {
     shove: string
     kick: string
     dance: string
+    /** The pen's key. Named for the verb, because the pen is a mode. */
+    draw: string
+    /**
+     * The hand's key, and its button.
+     *
+     * Named for the thing rather than the verb, unlike `draw` beside it,
+     * because the verb is the wrong word twice over: you are not "signing" in
+     * any language's sense, and half the point of the mode is that it says
+     * things without a word for what it is doing. See `world/_hand`.
+     */
+    sign: string
     view: string
     lookAtYourself: string
     seeTheRoom: string
@@ -101,6 +112,119 @@ export interface WorldDict {
     drive: string
     /** The sprint burst over the thumbstick. A name, because ⚡ says nothing aloud. */
     turbo: string
+  }
+
+  /**
+   * The companion the pen's "ai" calls, and the box you talk to him in.
+   * See `world/_buddy`.
+   */
+  buddy: {
+    /**
+     * What he says the moment he arrives. Every line here may carry `{name}`,
+     * replaced with whichever buddy is out - Telly or Kappa.
+     */
+    hello: string
+    placeholder: string
+    send: string
+    /** The ✕ that sends him home, said aloud. */
+    home: string
+    /** Folding the box down to a pill, and opening it again. */
+    fold: string
+    unfold: string
+    thinking: string
+    /** No model configured on this server. */
+    asleep: string
+    busy: string
+    fuzzy: string
+    signin: string
+    /** How to call him back, shown under the box. */
+    hint: string
+    /** The button that downloads the browser's own model. Say what it costs. */
+    fetch: string
+    /** While it downloads. `{pct}` is replaced with a number. */
+    fetching: string
+  }
+
+  /**
+   * The pen, and the book that explains it.
+   *
+   * Its own section rather than more `softKeys`, because only the first two
+   * are a button: the rest is a hint line and a small panel of worked
+   * examples. See `world/_ink`.
+   */
+  ink: {
+    /** The soft button, in the dance button's old spot. */
+    pen: string
+    /** The same button while the pen is out. */
+    away: string
+    /** The line along the top edge, which is also the way into the book. */
+    hint: string
+    /** The book's heading. */
+    title: string
+    close: string
+    /** Somebody else's word arriving here. `{name}` is who wrote it. */
+    from: string
+    /**
+     * A name and an instruction for every word the pen knows.
+     *
+     * Keyed by meaning rather than by spelling - `magic`, not `xo` - because
+     * the spelling is the recogniser's business and this is the sentence that
+     * says what happens. See `world/_ink/words.ts`.
+     */
+    spells: Record<
+      'magic' | 'shout' | 'dance' | 'rainbow' | 'beam' | 'companion',
+      { name: string; how: string }
+    >
+  }
+
+  /**
+   * Hand mode, and the chart that teaches it.
+   *
+   * Its own section beside the pen's, because it is the pen's twin: a second
+   * way to say the same five words and a first way to say fourteen more. See
+   * `world/_hand`.
+   *
+   * What is *not* here is the phrasebook itself. Those sentences are the
+   * message rather than the furniture, they are keyed by meaning, and they live
+   * in `world/_hand/phrases.ts` beside the hands that spell them - so a phrase
+   * cannot be added in one language and forgotten in another. See the note
+   * there, which is also the whole of how this mode translates.
+   */
+  hand: {
+    /** The soft button, and the same button while the hand is out. */
+    hand: string
+    away: string
+    /** The line along the edge, which is also the way into the chart. */
+    hint: string
+    /** The chart's heading, and its two lists. */
+    title: string
+    alphabet: string
+    phrasebook: string
+    close: string
+    /** Above the letters gathered so far. */
+    saying: string
+    /** What the open hand does. */
+    send: string
+    /** How to make a hand: five keys, or five pads. */
+    keys: string
+    pads: string
+    /**
+     * The third way to make one: your own hand, in front of a camera.
+     *
+     * A switch and the four things the preview can say - looking for a hand,
+     * and the three ways a camera does not come on. The fourth is deliberately
+     * vague, because the specific version of it is a developer's missing model
+     * file and says so in English. See `world/_hand/hand-camera.tsx`.
+     */
+    camera: string
+    looking: string
+    denied: string
+    noCamera: string
+    trouble: string
+    /** Somebody else's phrase arriving here. `{name}` is who signed it. */
+    from: string
+    /** The promise the mode makes, printed once in the chart. */
+    translated: string
   }
 
   /** The button that puts a headset on, and the two lines beside it. */
@@ -394,6 +518,12 @@ export interface WorldDict {
     tapUse: string
     tapLeave: string
     tapPickUp: string
+    /**
+     * The G prompt at something you can carry - a pistol, a bun - which goes
+     * into your pocket rather than being sat on. See `take` in `use-things`.
+     */
+    takeIt: string
+    tapTake: string
     /** Said for a few seconds after something is stood up. `{name}` is what. */
     placed: string
     /** The `/clip` menu: what this body can do, and what the chair adds to it. */
@@ -427,6 +557,8 @@ export interface WorldDict {
     nothingCalledThat: string
     /** There is nowhere near you to stand it - see `spotFor`. */
     noRoom: string
+    /** Eight things already, and G at a ninth. See `POCKET_SIZE`. */
+    pocketFull: string
     readOnly: string
     refused: string
     /** The E prompt when the thing in front of you drives. */
@@ -553,6 +685,8 @@ export const WORLD_EN: WorldDict = {
     shove: 'Shove',
     kick: 'Kick',
     dance: 'Dance',
+    draw: 'Pen on / off',
+    sign: 'Hand on / off',
     view: 'View',
     lookAtYourself: 'Look at yourself',
     seeTheRoom: 'See the whole room',
@@ -574,6 +708,68 @@ export const WORLD_EN: WorldDict = {
     getUp: 'Get up',
     drive: 'Drive',
     turbo: 'Turbo',
+  },
+
+  buddy: {
+    hello: 'Hi! I am {name}. Type to me down there!',
+    placeholder: 'Say something to {name}…',
+    send: 'Send',
+    home: 'Send {name} home',
+    fold: 'Fold the chat with {name}',
+    unfold: 'Open the chat with {name}',
+    thinking: '{name} is thinking…',
+    asleep: '{name} is fast asleep - this browser has no AI of its own, and the server has none plugged in yet.',
+    busy: '{name} needs a breather. Try again in a minute.',
+    fuzzy: 'Static on the screen - that one did not get through. Try again?',
+    signin: 'Sign in to talk to {name}.',
+    hint: 'Write "ai" with the pen, or /buddy in the chat, to send him home. /buddy kappa calls the red one.',
+    fetch: 'Give {name} a brain in this browser - a one-time download of a few GB that stays on your computer.',
+    fetching: '{name} is getting his brain… {pct}%',
+  },
+
+  ink: {
+    pen: 'Pen',
+    away: 'Done',
+    hint: '✎ write a word — tap for the spellbook',
+    title: 'Xoinggan',
+    close: 'Close',
+    from: '{name} wrote that',
+    spells: {
+      magic: { name: 'XO', how: 'A cross, then a ring. The room lights up.' },
+      shout: {
+        name: 'XOX',
+        how: 'Cross, ring, cross. Everybody here sees it, and whose it was.',
+      },
+      dance: { name: 'd, b or p', how: 'A bowl with a stem beside it. You dance.' },
+      rainbow: { name: 'OO', how: 'Two rings. A rainbow arcs over the room.' },
+      beam: { name: 'OI', how: 'A ring, then a stroke clear of it. Fires a beam. Battles only.' },
+      companion: {
+        name: 'AI',
+        how: 'An a, then an i. Telly comes to your side - write it again to send him home.',
+      },
+    },
+  },
+
+  hand: {
+    hand: 'Hand',
+    away: 'Done',
+    hint: '✋ hand mode — tap for the chart',
+    title: 'The hand alphabet',
+    alphabet: 'Letters',
+    phrasebook: 'Things to say',
+    close: 'Close',
+    saying: 'saying',
+    send: 'Open your hand to send it.',
+    keys: 'space j k l ;',
+    pads: 'hold one pad per finger',
+    camera: 'Camera',
+    looking: 'Hold your hand up to the camera.',
+    denied: 'The browser refused the camera. Allow it for this site and switch it on again.',
+    noCamera: 'No camera here, or something else is holding it.',
+    trouble: 'The hand model would not start.',
+    from: '{name} signed',
+    translated:
+      'Phrases from the book arrive in whatever language the reader has picked. Yours are in English.',
   },
 
   lounge: {
@@ -671,10 +867,12 @@ export const WORLD_EN: WorldDict = {
     floats: 'Stays up',
     useIt: 'G — use',
     leaveIt: 'G — get up',
-    pickUp: 'G — pick up',
+    pickUp: 'E — pick up',
     tapUse: 'Tap to use',
     tapLeave: 'Tap to get up',
     tapPickUp: 'Tap to pick up',
+    takeIt: 'G — take',
+    tapTake: 'Tap to take',
     placed: '{name} — E to move it',
     clips: 'What you can do',
     inThis: 'In this',
@@ -689,6 +887,7 @@ export const WORLD_EN: WorldDict = {
     working: 'Working…',
     nothingCalledThat: 'Nothing on the shelf or in the packs is called that',
     noRoom: 'No room here for that',
+    pocketFull: 'Your pockets are full',
     readOnly: 'You cannot summon anything here',
     refused: 'That change was refused',
     driveIt: 'G — drive',
@@ -995,6 +1194,8 @@ export const WORLD_DE: WorldDict = {
     shove: 'Stoßen',
     kick: 'Treten',
     dance: 'Tanzen',
+    draw: 'Stift an / aus',
+    sign: 'Hand an / aus',
     view: 'Ansicht',
     lookAtYourself: 'Sich selbst ansehen',
     seeTheRoom: 'Den ganzen Raum sehen',
@@ -1016,6 +1217,73 @@ export const WORLD_DE: WorldDict = {
     getUp: 'Aufstehen',
     drive: 'Fahren',
     turbo: 'Turbo',
+  },
+
+  buddy: {
+    hello: 'Hi! Ich bin {name}. Schreib mir da unten!',
+    placeholder: 'Sag {name} etwas…',
+    send: 'Senden',
+    home: '{name} heimschicken',
+    fold: 'Chat mit {name} einklappen',
+    unfold: 'Chat mit {name} öffnen',
+    thinking: '{name} denkt nach…',
+    asleep: '{name} schläft tief - dieser Browser hat keine eigene KI, und auf dem Server ist noch keine eingesteckt.',
+    busy: '{name} braucht eine Pause. Versuch es in einer Minute nochmal.',
+    fuzzy: 'Rauschen auf dem Bildschirm - das kam nicht an. Nochmal?',
+    signin: 'Melde dich an, um mit {name} zu reden.',
+    hint: 'Schreib nochmal „ai“ mit dem Stift oder /buddy im Chat, um ihn heimzuschicken. /buddy kappa ruft den Roten.',
+    fetch: 'Gib {name} ein Gehirn in diesem Browser - einmaliger Download von ein paar GB, bleibt auf deinem Computer.',
+    fetching: '{name} holt sein Gehirn… {pct}%',
+  },
+
+  ink: {
+    pen: 'Stift',
+    away: 'Fertig',
+    hint: '✎ schreib ein Wort — tippen für das Zauberbuch',
+    title: 'Xoinggan',
+    close: 'Schließen',
+    from: '{name} hat das geschrieben',
+    spells: {
+      magic: { name: 'XO', how: 'Ein Kreuz, dann ein Kreis. Der Raum leuchtet auf.' },
+      shout: {
+        name: 'XOX',
+        how: 'Kreuz, Kreis, Kreuz. Alle hier sehen es — und von wem es kam.',
+      },
+      dance: { name: 'd, b oder p', how: 'Ein Bauch mit einem Strich daneben. Du tanzt.' },
+      rainbow: { name: 'OO', how: 'Zwei Kreise. Ein Regenbogen spannt sich über den Raum.' },
+      beam: {
+        name: 'OI',
+        how: 'Ein Kreis, dann ein Strich mit Abstand. Schießt einen Strahl. Nur im Kampf.',
+      },
+      companion: {
+        name: 'AI',
+        how: 'Ein a, dann ein i. Telly kommt an deine Seite - nochmal schreiben schickt ihn heim.',
+      },
+    },
+  },
+
+  hand: {
+    hand: 'Hand',
+    away: 'Fertig',
+    hint: '✋ Handmodus — tippen für die Tafel',
+    title: 'Das Handalphabet',
+    alphabet: 'Buchstaben',
+    phrasebook: 'Was du sagen kannst',
+    close: 'Schließen',
+    saying: 'sagt gerade',
+    send: 'Hand öffnen, dann geht es raus.',
+    /* Die Taste rechts vom L, und auf einer deutschen Tastatur ist das ö. */
+    keys: 'leertaste j k l ö',
+    pads: 'pro Finger ein Feld halten',
+    camera: 'Kamera',
+    looking: 'Halte deine Hand in die Kamera.',
+    denied:
+      'Der Browser hat die Kamera abgelehnt. Erlaube sie für diese Seite und schalte sie neu ein.',
+    noCamera: 'Keine Kamera da, oder etwas anderes benutzt sie gerade.',
+    trouble: 'Das Handmodell ist nicht gestartet.',
+    from: '{name} hat gezeigt',
+    translated:
+      'Sätze aus dem Buch kommen in der Sprache an, die der Lesende gewählt hat. Deine hier auf Deutsch.',
   },
 
   lounge: {
@@ -1115,10 +1383,12 @@ export const WORLD_DE: WorldDict = {
     floats: 'Bleibt oben',
     useIt: 'G — benutzen',
     leaveIt: 'G — aufstehen',
-    pickUp: 'G — aufheben',
+    pickUp: 'E — aufheben',
     tapUse: 'Zum Benutzen tippen',
     tapLeave: 'Zum Aufstehen tippen',
     tapPickUp: 'Zum Aufheben tippen',
+    takeIt: 'G — nehmen',
+    tapTake: 'Zum Nehmen tippen',
     placed: '{name} — E zum Bewegen',
     clips: 'Was du kannst',
     inThis: 'Hierin',
@@ -1133,6 +1403,7 @@ export const WORLD_DE: WorldDict = {
     working: 'Wird erledigt …',
     nothingCalledThat: 'So heißt nichts im Regal und nichts in den Paketen',
     noRoom: 'Hier ist kein Platz dafür',
+    pocketFull: 'Deine Taschen sind voll',
     readOnly: 'Hier kannst du nichts herbeirufen',
     refused: 'Diese Änderung wurde abgelehnt',
     driveIt: 'G — fahren',
@@ -1449,6 +1720,8 @@ export const WORLD_BG: WorldDict = {
     shove: 'Бутане',
     kick: 'Ритник',
     dance: 'Танц',
+    draw: 'Писалка вкл. / изкл.',
+    sign: 'Ръка вкл. / изкл.',
     view: 'Изглед',
     lookAtYourself: 'Погледнете себе си',
     seeTheRoom: 'Вижте цялата стая',
@@ -1470,6 +1743,71 @@ export const WORLD_BG: WorldDict = {
     getUp: 'Стани',
     drive: 'Карай',
     turbo: 'Турбо',
+  },
+
+  buddy: {
+    hello: 'Здрасти! Аз съм {name}. Пиши ми долу!',
+    placeholder: 'Кажи нещо на {name}…',
+    send: 'Изпрати',
+    home: 'Прати {name} у дома',
+    fold: 'Сгъни чата с {name}',
+    unfold: 'Отвори чата с {name}',
+    thinking: '{name} мисли…',
+    asleep: '{name} спи дълбоко - този браузър няма собствен AI, а на сървъра още няма включен.',
+    busy: '{name} има нужда от почивка. Опитай пак след минута.',
+    fuzzy: 'Шум на екрана - това не стигна. Пак?',
+    signin: 'Влез, за да говориш с {name}.',
+    hint: 'Напиши пак „ai“ с писалката или /buddy в чата, за да го пратиш у дома. /buddy kappa вика червения.',
+    fetch: 'Дай на {name} мозък в този браузър - еднократно изтегляне от няколко GB, остава на компютъра ти.',
+    fetching: '{name} си взима мозъка… {pct}%',
+  },
+
+  ink: {
+    pen: 'Писалка',
+    away: 'Готово',
+    hint: '✎ напиши дума — докосни за книгата',
+    title: 'Xoinggan',
+    close: 'Затвори',
+    from: '{name} написа това',
+    spells: {
+      magic: { name: 'XO', how: 'Кръст, после кръг. Стаята засиява.' },
+      shout: {
+        name: 'XOX',
+        how: 'Кръст, кръг, кръст. Всички тук го виждат — и чие е.',
+      },
+      dance: { name: 'd, b или p', how: 'Кръгче с чертичка до него. Танцуваш.' },
+      rainbow: { name: 'OO', how: 'Два кръга. Дъга се извива над стаята.' },
+      beam: {
+        name: 'OI',
+        how: 'Кръг, после чертичка встрани. Пуска лъч. Само в битка.',
+      },
+      companion: {
+        name: 'AI',
+        how: 'Едно a, после i. Телли идва до теб - напиши го пак, за да го пратиш у дома.',
+      },
+    },
+  },
+
+  hand: {
+    hand: 'Ръка',
+    away: 'Готово',
+    hint: '✋ режим ръка — докосни за таблицата',
+    title: 'Ръчната азбука',
+    alphabet: 'Букви',
+    phrasebook: 'Какво да кажеш',
+    close: 'Затвори',
+    saying: 'казва',
+    send: 'Отвори дланта, за да го изпратиш.',
+    keys: 'интервал j k l ;',
+    pads: 'задръж по едно поле за пръст',
+    camera: 'Камера',
+    looking: 'Вдигни ръката си пред камерата.',
+    denied: 'Браузърът отказа камерата. Разреши я за този сайт и я включи отново.',
+    noCamera: 'Няма камера тук или нещо друго я използва.',
+    trouble: 'Моделът за ръка не стартира.',
+    from: '{name} показа',
+    translated:
+      'Фразите от книгата пристигат на езика, който четящият е избрал. Твоите тук са на български.',
   },
 
   lounge: {
@@ -1568,10 +1906,12 @@ export const WORLD_BG: WorldDict = {
     floats: 'Стои горе',
     useIt: 'G — използвай',
     leaveIt: 'G — стани',
-    pickUp: 'G — вземи',
+    pickUp: 'E — вдигни',
     tapUse: 'Докоснете, за да използвате',
     tapLeave: 'Докоснете, за да станете',
-    tapPickUp: 'Докоснете, за да вземете',
+    tapPickUp: 'Докоснете, за да вдигнете',
+    takeIt: 'G — вземи',
+    tapTake: 'Докоснете, за да вземете',
     placed: '{name} — E, за да го местиш',
     clips: 'Какво можеш',
     inThis: 'В това',
@@ -1586,6 +1926,7 @@ export const WORLD_BG: WorldDict = {
     working: 'Изпълнява се…',
     nothingCalledThat: 'Нищо на рафта и в пакетите не се казва така',
     noRoom: 'Тук няма място за това',
+    pocketFull: 'Джобовете ти са пълни',
     readOnly: 'Тук не можеш да призоваваш нищо',
     refused: 'Тази промяна беше отказана',
     driveIt: 'G — карай',

@@ -18,7 +18,7 @@ export type BankCoins = {
   type: 'BankCoins'
   from: string
   amount: number
-  reason: 'needs' | 'room-entry' | 'bank-grant-out' | 'channel'
+  reason: 'needs' | 'room-entry' | 'bank-grant-out' | 'channel' | 'xoin-fee'
   what?: string
   transfer: string
 }

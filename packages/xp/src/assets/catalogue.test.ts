@@ -311,9 +311,14 @@ describe('tiles', () => {
     // swatch row is and what `prefer` can mean, for eleven shapes. Not worth
     // it yet; worth it the moment a third family lands.
     // The adventurers moved both numbers by their nine and the monsters by
-    // their two: no colourways, so no collapse, same as Kenney's kits.
-    expect(CATALOGUE.length).toBe(4462)
-    expect(tiles()).toHaveLength(4092)
+    // their two: no colourways, so no collapse, same as Kenney's kits. The mech
+    // moved them by four - two paint jobs and its two weapons - and it does not
+    // collapse either, for a reason worth knowing: `variantOf` groups the two
+    // mechs on the *shop's* card, and this tile machinery is the level editor's
+    // and knows only the platformer kit's five suffixes. Two lists, two
+    // questions; see the note above about widening `VariantColour`.
+    expect(CATALOGUE.length).toBe(4466)
+    expect(tiles()).toHaveLength(4096)
   })
 
   test('the grid is only the packs the document declares', () => {

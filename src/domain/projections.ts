@@ -19,6 +19,7 @@ import { streaksProjection } from '@/domain/streaks/projection'
 import { tasksProjection } from '@/domain/tasks/projection'
 import { thingiverseProjection } from '@/domain/thingiverse/projection'
 import { tournamentsProjection } from '@/domain/tournament/projection'
+import { xoinProjection } from '@/domain/xoin/projection'
 import { xpsProjection } from '@/domain/xps/projection'
 
 /**
@@ -74,5 +75,6 @@ export const ALL_PROJECTIONS: readonly Projection<DomainEvent>[] = [
   erase(tasksProjection),
   erase(thingiverseProjection),
   erase(tournamentsProjection),
+  erase(xoinProjection),
   erase(xpsProjection),
 ]

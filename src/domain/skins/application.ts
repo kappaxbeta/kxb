@@ -17,6 +17,39 @@ export interface SkinView {
   voucherCost: number
   backstory: string
   active: boolean
+  /**
+   * The skin this row is a *colour* of, or null for one sold in its own right.
+   *
+   * Set means it is never a card of its own: the shop draws it as a swatch on
+   * its parent's card, and whoever owns the parent may wear it. See the
+   * migration that added the column for why paint is not a second purchase.
+   */
+  variantOf: string | null
+}
+
+/**
+ * The colours of one skin: the skin itself first, then whatever is painted
+ * from it.
+ *
+ * Ordered rather than sorted, and the parent leads on purpose - it is the one
+ * on the shelf, the one the price belongs to and the one somebody bought, so a
+ * card that opened on a colour would be showing a thing nobody chose. Every
+ * caller wants the same list, which is why it is here and not three `filter`s
+ * in the shop.
+ */
+export function coloursOf(skin: SkinView, all: readonly SkinView[]): SkinView[] {
+  return [skin, ...all.filter((entry) => entry.variantOf === skin.id)]
+}
+
+/**
+ * Do you own this - counting a colour of it as the same purchase?
+ *
+ * The client-side twin of the `profile_skins` write policy, and it must keep
+ * saying the same thing: the policy is what actually adjudicates, this is only
+ * what stops the page offering a button the database will refuse.
+ */
+export function ownsSkin(skin: SkinView, owned: Record<string, string>): boolean {
+  return Boolean(owned[skin.id] ?? (skin.variantOf ? owned[skin.variantOf] : undefined))
 }
 
 /** A voucher in your pocket: claimed, unspent. */

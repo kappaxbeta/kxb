@@ -51,6 +51,8 @@ import { ridePosition, seatDelta } from '@/app/world/lounge/_sim/seats'
 import { useThingiverse } from '@/app/world/_stores/thing-store'
 import { useSceneRefs } from '@/app/world/lounge/_scene/scene-refs'
 import { AvatarPlaceholder } from '@/app/world/_canvas/rainbow'
+import { newGlitch, seedFrom } from '@/app/world/_canvas/body-shader'
+import { linkTrouble } from '@/app/world/_presence/link-health'
 import type { Goal, GoalTeam } from '@/domain/lounge/goal-events'
 import { ChatBubble } from '@/app/world/_canvas/chat-bubble'
 import { HealthBar, showHealth, useHealthBar } from '@/app/world/_canvas/health-bar'
@@ -100,6 +102,7 @@ import {
   asAvatarClip,
   type AvatarClip,
   DEFAULT_AVATAR,
+  type Gait,
   isKnownLook,
 } from '@/domain/lounge/avatars'
 import { type EmoteId, isEmote } from '@/domain/world/emotes'
@@ -664,6 +667,7 @@ export function Multiplayer({
   onPushed,
   party,
   partyHost,
+  glitch = false,
   perf,
   faces = false,
   items,
@@ -688,6 +692,11 @@ export function Multiplayer({
   /** Whether the lights are on, and whose switch it was. See ../party-glow. */
   party?: boolean
   partyHost?: string | null
+  /**
+   * Draw a peer on a bad connection as a glitch. The space's `glitch`
+   * capability; off draws everybody as if their link were fine.
+   */
+  glitch?: boolean
   dancing: boolean
   /**
    * A clip a thing is making this body play, or null while it is just walking
@@ -2301,6 +2310,7 @@ export function Multiplayer({
           tone={toneOf?.(peer.userId)}
           party={party}
           partyHost={partyHost === peer.userId}
+          glitch={glitch}
           items={items}
           poseFor={poseFor}
         />
@@ -3097,6 +3107,7 @@ function RemoteAvatar({
   tone,
   party,
   partyHost,
+  glitch = false,
   items,
   poseFor,
 }: {
@@ -3117,6 +3128,8 @@ function RemoteAvatar({
   party?: boolean
   /** This is whoever started it, so they cycle instead of sitting on one hue. */
   partyHost?: boolean
+  /** The room draws a bad link as a glitch. See `linkTrouble`. */
+  glitch?: boolean
   /**
    * The shelf, as "what does this word look like".
    *
@@ -3155,6 +3168,22 @@ function RemoteAvatar({
   // <SelfAvatar>.
   const partyColour = usePartyColour(peer.userId, partyHost)
   const [clip, setClip] = useState<AvatarClip>('idle')
+  /** Their feet while they dance on the move. See the same state in `SelfAvatar`. */
+  const [feet, setFeet] = useState<Gait | null>(null)
+
+  /**
+   * Their glitch, as the numbers the shader reads.
+   *
+   * One long-lived set of uniforms per body, written by the frame loop below
+   * and never replaced - the same discipline as `partyColour`, and in a ref
+   * like `peerMotion` because a frame loop may write into a ref and nothing
+   * else. `glitching` is the one fact mirrored into state: whether the shader
+   * is worn at all. It flips when a link goes bad and when it recovers, which
+   * is rare, and the strength in between is a number the material reads
+   * without a render.
+   */
+  const glitchRef = useRef(newGlitch(seedFrom(peer.userId)))
+  const [glitching, setGlitching] = useState(false)
 
   /**
    * A clip a thing is making them play, or null while they are walking about.
@@ -3274,7 +3303,7 @@ function RemoteAvatar({
       })(),
   )
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     const node = group.current
     const state = transforms.current?.get(peer.userId)
     if (!node || !state) return
@@ -3371,18 +3400,13 @@ function RemoteAvatar({
      * while seated - the one case where how fast the body moves says nothing
      * about what its legs are doing.
      */
-    const next: AvatarClip = down
-      ? 'idle'
-      : state.driving
-        ? 'idle'
-        : state.dancing
-          ? 'dance'
-          : speed > RUN_SPEED
-            ? 'run'
-            : speed > WALK_SPEED
-              ? 'walk'
-              : 'idle'
+    const stepping: Gait | null = speed > RUN_SPEED ? 'run' : speed > WALK_SPEED ? 'walk' : null
+    const next: AvatarClip =
+      down || state.driving ? 'idle' : state.dancing ? 'dance' : (stepping ?? 'idle')
     if (next !== clip) setClip(next)
+    // Dancing across the room: the legs keep the gait. See `BodyModel.feet`.
+    const nextFeet = next === 'dance' ? stepping : null
+    if (nextFeet !== feet) setFeet(nextFeet)
 
     /**
      * And whatever they are sitting in, which outranks the gait.
@@ -3411,6 +3435,24 @@ function RemoteAvatar({
     }
 
     showHealth(bar, state.health)
+
+    /**
+     * How badly their link is doing, drawn on their body.
+     *
+     * Read off the replay buffer, which already knows - see `linkTrouble` -
+     * and eased rather than taken raw, so a single late packet is a flicker of
+     * colour and a link that is really struggling is a body that tears. The
+     * rail's test button does not reach here: it glitches the person who
+     * pressed it, not the people they are looking at - see `<SelfAvatar>`.
+     */
+    const wanted = glitch ? linkTrouble(state.motion, performance.now()) : 0
+    const strength = glitchRef.current.strength
+    strength.value += (wanted - strength.value) * Math.min(1, delta * 4)
+    if (wanted === 0 && strength.value < 0.01) strength.value = 0
+    glitchRef.current.time.value = clock.elapsedTime
+
+    const worn = strength.value > 0
+    if (worn !== glitching) setGlitching(worn)
   })
 
   return (
@@ -3435,9 +3477,11 @@ function RemoteAvatar({
                 everybody else. See `asAvatarClip` and `BodyModel.pose`.
               */
               clip={(posed && asAvatarClip(posed)) || clip}
+              feet={feet ?? undefined}
               pose={posed ? (poseFor?.(posed) ?? null) : null}
               ignoreRay
               rim={party ? partyColour : null}
+              glitch={glitching ? glitchRef : null}
             />
           </Suspense>
         )}

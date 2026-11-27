@@ -34,7 +34,12 @@ import {
   countThings,
   listBlueprints,
 } from '@/domain/thingiverse/queries'
-import { type ModelHit, searchModels } from '@/domain/thingiverse/models'
+import {
+  MODEL_PACKS,
+  type ModelHit,
+  type ModelPack,
+  searchModels,
+} from '@/domain/thingiverse/models'
 import { sameItem } from '@/domain/thingiverse/craft'
 import { starterSet } from '@/domain/thingiverse/starters'
 import { nameForModel } from '@/domain/thingiverse/summon'
@@ -258,6 +263,65 @@ export async function findParts(slug: string, query: string, pack?: string): Pro
   if (!prepared.ok) return []
 
   return searchModels(query, pack).slice(0, 40)
+}
+
+/**
+ * The packs, for the picker's tree.
+ *
+ * The other half of finding a model, and the half a search box cannot give
+ * anybody: typing is only a way in if you already know a word to type. Somebody
+ * who has never seen this catalogue does not know it ships a pack of park
+ * benches, so "look" answers nothing and the picker is a dead end - which is
+ * how a bench gets built out of the four models whose names somebody guessed.
+ *
+ * Fifty-one rows with their sizes, which is the whole tree above the leaves.
+ * Small enough to hand over in one go, unlike the 5,770 models underneath it,
+ * and a copy rather than the constant itself because a server action's return
+ * value is serialised and a readonly array is not one.
+ *
+ * Gated exactly like `findParts`, and for the same reason: what it discloses is
+ * the shape of the catalogue a space pays for.
+ */
+export async function listModelPacks(slug: string): Promise<ModelPack[]> {
+  const prepared = await prepare(slug)
+  if (!prepared.ok) return []
+
+  return MODEL_PACKS.map((pack) => ({ ...pack }))
+}
+
+/**
+ * How many models one press of a branch draws.
+ *
+ * Sixty rather than forty: a pack is looked *through*, and the tile is small.
+ * Not exported, because every export of a `'use server'` module has to be an
+ * async function - the client asks for the next page by handing back where the
+ * last one ended, and never has to know the size.
+ */
+const PACK_PAGE = 60
+
+/**
+ * What is in one pack, a page at a time.
+ *
+ * `findParts` caps at forty and that is right for a search - past forty hits
+ * the answer is another word. It is wrong for a pack, because a pack is not a
+ * result set somebody is narrowing: it is a shelf, and "the first forty of the
+ * four hundred, and no way to see the rest" is a shelf with a wall in front of
+ * it.
+ *
+ * So this one pages. `from` is where the last page ended and `total` is what
+ * the branch says it holds, so the tree can both draw a count before you open
+ * it and tell you how much of it you are looking at.
+ */
+export async function openModelPack(
+  slug: string,
+  pack: string,
+  from = 0,
+): Promise<{ hits: ModelHit[]; total: number }> {
+  const prepared = await prepare(slug)
+  if (!prepared.ok) return { hits: [], total: 0 }
+
+  const all = searchModels('', pack)
+  return { hits: all.slice(from, from + PACK_PAGE), total: all.length }
 }
 
 /**

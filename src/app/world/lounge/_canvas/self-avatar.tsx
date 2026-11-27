@@ -12,10 +12,12 @@ import { EmoteBubble } from '@/app/world/_canvas/emote-bubble'
 import type { PlateTone } from '@/app/world/_canvas/nameplate'
 import { PartyGlow, usePartyColour } from '@/app/world/_canvas/party-glow'
 import { AvatarPlaceholder } from '@/app/world/_canvas/rainbow'
+import { newGlitch } from '@/app/world/_canvas/body-shader'
+import { glitchPreviewing } from '@/app/world/_stores/glitch-store'
 import { TeamRing } from '@/app/world/_canvas/team-ring'
 import { FaceCircle } from '@/app/world/_canvas/face-circle'
 import { useLocalFace } from '@/app/world/_stores/face-store'
-import type { AvatarClip } from '@/domain/lounge/avatars'
+import type { AvatarClip, Gait } from '@/domain/lounge/avatars'
 import { HeldThing } from '@/app/world/lounge/_canvas/held-thing'
 import type { HoldSpec } from '@/domain/thingiverse/hold'
 
@@ -112,6 +114,25 @@ export function SelfAvatar({
   const group = useRef<THREE.Group>(null)
   const previous = useRef(new THREE.Vector3())
   const [clip, setClip] = useState<AvatarClip>('idle')
+  /**
+   * What the feet do while dancing on the move. Null on the spot, and null
+   * whenever the clip is not the dance - see `BodyModel.feet`.
+   */
+  const [feet, setFeet] = useState<Gait | null>(null)
+
+  /**
+   * Our own glitch, which only the test button ever switches on.
+   *
+   * Nothing measures our own link from here - the buffers measure the people
+   * we hear, and we do not hear ourselves - so this is not a reading of
+   * anything. It is the rail's test button, putting the effect on *you* and
+   * nobody else, so the person pressing it sees it in the mirror without the
+   * room's peers being made to look broken. Same shape as a peer's: uniforms
+   * in a ref, written per frame, and one state flag for whether the shader is
+   * worn at all.
+   */
+  const glitchRef = useRef(newGlitch(0.5))
+  const [glitching, setGlitching] = useState(false)
 
   // Held whether or not there is a party on: it is one Color and a sine, and a
   // hook cannot be called conditionally. What `party` decides is who reads it.
@@ -120,7 +141,7 @@ export function SelfAvatar({
   /** Our own picture, when the switch in the HUD is on. See `face-store`. */
   const selfFace = useLocalFace()
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     const node = group.current
     if (!node) return
 
@@ -131,22 +152,29 @@ export function SelfAvatar({
     const speed = player.distanceTo(previous.current) / Math.max(delta, 0.0001)
     previous.current.copy(player)
 
-    const next: AvatarClip = posing
-      ? posing
-      : dancing
-        ? 'dance'
-        : speed > RUN_SPEED
-          ? 'run'
-          : speed > WALK_SPEED
-            ? 'walk'
-            : 'idle'
+    const stepping: Gait | null = speed > RUN_SPEED ? 'run' : speed > WALK_SPEED ? 'walk' : null
+    const next: AvatarClip = posing ? posing : dancing ? 'dance' : (stepping ?? 'idle')
     if (next !== clip) setClip(next)
+    // The legs keep stepping under a dance; nothing else wants the second word.
+    const nextFeet = next === 'dance' ? stepping : null
+    if (nextFeet !== feet) setFeet(nextFeet)
 
     // The lunge clock, ticked here for the same reason the gait is: a kick
     // thrown in first person should be over by the time you turn around, not
     // waiting to play the moment a body appears. Clamped at the end so it
     // cannot count up forever.
     kickLungeRef.current = Math.min(kickLungeRef.current + delta, KICK_LUNGE_DURATION)
+
+    // The test button's moment, eased in and out like a peer's. Ticked before
+    // the visibility gate so a preview that ends in first person is over by
+    // the time the body is looked at again.
+    const wanted = glitchPreviewing() ? 1 : 0
+    const strength = glitchRef.current.strength
+    strength.value += (wanted - strength.value) * Math.min(1, delta * 4)
+    if (wanted === 0 && strength.value < 0.01) strength.value = 0
+    glitchRef.current.time.value = clock.elapsedTime
+    const worn = strength.value > 0
+    if (worn !== glitching) setGlitching(worn)
 
     if (!visible) return
 
@@ -200,9 +228,11 @@ export function SelfAvatar({
         <BodyModel
           look={model}
           clip={clip}
+          feet={feet ?? undefined}
           pose={pose}
           ignoreRay
           rim={party ? partyColour : null}
+          glitch={glitching ? glitchRef : null}
         />
       </Suspense>
 

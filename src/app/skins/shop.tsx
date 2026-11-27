@@ -15,7 +15,13 @@ import {
 } from '@/domain/skins/actions'
 import { startBucksCheckout } from '@/domain/skins/buck-actions'
 import { claimSkinGift, giftSkin } from '@/domain/skins/gifts'
-import { skinThumbUrl, type ShopView, type SkinView } from '@/domain/skins/application'
+import {
+  coloursOf,
+  ownsSkin,
+  skinThumbUrl,
+  type ShopView,
+  type SkinView,
+} from '@/domain/skins/application'
 import type { BuckBundle } from '@/domain/skins/bucks'
 import { ErrorNote } from '@/app/components/error-note'
 
@@ -78,12 +84,35 @@ export function Shop({
    * the answer you already gave rather than on whatever sorts first.
    */
   const [selectedId, setSelectedId] = useState<string | null>(
-    view.chosen ?? view.skins[0]?.id ?? null,
+    // May be a colour id: `chosen` is what you are wearing, and the panel opens
+    // on it rather than on the colour its card happens to lead with.
+    view.chosen ?? view.skins.find((entry) => entry.variantOf === null)?.id ?? null,
   )
   const [, startTransition] = useTransition()
 
   const wallet = view.vouchers.length
-  const skin = view.skins.find((entry) => entry.id === selectedId) ?? view.skins[0] ?? null
+
+  /**
+   * What is on the shelf, and what is on the podium.
+   *
+   * They stopped being the same thing when a skin gained colourways. A colour
+   * is not a product - it has no price and no card - so the strip lists the
+   * skins that *are* sold, and the colour lives inside the selected one's
+   * panel. Two derivations rather than two pieces of state:
+   *
+   *   - `colour` is whatever `selectedId` names, and that may be a colour,
+   *     because the page opens on what you are wearing;
+   *   - `skin` is the thing sold - the colour's parent, or the colour itself
+   *     when it has none - and it is what the price, the backstory, the
+   *     purchase and the gift all belong to.
+   *
+   * Storing the pair instead would let them disagree, and the disagreement -
+   * a card for one skin with another one's colour on the podium - is not a
+   * state anything downstream could make sense of.
+   */
+  const shelf = view.skins.filter((entry) => entry.variantOf === null)
+  const colour = view.skins.find((entry) => entry.id === selectedId) ?? shelf[0] ?? null
+  const skin = (colour?.variantOf ? view.skins.find((e) => e.id === colour.variantOf) : colour) ?? colour
 
   function run(
     key: string,
@@ -199,7 +228,7 @@ export function Shop({
         </p>
       )}
 
-      {skin && (
+      {skin && colour && (
         <div className="grid gap-5 lg:grid-cols-[1fr_minmax(20rem,26rem)]">
           {/* The stage. First on a phone, because it is the thing you came to
               look at; second on desktop, where the argument reads left. */}
@@ -223,7 +252,7 @@ export function Shop({
                       {/* Keyed on the model: a mixer caches its bindings under
                           the root it was handed, so a re-dressed body would
                           stand stone still. */}
-                      <XpBody key={skin.id} model={skin.id} />
+                      <XpBody key={colour.id} model={colour.id} />
                     </Spinnable>
                   </group>
                 </Suspense>
@@ -236,8 +265,11 @@ export function Shop({
 
           <Detail
             skin={skin}
-            owned={Boolean(view.owned[skin.id])}
-            worn={view.chosen === skin.id}
+            colour={colour}
+            colours={coloursOf(skin, view.skins)}
+            onColour={setSelectedId}
+            owned={ownsSkin(skin, view.owned)}
+            worn={view.chosen === colour.id}
             wallet={wallet}
             open={view.open}
             signedIn={view.signedIn}
@@ -257,16 +289,24 @@ export function Shop({
                 isFree(skin) ? claimFreeSkin(skin.id) : spendVouchersOnSkin(skin.id),
               )
             }
-            onWear={() => run(`wear:${skin.id}`, () => chooseSkin(skin.id))}
+            /* Buying and gifting are the parent's; wearing is the colour's. */
+            onWear={() => run(`wear:${skin.id}`, () => chooseSkin(colour.id))}
             onRemove={() => run(`wear:${skin.id}`, () => chooseSkin(null))}
           />
         </div>
       )}
 
       <Shelf
-        skins={view.skins}
+        skins={shelf}
         owned={view.owned}
-        chosen={view.chosen}
+        /* A colour worn is its card worn: the strip has no row for the colour
+           itself, so passing `view.chosen` through unresolved would take the
+           tick off the mech the moment somebody repainted it. */
+        chosen={
+          view.chosen
+            ? (view.skins.find((entry) => entry.id === view.chosen)?.variantOf ?? view.chosen)
+            : null
+        }
         selectedId={skin?.id ?? null}
         onSelect={(id) => {
           setSelectedId(id)
@@ -371,11 +411,75 @@ function Shelf({
 }
 
 /**
+ * Which paint, for a skin that comes in more than one.
+ *
+ * Thumbnails rather than dots, and the reason is that a dot would have to be a
+ * colour somebody typed into the database. The pipeline already renders every
+ * catalogue model to a 192px WebP - the same picture the shelf strip uses - so
+ * a swatch that *is* the body cannot go stale, cannot be a lie about what you
+ * are about to wear, and costs no new column. Two mechs at 40px are told apart
+ * by exactly the thing being chosen.
+ *
+ * It changes what is on the podium and nothing else. Picking a colour is not a
+ * purchase and not an equip: the price beside it belongs to the skin either
+ * way, and `Wear it` is still one button away. That is why this is a radio
+ * group and not a form - browsing a colour commits to nothing, the same rule
+ * the shelf strip follows.
+ */
+function Colours({
+  colours,
+  chosen,
+  onChoose,
+}: {
+  colours: SkinView[]
+  chosen: string
+  onChoose: (id: string) => void
+}) {
+  return (
+    <div className="mt-4">
+      <p className="text-[0.62rem] uppercase tracking-[0.14em] text-ink-muted">Colour</p>
+      <div role="radiogroup" aria-label="Colour" className="mt-1.5 flex gap-2">
+        {colours.map((entry) => {
+          const isChosen = entry.id === chosen
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              role="radio"
+              aria-checked={isChosen}
+              aria-label={entry.name}
+              title={entry.name}
+              onClick={() => onChoose(entry.id)}
+              className={`rounded-xl border p-1 transition ${
+                isChosen
+                  ? 'border-accent bg-accent/10'
+                  : 'border-line bg-surface-raised/50 hover:border-accent/60'
+              }`}
+            >
+              <Image
+                src={skinThumbUrl(entry.id)}
+                alt=""
+                width={192}
+                height={192}
+                className="h-10 w-10 object-contain"
+              />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
  * The argument for the one on the podium: what it is called, what it costs,
  * who it is, and the one thing to do about it.
  */
 function Detail({
   skin,
+  colour,
+  colours,
+  onColour,
   owned,
   worn,
   wallet,
@@ -391,6 +495,11 @@ function Detail({
   onRemove,
 }: {
   skin: SkinView
+  /** The one on the podium: `skin` itself, or one of its colours. */
+  colour: SkinView
+  /** `skin` first, then its colours. One member when it comes in one colour. */
+  colours: SkinView[]
+  onColour: (id: string) => void
   owned: boolean
   worn: boolean
   wallet: number
@@ -440,6 +549,10 @@ function Detail({
       <p className={`mt-1 text-sm ${free ? 'text-accent-2' : 'text-ink-muted'}`}>
         {cost}
       </p>
+
+      {colours.length > 1 && (
+        <Colours colours={colours} chosen={colour.id} onChoose={onColour} />
+      )}
 
       <p className="mt-4 text-sm leading-relaxed text-ink-muted">{skin.backstory}</p>
 

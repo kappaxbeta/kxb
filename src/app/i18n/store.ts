@@ -34,6 +34,21 @@ export interface StoreDict {
   xpBody: string
   misc: string
   miscBody: string
+  /**
+   * The pen, on the shop front.
+   *
+   * Its own little section because it is the one thing on this page you can
+   * *use* without an account, a space or a download - see the pad on
+   * /browse. Six short strings: two for the section, four inside the card.
+   */
+  xoinggan: {
+    title: string
+    body: string
+    free: string
+    chase: string
+    idle: string
+    written: string
+  }
   nothingPublished: string
   /** `{n}` worlds in the whole catalogue, when the page is showing fewer. */
   worldsInCatalogue: string
@@ -110,6 +125,14 @@ export const STORE_EN: StoreDict = {
 
   xp: 'XP',
   xpBody: 'A game, not a level. Things break, something is counted, and it ends.',
+  xoinggan: {
+    title: 'Xoinggan',
+    body: 'The pen our rooms are drawn on. Write a word in the box — a cross and a ring for the magic, a bowl with a stem to dance. Chase asks for one and counts them.',
+    free: 'Free',
+    chase: 'Chase',
+    idle: 'write anything',
+    written: 'written',
+  },
   misc: 'Misc',
   miscBody: 'Places rather than games: arenas, pitches, hangouts, built block by block.',
   nothingPublished:
@@ -172,6 +195,14 @@ export const STORE_DE: StoreDict = {
 
   xp: 'XP',
   xpBody: 'Ein Spiel, kein Level. Dinge gehen kaputt, etwas wird gezählt, und es endet.',
+  xoinggan: {
+    title: 'Xoinggan',
+    body: 'Der Stift, mit dem in unseren Räumen gemalt wird. Schreib ein Wort in das Feld — ein Kreuz und ein Kreis für die Magie, ein Bauch mit Strich zum Tanzen. „Chase“ fragt eins ab und zählt mit.',
+    free: 'Frei',
+    chase: 'Chase',
+    idle: 'schreib irgendwas',
+    written: 'geschrieben',
+  },
   misc: 'Sonstiges',
   miscBody: 'Orte statt Spiele: Arenen, Plätze, Treffpunkte, Block für Block gebaut.',
   nothingPublished:
@@ -235,6 +266,14 @@ export const STORE_BG: StoreDict = {
 
   xp: 'XP',
   xpBody: 'Игра, не ниво. Неща се чупят, нещо се брои, и накрая свършва.',
+  xoinggan: {
+    title: 'Xoinggan',
+    body: 'Писалката, с която се рисува в стаите ни. Напиши дума в полето — кръст и кръг за магия, кръгче с чертичка за танц. „Chase“ иска по една и брои.',
+    free: 'Свободно',
+    chase: 'Chase',
+    idle: 'напиши каквото искаш',
+    written: 'написани',
+  },
   misc: 'Разни',
   miscBody: 'Места, а не игри: арени, игрища, сборни точки, построени блок по блок.',
   nothingPublished:

@@ -1,5 +1,7 @@
 import { requireBackofficeSection } from '@/lib/backoffice'
 import { probeDependencies, rollup } from '@/domain/health/probe'
+import { EventBoxes } from '@/app/ovaloffice/health/event-boxes'
+import { readEventBoxes } from '@/domain/events/boxes'
 import { buildDrift, peerUrls, readReplicas } from '@/domain/health/replicas'
 import {
   readDbStats,
@@ -97,6 +99,7 @@ export default async function HealthPage({
     hostSeries,
     realtimeLimits,
     sweeps,
+    eventBoxes,
   ] = await Promise.all([
     readReplicas(),
     probeDependencies(),
@@ -115,6 +118,18 @@ export default async function HealthPage({
      * so the shapes on this page can be read against each other.
      */
     readSweepHistory(admin, window),
+    /**
+     * Whatever event boxes exist right now.
+     *
+     * Caught rather than allowed to throw, unlike its neighbours: an expired
+     * Hetzner token must not be what takes the health page down, because the
+     * health page is where somebody looks *during* an outage. The section
+     * renders the failure instead.
+     */
+    readEventBoxes().catch((error: unknown) => {
+      console.error('event boxes', error)
+      return null
+    }),
   ])
 
   const hosts = latestPerHost(hostSeries)
@@ -324,6 +339,24 @@ export default async function HealthPage({
           })}
         </div>
       </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Event boxes                                                        */}
+      {/* ------------------------------------------------------------------ */}
+      {/*
+        Whole second deployments, on machines that did not exist last week.
+
+        Nothing else on this page can see them: they have their own Postgres,
+        their own Realtime and their own Caddy, and they fail completely
+        independently of everything above. A hackathon whose box filled its disk
+        on Saturday afternoon is invisible here without this section, and the
+        people it is happening to are not the people who read this page.
+
+        It is also where a forgotten box shows up. One nobody destroyed bills
+        quietly by the hour until somebody opens the Hetzner console, and nobody
+        opens the Hetzner console.
+      */}
+      <EventBoxes boxes={eventBoxes} />
 
       {/* ------------------------------------------------------------------ */}
       {/* Machines                                                           */}

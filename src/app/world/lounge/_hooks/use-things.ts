@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { attempt } from '@/app/components/connection'
 import type { WorldDict } from '@/app/i18n/world'
 import { chooseLoans, useKeepDefault } from '@/app/world/_stores/loan-store'
+import { useTake } from '@/app/world/lounge/_hooks/use-take'
 import { useThingWire } from '@/app/world/lounge/_hooks/use-thing-wire'
 import {
   clearThingiverse,
@@ -59,13 +60,14 @@ import type { ThingTuning } from '@/domain/thingiverse/thing-events'
  * disagreeing with the log.
  *
  * ---------------------------------------------------------------------------
- * What is deliberately missing: other people
+ * Other people
  * ---------------------------------------------------------------------------
- * Nothing here is broadcast. A thing summoned in a room appears for everybody
- * else on their next load, exactly as an image hung on a wall does and for the
- * same reason - the channel in this scene carries positions sixty times a
- * second, and furniture is not that kind of fact. If it turns out to want live
- * updates, the seam is the same one the blocks use, not a change here.
+ * Every settled change is told to the room over a channel of this hook's own -
+ * see `channelRef` below for why it is not the presence topic, and `tell` for
+ * why it speaks after the server has agreed rather than beside the optimistic
+ * change. This paragraph used to say nothing here was broadcast and that a
+ * summoned thing appeared for everybody on their next load; that was true once
+ * and then it was not, and the channel it contradicted was thirty lines down.
  */
 export function useThings({
   slug,
@@ -376,10 +378,18 @@ export function useThings({
     channel
       .on('broadcast', { event: 'thing' }, ({ payload }) => {
         const message = payload as ThingMessage
-        // The socket does not echo to the sender, but a second tab of the same
-        // person is a different socket and would - and it has already applied
-        // this optimistically.
-        if (!message || message.u === userId) return
+        /*
+          Our own echo, and only our own.
+
+          The socket does not echo to the sender, but a second tab of the same
+          person is a different socket and does hear it - and this used to drop
+          everything from the same *user* on the argument that the other tab
+          had already applied it optimistically. It had not: the other tab is
+          the one that did nothing. Two browsers signed in as one person - which
+          is how everybody tests a room alone - never saw each other's furniture.
+          So the guard is the tab, the same id the election uses.
+        */
+        if (!message || message.c === wire.conn) return
 
         if (message.gone) {
           const id = message.gone
@@ -427,9 +437,16 @@ export function useThings({
    * imperceptible for furniture and is the difference between "somebody moved
    * the crate" and "somebody moved the crate and then it moved back".
    */
-  const tell = useCallback((message: ThingMessage) => {
-    channelRef.current?.send({ type: 'broadcast', event: 'thing', payload: message })
-  }, [])
+  const tell = useCallback(
+    (message: Omit<ThingMessage, 'c'>) => {
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'thing',
+        payload: { ...message, c: wire.conn } satisfies ThingMessage,
+      })
+    },
+    [wire.conn],
+  )
 
   /**
    * Run a command, putting the thing back if it is refused.
@@ -1123,10 +1140,17 @@ export function useThings({
     [run, slug, worldId],
   )
 
+  /**
+   * Take it out of the world.
+   *
+   * Answers whether the server agreed, because one caller cares: `take` below
+   * has already put the thing in somebody's pocket by the time the round trip
+   * comes back, and a refusal has to take it out again.
+   */
   const dismiss = useCallback(
-    (id: string) => {
+    async (id: string): Promise<boolean> => {
       const before = thingsRef.current.find((thing) => thing.id === id)
-      if (!before) return
+      if (!before) return false
 
       setSelectedId((current) => (current === id ? null : current))
       setThings((current) => current.filter((thing) => thing.id !== id))
@@ -1139,22 +1163,31 @@ export function useThings({
       }
       setBusy(true)
 
-      void attempt(() => dismissThing(slug, { id, worldId: worldId ?? undefined })).then(
-        (result) => {
-          setBusy(false)
-          if (result.ok) {
-            tell({ u: userId, gone: id })
-            return
-          }
-          // Put it back where it stood. A thing that vanished and stayed
-          // vanished after a refusal is a thing somebody will summon again.
-          setThings((current) => [...current, before])
-          setError(refusal(result.error ?? dict.things.refused))
-        },
+      const result = await attempt(() =>
+        dismissThing(slug, { id, worldId: worldId ?? undefined }),
       )
+      setBusy(false)
+      if (result.ok) {
+        tell({ u: userId, gone: id })
+        return true
+      }
+      // Put it back where it stood. A thing that vanished and stayed
+      // vanished after a refusal is a thing somebody will summon again.
+      setThings((current) => [...current, before])
+      setError(refusal(result.error ?? dict.things.refused))
+      return false
     },
     [slug, worldId, userId, dict, refusal, tell],
   )
+
+  /**
+   * Refuse, in the reader's language. Stable, so `useTake` does not rebuild
+   * the key handler on every render that changed nothing about the pocket.
+   */
+  const refuse = useCallback((text: string) => setError(refusal(text)), [refusal])
+
+  /** G at a pistol on the floor. Its own file - see `useTake`. */
+  const take = useTake({ things, dismiss, refuse, dict })
 
   /**
    * `/vehicle kart`, and the bare `/vehicle` that puts it away again.
@@ -1205,7 +1238,7 @@ export function useThings({
             setUsingId(null)
             setBodyClip(null)
           }
-          dismiss(going)
+          void dismiss(going)
           return
         }
 
@@ -1498,6 +1531,7 @@ export function useThings({
     setFalls,
     setSolid,
     dismiss,
+    take,
     /**
      * The live half: who this tab is, what the driver last said, what has been
      * claimed since, and the two ways to speak.
@@ -1537,8 +1571,13 @@ const ANNOUNCE_MS = 4000
  * What travels between the people in a room.
  *
  * Short keys, because this is a wire format and the room's other packets are
- * written the same way - `u` for who sent it, `t` for the thing, `gone` for an
- * id that is not there any more.
+ * written the same way - `u` for who sent it, `c` for which of their tabs, `t`
+ * for the thing, `gone` for an id that is not there any more.
+ *
+ * The tab is what the receiver checks, not the person: see the handler for the
+ * two browsers that never saw each other's crates. The person still travels,
+ * because it is the honest answer to "who did that" and nothing on the wire
+ * carries it otherwise.
  *
  * A whole row rather than a diff. See the note on the channel: every verb ends
  * in the same sentence, which is *this is what that thing is now*, and a
@@ -1546,6 +1585,8 @@ const ANNOUNCE_MS = 4000
  */
 interface ThingMessage {
   u: string
+  /** The sending tab - `useThingWire`'s `conn`, the same id the election uses. */
+  c: string
   t?: ThingView
   gone?: string
 }
