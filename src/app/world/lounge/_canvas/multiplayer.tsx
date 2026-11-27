@@ -53,6 +53,7 @@ import { useSceneRefs } from '@/app/world/lounge/_scene/scene-refs'
 import { AvatarPlaceholder } from '@/app/world/_canvas/rainbow'
 import { newGlitch, seedFrom } from '@/app/world/_canvas/body-shader'
 import { linkTrouble } from '@/app/world/_presence/link-health'
+import { freshChannel } from '@/lib/supabase/fresh-channel'
 import type { Goal, GoalTeam } from '@/domain/lounge/goal-events'
 import { ChatBubble } from '@/app/world/_canvas/chat-bubble'
 import { HealthBar, showHealth, useHealthBar } from '@/app/world/_canvas/health-bar'
@@ -1183,729 +1184,761 @@ export function Multiplayer({
 
   useEffect(() => {
     /**
+     * Asked for through `freshChannel`, never `supabase.channel` directly.
+     *
+     * The client hands back the *existing* channel for a topic until the
+     * server has acknowledged its leave, so a re-run of this effect soon after
+     * the last one's cleanup - strict mode's double mount, a changed name or
+     * avatar - was given the old, already-subscribed channel and threw "cannot
+     * add `presence` callbacks for realtime:lounge:<id> after `subscribe()`" at
+     * the first `.on` below. See that helper for the queue that closes it.
+     *
+     * Which makes opening a tick late, so a cleanup can arrive before the
+     * channel has: `gone` is how it says so, and a channel that turns up after
+     * it is let go without a handler bound.
+     *
      * `private: true` makes Realtime check the policies in the lounge presence
      * migration before letting us in. Without that flag the topic would be open
      * to anyone holding the anon key who could guess a tenant id, which for
      * private team spaces is not a tradeoff worth making.
      */
-    const channel = supabase.channel(topic, {
-      config: { private: true, presence: { key: userId } },
+    let gone = false
+    let close: (() => void) | undefined
+    void freshChannel(
+      supabase,
+      topic,
+      { config: { private: true, presence: { key: userId } } },
+      () => {},
+    ).then((channel) => {
+      if (gone) {
+        void supabase.removeChannel(channel)
+        return
+      }
+      close = wire(channel)
     })
-    channelRef.current = channel
-
-    /**
-     * The four handlers that used to sit inline in the `.on` chain below.
-     *
-     * Lifted out because they now have two callers: a message that arrives in
-     * sequence is applied as it always was, and one that arrives early is held
-     * by the inbox and applied later, out of `pump`. Nothing inside them
-     * changed - a body that is correct to run on arrival is correct to run on
-     * delivery, because the sequencer only ever reorders and deduplicates.
-     */
-    function applyRoom(message: RoomMessage): void {
-    // Our own echo is not news: the sender already applied the change, and
-    // for `world` it is already reloading.
-    if (!message?.u || message.u === userId) return
-    onRoomRef.current?.(message)
+    return () => {
+      gone = true
+      close?.()
     }
 
-    function applyHit(message: HitMessage): void {
-    // Everyone on the channel sees every hit; only the addressee acts on it.
-    // Bystanders learn the outcome from the victim's next health update
-    // rather than by doing the arithmetic themselves, which is what keeps
-    // one player's health from having two authors.
-    if (!message?.i || message.t !== userId) return
+    /** Everything the channel needs, bound before it subscribes. */
+    function wire(channel: RealtimeChannel): () => void {
+      channelRef.current = channel
 
-    if (seenHits.current.has(message.i)) return
-    if (seenHits.current.size >= SEEN_HITS_LIMIT) seenHits.current.clear()
-    seenHits.current.add(message.i)
-
-    // Spawn protection. Checked on the receiving side because it is our
-    // health being defended, and an attacker's clock is not ours to trust.
-    if (performance.now() < (invulnerableUntilRef.current ?? 0)) return
-
-    // Resolved to a name here rather than in the scene, because the roster
-    // lives on this side of the channel and "you were taken out by
-    // 8f3c-…-a71" is not a thing to put on a death screen.
-    handlers.current.onDamaged(
-      sanitiseDamage(message.d),
-      names.current.get(message.f) ?? 'Someone',
-    )
-    }
-
-    function applyPush(message: PushMessage): void {
-    if (!message?.i || message.t !== userId) return
-
-    if (seenHits.current.has(message.i)) return
-    if (seenHits.current.size >= SEEN_HITS_LIMIT) seenHits.current.clear()
-    seenHits.current.add(message.i)
-
-    // Spawn protection covers being shoved as well as being hurt. A kick
-    // does no damage, but a kick into the lava does - and being launched
-    // off the spawn point before you have had a frame to move is the exact
-    // thing the grace period exists to prevent.
-    if (performance.now() < (invulnerableUntilRef.current ?? 0)) return
-
-    handlers.current.onPushed(
-      sanitiseImpulse(message.x, KICK_IMPULSE),
-      sanitiseImpulse(message.z, KICK_IMPULSE),
-      // Clamped at zero from below: a "kick" that drives somebody
-      // downwards is not a thing the verb can do, and would be a way to
-      // push people through floors.
-      Math.max(0, sanitiseImpulse(message.up, KICK_LIFT)),
-    )
-    }
-
-    function applyBallReset(message: BallResetMessage): void {
-    if (!message?.u) return
-    resetAsked.current = performance.now()
-    }
-
-    function apply({ event, message }: Delivery): void {
-      switch (event) {
-        case 'room':
-          applyRoom(message as RoomMessage)
-          return
-        case 'hit':
-          applyHit(message as HitMessage)
-          return
-        case 'push':
-          applyPush(message as PushMessage)
-          return
-        case 'ball-reset':
-          applyBallReset(message as BallResetMessage)
-          return
+      /**
+       * The four handlers that used to sit inline in the `.on` chain below.
+       *
+       * Lifted out because they now have two callers: a message that arrives in
+       * sequence is applied as it always was, and one that arrives early is held
+       * by the inbox and applied later, out of `pump`. Nothing inside them
+       * changed - a body that is correct to run on arrival is correct to run on
+       * delivery, because the sequencer only ever reorders and deduplicates.
+       */
+      function applyRoom(message: RoomMessage): void {
+      // Our own echo is not news: the sender already applied the change, and
+      // for `world` it is already reloading.
+      if (!message?.u || message.u === userId) return
+      onRoomRef.current?.(message)
       }
-    }
 
-    /** Hand over what is ready, and ask for what is missing. */
-    function pump(result: InboxResult): void {
-      for (const held of result.deliver) apply(held)
-      if (result.request) {
-        countSent('other')
-        void channel.send({
-          type: 'broadcast',
-          event: RESEND_EVENT,
-          payload: result.request,
-        })
-      }
-      if (result.skipped > 0 && process.env.NODE_ENV !== 'production') {
-        // The one thing this module must not do is lose messages quietly - a
-        // silent write-off is the bug it was built to end. Dev only, because in
-        // production the person who needs to know is not looking at a console.
-        console.warn(
-          `[lounge] gave up on ${result.skipped} broadcast(s) nobody resent`,
-        )
-      }
-    }
+      function applyHit(message: HitMessage): void {
+      // Everyone on the channel sees every hit; only the addressee acts on it.
+      // Bystanders learn the outcome from the victim's next health update
+      // rather than by doing the arithmetic themselves, which is what keeps
+      // one player's health from having two authors.
+      if (!message?.i || message.t !== userId) return
 
-    /**
-     * Take one message off the channel, in sequence.
-     *
-     * `from` is passed rather than read off the payload because the four shapes
-     * disagree about where the sender's id lives, and because the check has to
-     * happen *before* the addressee filter inside the handlers: a `hit` aimed at
-     * somebody else is a message this client will never act on, but its loss
-     * still has to be noticed, or the next `room` looks contiguous when it is
-     * not. See `world/reliable`.
-     */
-    function receive(
-      event: ReliableEvent,
-      from: string | undefined,
-      payload: unknown,
-    ): void {
-      if (!from) return
-      pump(
-        inbox.current.accept(event, from, payload as Sequenced, performance.now()),
+      if (seenHits.current.has(message.i)) return
+      if (seenHits.current.size >= SEEN_HITS_LIMIT) seenHits.current.clear()
+      seenHits.current.add(message.i)
+
+      // Spawn protection. Checked on the receiving side because it is our
+      // health being defended, and an attacker's clock is not ours to trust.
+      if (performance.now() < (invulnerableUntilRef.current ?? 0)) return
+
+      // Resolved to a name here rather than in the scene, because the roster
+      // lives on this side of the channel and "you were taken out by
+      // 8f3c-…-a71" is not a thing to put on a death screen.
+      handlers.current.onDamaged(
+        sanitiseDamage(message.d),
+        names.current.get(message.f) ?? 'Someone',
       )
-    }
+      }
 
-    /** Everything we send that cannot be restated by a later packet. */
-    function sendReliable(event: ReliableEvent, message: object): void {
-      sendSequenced(channel, outbox.current, event, message)
-    }
+      function applyPush(message: PushMessage): void {
+      if (!message?.i || message.t !== userId) return
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState<{
-          userId: string
-          name: string
-          avatar: string
-          conn?: string
-          /**
-           * This client's camera is on. See `faces` on the props.
-           *
-           * On presence for exactly the reason `perf` below is: the far end has
-           * to know there is something to connect *for*. Without it, either
-           * every pair in the room holds an idle connection against the
-           * possibility of a camera, or a camera switched on has no way to
-           * announce itself. One boolean on a payload already being sent is
-           * cheaper than either - see the header of `@/domain/world/faces`.
-           */
-          face?: boolean
-          /**
-           * This client is measuring the room. See `perf` on the props.
-           *
-           * On the presence payload rather than inferred, because the round
-           * trip probe has to know *who will answer a ping*: a client whose
-           * space has collection off does not echo, and counting its silence as
-           * a lost packet would report a broken network where there is only a
-           * flag. It is also what lets a room say how much of it is measured.
-           */
-          perf?: boolean
-        }>()
+      if (seenHits.current.has(message.i)) return
+      if (seenHits.current.size >= SEEN_HITS_LIMIT) seenHits.current.clear()
+      seenHits.current.add(message.i)
 
-        const next: Peer[] = []
-        /**
-         * Every *connection* in the room, which is not the same list as `next`.
-         *
-         * Peers are people - one entry each, our own excluded, because that is
-         * what a roster and a set of drawn bodies want. The election wants tabs:
-         * both of somebody's, and ours among them.
-         */
-        const clients: BallClient[] = []
-        /** Other tabs that will answer a ping - see `perf` on the entry above. */
-        const measuring: string[] = []
-        /**
-         * Every tab again, this time with its camera state.
-         *
-         * A third list rather than a field on one of the two above, because it
-         * is the only one that includes *us*: `wantedLinks` is asked "given the
-         * room, and given that you are in it, what should you be holding", and
-         * a roster with our own camera missing from it would have us calling
-         * people we have nothing to send.
-         */
-        const cameras: FaceClient[] = []
-        for (const entries of Object.values(state)) {
-          for (const entry of entries) {
-            if (entry.userId) {
-              clients.push({ userId: entry.userId, conn: entry.conn ?? '' })
-            }
-            if (entry.userId && entry.conn) {
-              cameras.push({
-                userId: entry.userId,
-                conn: entry.conn,
-                face: Boolean(entry.face),
-              })
-            }
-            if (entry.perf && entry.conn && entry.conn !== conn) {
-              measuring.push(entry.conn)
-            }
-            // Our own body is drawn by <SelfAvatar>, which knows about the
-            // camera and the view toggle. Drawing it twice would mean fighting
-            // over one position with a network round trip in between.
-            if (!entry.userId || entry.userId === userId) continue
-            if (next.some((peer) => peer.userId === entry.userId)) continue
+      // Spawn protection covers being shoved as well as being hurt. A kick
+      // does no damage, but a kick into the lava does - and being launched
+      // off the spawn point before you have had a frame to move is the exact
+      // thing the grace period exists to prevent.
+      if (performance.now() < (invulnerableUntilRef.current ?? 0)) return
 
-            next.push({
-              userId: entry.userId,
-              name: entry.name || 'Someone',
-              /**
-               * A look we no longer ship must not become a 404 mid-scene - and
-               * `isKnownLook`, not `isKnownAvatar`, because a look is now one
-               * of two things. The animal roster answers "no" to every skin, so
-               * this guard was replacing `adventurers/Knight` with the default
-               * penguin: you switched to your XP body, the wire carried it, and
-               * every other person in the lounge watched you turn back into
-               * somebody else. The rooms' presence (`_presence/room-presence`)
-               * was fixed for exactly this and the lounge's copy was not.
-               */
-              avatar: isKnownLook(entry.avatar) ? entry.avatar : DEFAULT_AVATAR,
-            })
-          }
+      handlers.current.onPushed(
+        sanitiseImpulse(message.x, KICK_IMPULSE),
+        sanitiseImpulse(message.z, KICK_IMPULSE),
+        // Clamped at zero from below: a "kick" that drives somebody
+        // downwards is not a thing the verb can do, and would be a way to
+        // push people through floors.
+        Math.max(0, sanitiseImpulse(message.up, KICK_LIFT)),
+      )
+      }
+
+      function applyBallReset(message: BallResetMessage): void {
+      if (!message?.u) return
+      resetAsked.current = performance.now()
+      }
+
+      function apply({ event, message }: Delivery): void {
+        switch (event) {
+          case 'room':
+            applyRoom(message as RoomMessage)
+            return
+          case 'hit':
+            applyHit(message as HitMessage)
+            return
+          case 'push':
+            applyPush(message as PushMessage)
+            return
+          case 'ball-reset':
+            applyBallReset(message as BallResetMessage)
+            return
         }
+      }
 
-        setPeers(next)
-        onCount(next.length)
-        onPeers?.(next)
-
-        /**
-         * Who should be connected to whom, recomputed from scratch.
-         *
-         * Every sync rather than only on a change, and it is cheap enough to be
-         * uninteresting: the reconciler compares the answer against the
-         * connections it holds and does nothing when they agree. Doing it on
-         * every sync is what makes a client that missed an event - a tab that
-         * was asleep while somebody left - converge anyway.
-         */
-        faceRoom.current = cameras
-        faceLinks.current?.reconcile(cameras)
-
-        pingTargets.current = measuring
-        // The room size that produced this window's traffic. Fan-out is
-        // quadratic in it, so a packet rate without it says very little.
-        activeCollector()?.notePeers(next.length)
-
-        names.current = new Map(next.map((peer) => [peer.userId, peer.name]))
-
-        /**
-         * Who is stepping the ball, re-derived from the room every sync.
-         *
-         * Not negotiated, and that is the whole point: everybody sorts the same
-         * roster the same way, so the answer needs no round of messages and the
-         * *instant* the owner's presence disappears the next person in order takes
-         * over. A handover protocol would have to survive the owner's tab closing
-         * without warning, which is exactly when it is needed.
-         *
-         * Our own connection is included here even though we are excluded from
-         * `peers` - we are as eligible as anybody, and a room where the only
-         * occupant was never the owner would have a ball nobody moved. Added by
-         * hand when the state does not have it yet: the first sync can land
-         * before our own `track` has come back round, and a client that read that
-         * sync as "not me" would hand the ball to somebody else for a moment.
-         */
-        if (!clients.some((client) => client.conn === conn)) {
-          clients.push({ userId, conn })
-        }
-
-        owner.current = ballOwner(clients)
-
-        // Drop transforms for people who left, or the map grows for the life of
-        // the session.
-        const present = new Set(next.map((peer) => peer.userId))
-        for (const key of transforms.current.keys()) {
-          if (!present.has(key)) {
-            // Their kart stops being theirs the moment they are gone - the
-            // parked row (or the loan sweep) is the truth from here. Only a
-            // driver was hiding anything; a passenger's leaving hid nothing.
-            const gone = transforms.current.get(key)
-            if (gone?.driving && gone.seat === 0) onDrivingRef.current?.(key, null)
-            transforms.current.delete(key)
-          }
-        }
-        for (const key of emotes.current.keys()) {
-          if (!present.has(key)) emotes.current.delete(key)
-        }
-        for (const key of saids.current.keys()) {
-          if (!present.has(key)) saids.current.delete(key)
-        }
-        /**
-         * Somebody who has left will not be resending anything.
-         *
-         * Without this their last hole stays open for its full grace period and
-         * then counts as a write-off, which reads in the console as loss the
-         * network never caused.
-         *
-         * Connections *and* people, because that is how the inbox files a
-         * stream: by `c` for anybody whose messages carry one, by user id for
-         * anybody's that do not. A roster of user ids alone would throw away
-         * every connection-keyed stream in the room on the first sync, which
-         * costs nothing visible - the next message re-adopts - but re-opens
-         * every gap in flight at the time.
-         *
-         * A returning client needs no help from this any more: it comes back on
-         * a fresh sequence *and* a fresh connection, so its numbers land in a
-         * slot of their own rather than behind the mark the last one left.
-         */
-        inbox.current.keep(
-          new Set([...present, ...clients.map((client) => client.conn)]),
-        )
-      })
-
-      .on('broadcast', { event: 'room' }, ({ payload }) => {
-        countReceived('room', performance.now())
-        receive('room', (payload as RoomMessage)?.u, payload)
-      })
-      .on('broadcast', { event: 'emote' }, ({ payload }) => {
-        countReceived('emote', performance.now())
-        const message = payload as EmoteMessage
-        if (!message?.u || message.u === userId) return
-        // A face we cannot draw is a face nobody sees - see `isEmote`.
-        if (!isEmote(message.e)) return
-
-        let slot = emotes.current.get(message.u)
-        if (!slot) {
-          slot = noEmote()
-          emotes.current.set(message.u, slot)
-        }
-        showEmote(slot, message.e)
-      })
-      .on('broadcast', { event: 'move' }, ({ payload }) => {
-        const message = payload as MoveMessage
-        if (!message?.u || message.u === userId) return
-
-        const existing = transforms.current.get(message.u)
-        const target = { x: message.x, y: message.y, z: message.z, yaw: message.r }
-        // Tolerated rather than required, so a client that has not reloaded
-        // since combat shipped reads as unhurt instead of instantly dead.
-        const health = typeof message.h === 'number' ? message.h : MAX_HEALTH
-
-        // One clock for the buffer, and it is ours: `record` and `sample` must
-        // agree, and they do not care that the sender's epoch is different.
-        const arrived = performance.now()
-        // The same clock again, deliberately reused rather than re-read: the
-        // two numbers describe one arrival and there is nothing to be gained by
-        // them disagreeing by a microsecond.
-        countReceived('move', arrived)
-
-        const wheeled = message.v ?? null
-        const seat = message.s ?? 0
-        /**
-         * Only the wheel makes a thing *driven* - a passenger of a parked kart
-         * is aboard it, and hiding the kart from its cell over that would make
-         * it vanish under whoever sat down in it.
-         */
-        const drives = wheeled && seat === 0 ? wheeled : null
-
-        if (existing) {
-          const drove =
-            existing.driving && existing.seat === 0 ? existing.driving : null
-          if (drove !== drives) onDrivingRef.current?.(message.u, drives)
-          existing.target = target
-          existing.dancing = message.d
-          existing.driving = wheeled
-          existing.seat = seat
-          existing.health = health
-          existing.held = message.w ?? null
-          existing.pose = message.c ?? null
-          record(existing.motion, target, message.t ?? null, arrived)
-        } else {
-          const motion = newMotionBuffer()
-          record(motion, target, message.t ?? null, arrived)
-          transforms.current.set(message.u, {
-            target,
-            // Seeded to the first known position rather than the origin, so a
-            // peer does not visibly slide in from the middle of the world.
-            current: { ...target },
-            dancing: message.d,
-            driving: wheeled,
-            seat,
-            health,
-            held: message.w ?? null,
-            pose: message.c ?? null,
-            seeded: true,
-            motion,
-          })
-          if (drives) onDrivingRef.current?.(message.u, drives)
-        }
-      })
-      /*
-        Somebody else's bullet, drawn and nothing else.
-
-        Not sequenced and not deduplicated, unlike a hit: a tracer that arrives
-        twice is one extra bullet drawn for half a second, and one that never
-        arrives is a shot you did not see. Neither is worth an ack, and the
-        thing that *does* need exactly-once - what it cost the person it hit -
-        travels as its own addressed message.
-      */
-      .on('broadcast', { event: 'shot' }, ({ payload }) => {
-        countReceived('shot', performance.now())
-        const message = payload as ShotMessage
-        if (!message?.m || message.f === userId) return
-        fireTracer({
-          model: message.m,
-          scale: message.c,
-          speed: message.s,
-          from: { x: message.x, y: message.y, z: message.z },
-          to: { x: message.tx, y: message.ty, z: message.tz },
-        })
-      })
-      .on('broadcast', { event: 'hit' }, ({ payload }) => {
-        countReceived('hit', performance.now())
-        receive('hit', (payload as HitMessage)?.f, payload)
-      })
-      /**
-       * Somebody kicked us.
-       *
-       * Deduplicated out of the same set as hits - the ids are uuids, so there
-       * is nothing to collide, and one bounded set beats two. A redelivered
-       * push matters more than a redelivered hit, not less: it would shove us
-       * twice as far as the kicker saw, and end the argument about where
-       * anybody is standing in the kicker's favour.
-       */
-      .on('broadcast', { event: 'push' }, ({ payload }) => {
-        countReceived('push', performance.now())
-        receive('push', (payload as PushMessage)?.f, payload)
-      })
-      /**
-       * Where the ball is, according to whoever is stepping it.
-       *
-       * Adopted outright rather than eased toward, unlike a peer's body. A ball
-       * changes direction sharply and often - off a wall, off a boot - and smoothing
-       * that would round the corners off every bounce, putting the drawn ball
-       * somewhere the owner's ball never was. Since the owner is also the one judging
-       * whether it crossed a line, a smoothed copy would disagree with the score.
-       *
-       * Ignored when it comes from any client but the current owner, so one that
-       * has not yet seen the owner leave cannot keep writing to everybody's ball.
-       * By connection rather than by person, unlike every other handler here: our
-       * *own* second tab is a different client with the same user id, and the
-       * whole point of the election is that only one of the two steps the ball.
-       * Filtering that by user id would leave the other tab unable to see the
-       * ball it is not stepping.
-       *
-       * Except while we have no ball at all. A client that joins or reloads
-       * mid-match usually sees its first presence sync before the outgoing owner's
-       * next packet, and if its id sorts lowest it has already elected itself by
-       * the time that packet lands - so the strict rule would discard the only copy
-       * of where the ball actually is, and the seed below would restart the match
-       * from the kickoff spot. Nothing can be hijacked by relaxing it here: there
-       * is no ball to overwrite, and only a client that believes it is the owner
-       * broadcasts at all.
-       */
-      .on('broadcast', { event: 'ball' }, ({ payload }) => {
-        countReceived('ball', performance.now())
-        const message = payload as BallMessage
-        if (!message?.u) return
-        // Whoever sent it, in the terms the election uses - see `ballClientKey`.
-        // Only our own connection is an echo: a packet carrying our user id but
-        // not our connection is our *other* tab, and if it is the owner we want
-        // it, which is the entire point of the pair.
-        const from = message.c || message.u
-        if (from === conn) return
-        if (owner.current && from !== owner.current && ball.current) return
-
-        ball.current = {
-          x: message.x,
-          y: message.y,
-          z: message.z,
-          vx: message.vx,
-          vy: message.vy,
-          vz: message.vz,
-        }
-        ballPause.current = message.k
-        // Proof the owner's frame loop is still turning. Stamped here rather
-        // than on any ball message, because a packet from a client that is no
-        // longer the owner says nothing about the one that is.
-        lastBallSeen.current = performance.now()
-      })
-      /**
-       * Somebody wants the ball back on the centre spot.
-       *
-       * Noted by everybody and acted on by the owner alone, which is the point:
-       * ownership changes hands without warning, and a request routed only to
-       * whoever was the owner when the button was pressed would vanish if that
-       * tab closed a moment later. Recording it everywhere costs one number.
-       *
-       * No filter on the sender. Anybody in the room may ask - the person who
-       * can see the ball behind the wall is rarely the one stepping it - and the
-       * owner decides. See `BallResetMessage` for why that is safe.
-       */
-      .on('broadcast', { event: 'ball-reset' }, ({ payload }) => {
-        countReceived('ball-reset', performance.now())
-        receive('ball-reset', (payload as BallResetMessage)?.u, payload)
-      })
-      /**
-       * Somebody missed something of ours.
-       *
-       * The reply is another broadcast rather than a private message, because
-       * Realtime has no private lane and the alternative would be a channel per
-       * pair. Everybody hears the answer; everybody who already had it drops it
-       * as a duplicate, which is exactly what the inbox's "behind the mark"
-       * rule is for. The cost of answering loudly is one extra small message per
-       * hole per room, and the cost of not doing it is the bug this is for.
-       */
-      /**
-       * One end of a video call arranging itself with the other.
-       *
-       * Not put through the sequencer, unlike `room` and `hit`, and the reason
-       * is that the loss it has to survive is broader than the one the
-       * sequencer repairs. A missing offer is a connection that never comes up
-       * - and so is a failed ICE negotiation, a peer that reloaded halfway
-       * through, and a route that stopped working when somebody walked out of
-       * wifi range. One timer that notices a link is not carrying anything
-       * covers all four; a resend request covers the first and leaves the rest.
-       * See the watchdog in `face-links`.
-       *
-       * Everybody in the room hears every message, and all but one drops it on
-       * the address - the same arrangement `hit` and `push` use, for the same
-       * reason: Realtime has no private lane, and the alternative is a channel
-       * per pair.
-       */
-      .on('broadcast', { event: 'face' }, ({ payload }) => {
-        countReceived('other', performance.now())
-        faceLinks.current?.accept(payload)
-      })
-      .on('broadcast', { event: RESEND_EVENT }, ({ payload }) => {
-        countReceived('other', performance.now())
-        const ask = payload as ResendRequest
-        // Only the sender named answers. Without this every client in the room
-        // would replay its own unrelated history at whoever asked.
-        if (ask?.u !== userId) return
-        // And only the tab named, where the asker knew which one. Our sequence
-        // is this mount's; another tab of ours holds a different one, and its
-        // reply to a request meant for us is numbers that fit nobody's stream.
-        if (ask.c && ask.c !== conn) return
-        for (const held of outbox.current.replay(ask.from, ask.to)) {
-          countSent(held.event)
+      /** Hand over what is ready, and ask for what is missing. */
+      function pump(result: InboxResult): void {
+        for (const held of result.deliver) apply(held)
+        if (result.request) {
+          countSent('other')
           void channel.send({
             type: 'broadcast',
-            event: held.event,
-            payload: held.message,
+            event: RESEND_EVENT,
+            payload: result.request,
           })
         }
-      })
-      /**
-       * Somebody is timing the room, and we are this ping's addressee.
-       *
-       * Registered unconditionally rather than behind the flag, because adding
-       * or removing a handler means reopening the channel - and a reopened
-       * channel is what produces "cannot add presence callbacks after
-       * subscribe()". It is inert without a sender: nothing broadcasts `perf`
-       * events unless some client has collection armed.
-       *
-       * `collecting()` is the gate on *answering*, and it is the same flag read
-       * from the other end. A client whose space has collection off does not
-       * echo, and the prober knows not to ask it - see `perf` on the presence
-       * payload, which is how a target is chosen in the first place.
-       *
-       * Addressed to one connection rather than answered by everybody: the
-       * obvious version costs one reply per person in the room per ping, which
-       * is the quadratic fan-out this whole diagnostic is supposed to be
-       * measuring rather than adding to.
-       */
-      .on('broadcast', { event: PERF_PING }, ({ payload }) => {
-        const ask = payload as PerfPing
-        countReceived('ping', performance.now())
-        if (!collecting()) return
-        if (!ask?.n || ask.to !== conn) return
-        countSent('ping')
-        void channel.send({
-          type: 'broadcast',
-          event: PERF_ECHO,
-          payload: { n: ask.n, to: ask.from } satisfies PerfEcho,
-        })
-      })
-      /**
-       * Our own nonce, back again.
-       *
-       * The elapsed time is read here, off the same `performance.now()` that
-       * stamped the ping - one clock from end to end, which is the only reason
-       * this number means anything. See the header of `collector.ts` for why
-       * there is no one-way version of it.
-       */
-      .on('broadcast', { event: PERF_ECHO }, ({ payload }) => {
-        const echo = payload as PerfEcho
-        const now = performance.now()
-        countReceived('ping', now)
-        if (!echo?.n || echo.to !== conn) return
-        activeCollector()?.noteEcho(echo.n, now)
-      })
-      .subscribe((status) => {
-        // Before the branches below, so a state nothing else acts on -
-        // `CLOSED`, or a `TIMED_OUT` that recovers - is still recorded. A room
-        // that spent five minutes reconnecting is exactly what this is for.
-        activeCollector()?.noteChannel(channelStateOf(status))
-        if (status === 'SUBSCRIBED') {
-          onStatus('live')
-          // `conn` rides along with the person: presence is keyed by user id, so
-          // this is the only place the room can learn that one of its players is
-          // two clients. See `ballOwner`.
-          void channel.track({
-            userId,
-            name,
-            avatar,
-            conn,
-            perf: measuring,
-            // From the ref, so that switching a camera on does not appear in
-            // this effect's dependencies and take the socket with it. The
-            // effect below re-tracks when it changes.
-            face: cameraOnRef.current,
-          })
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // Surfaced rather than swallowed: the most likely cause is the
-          // presence migration not being applied, and silent absence of other
-          // people is indistinguishable from nobody being online.
-          onStatus('error')
+        if (result.skipped > 0 && process.env.NODE_ENV !== 'production') {
+          // The one thing this module must not do is lose messages quietly - a
+          // silent write-off is the bug it was built to end. Dev only, because in
+          // production the person who needs to know is not looking at a console.
+          console.warn(
+            `[lounge] gave up on ${result.skipped} broadcast(s) nobody resent`,
+          )
         }
-      })
-
-    /**
-     * Holes do not announce themselves.
-     *
-     * A sender who has gone quiet - or gone entirely - produces no further
-     * arrivals, so nothing would drive the retry or the give-up timer from
-     * `accept` alone. This is the clock that does, and it is the same interval
-     * the inbox rate-limits requests to, so a hole is asked about roughly once
-     * per sweep until it fills or expires.
-     */
-    const sweeping = setInterval(() => {
-      pump(inbox.current.sweep(performance.now()))
-    }, RESEND_INTERVAL_MS)
-
-    if (roomRef) {
-      roomRef.current = (message) => {
-        sendReliable('room', { ...message, u: userId } satisfies RoomMessage)
       }
-    }
 
-    /**
-     * The HUD's "fetch the ball" button.
-     *
-     * Noted locally as well as sent, rather than waiting for our own broadcast
-     * to come back - Realtime does not echo to the sender, so an owner pressing
-     * its own button would otherwise be the one client in the room the request
-     * never reached.
-     */
-    resetBallRef.current = () => {
-      resetAsked.current = performance.now()
-      sendReliable('ball-reset', { u: userId } satisfies BallResetMessage)
-    }
+      /**
+       * Take one message off the channel, in sequence.
+       *
+       * `from` is passed rather than read off the payload because the four shapes
+       * disagree about where the sender's id lives, and because the check has to
+       * happen *before* the addressee filter inside the handlers: a `hit` aimed at
+       * somebody else is a message this client will never act on, but its loss
+       * still has to be noticed, or the next `room` looks contiguous when it is
+       * not. See `world/reliable`.
+       */
+      function receive(
+        event: ReliableEvent,
+        from: string | undefined,
+        payload: unknown,
+      ): void {
+        if (!from) return
+        pump(
+          inbox.current.accept(event, from, payload as Sequenced, performance.now()),
+        )
+      }
 
-    /**
-     * A shot somebody just fired: drawn for the room, charged to one person.
-     *
-     * Both halves go out from here because both need the socket, and they are
-     * deliberately two messages - see `ShotMessage`. The victim's bar is
-     * dropped locally on the way past for the same reason `judgeDash` does it:
-     * waiting for their next packet puts a round trip between the impact and
-     * the feedback, and at that distance a hit reads as not having registered.
-     */
-    sendShotRef.current = (shot: PlayerShot) => {
-      if (shot.model) {
-        countSent('shot')
+      /** Everything we send that cannot be restated by a later packet. */
+      function sendReliable(event: ReliableEvent, message: object): void {
+        sendSequenced(channel, outbox.current, event, message)
+      }
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState<{
+            userId: string
+            name: string
+            avatar: string
+            conn?: string
+            /**
+             * This client's camera is on. See `faces` on the props.
+             *
+             * On presence for exactly the reason `perf` below is: the far end has
+             * to know there is something to connect *for*. Without it, either
+             * every pair in the room holds an idle connection against the
+             * possibility of a camera, or a camera switched on has no way to
+             * announce itself. One boolean on a payload already being sent is
+             * cheaper than either - see the header of `@/domain/world/faces`.
+             */
+            face?: boolean
+            /**
+             * This client is measuring the room. See `perf` on the props.
+             *
+             * On the presence payload rather than inferred, because the round
+             * trip probe has to know *who will answer a ping*: a client whose
+             * space has collection off does not echo, and counting its silence as
+             * a lost packet would report a broken network where there is only a
+             * flag. It is also what lets a room say how much of it is measured.
+             */
+            perf?: boolean
+          }>()
+
+          const next: Peer[] = []
+          /**
+           * Every *connection* in the room, which is not the same list as `next`.
+           *
+           * Peers are people - one entry each, our own excluded, because that is
+           * what a roster and a set of drawn bodies want. The election wants tabs:
+           * both of somebody's, and ours among them.
+           */
+          const clients: BallClient[] = []
+          /** Other tabs that will answer a ping - see `perf` on the entry above. */
+          const measuring: string[] = []
+          /**
+           * Every tab again, this time with its camera state.
+           *
+           * A third list rather than a field on one of the two above, because it
+           * is the only one that includes *us*: `wantedLinks` is asked "given the
+           * room, and given that you are in it, what should you be holding", and
+           * a roster with our own camera missing from it would have us calling
+           * people we have nothing to send.
+           */
+          const cameras: FaceClient[] = []
+          for (const entries of Object.values(state)) {
+            for (const entry of entries) {
+              if (entry.userId) {
+                clients.push({ userId: entry.userId, conn: entry.conn ?? '' })
+              }
+              if (entry.userId && entry.conn) {
+                cameras.push({
+                  userId: entry.userId,
+                  conn: entry.conn,
+                  face: Boolean(entry.face),
+                })
+              }
+              if (entry.perf && entry.conn && entry.conn !== conn) {
+                measuring.push(entry.conn)
+              }
+              // Our own body is drawn by <SelfAvatar>, which knows about the
+              // camera and the view toggle. Drawing it twice would mean fighting
+              // over one position with a network round trip in between.
+              if (!entry.userId || entry.userId === userId) continue
+              if (next.some((peer) => peer.userId === entry.userId)) continue
+
+              next.push({
+                userId: entry.userId,
+                name: entry.name || 'Someone',
+                /**
+                 * A look we no longer ship must not become a 404 mid-scene - and
+                 * `isKnownLook`, not `isKnownAvatar`, because a look is now one
+                 * of two things. The animal roster answers "no" to every skin, so
+                 * this guard was replacing `adventurers/Knight` with the default
+                 * penguin: you switched to your XP body, the wire carried it, and
+                 * every other person in the lounge watched you turn back into
+                 * somebody else. The rooms' presence (`_presence/room-presence`)
+                 * was fixed for exactly this and the lounge's copy was not.
+                 */
+                avatar: isKnownLook(entry.avatar) ? entry.avatar : DEFAULT_AVATAR,
+              })
+            }
+          }
+
+          setPeers(next)
+          onCount(next.length)
+          onPeers?.(next)
+
+          /**
+           * Who should be connected to whom, recomputed from scratch.
+           *
+           * Every sync rather than only on a change, and it is cheap enough to be
+           * uninteresting: the reconciler compares the answer against the
+           * connections it holds and does nothing when they agree. Doing it on
+           * every sync is what makes a client that missed an event - a tab that
+           * was asleep while somebody left - converge anyway.
+           */
+          faceRoom.current = cameras
+          faceLinks.current?.reconcile(cameras)
+
+          pingTargets.current = measuring
+          // The room size that produced this window's traffic. Fan-out is
+          // quadratic in it, so a packet rate without it says very little.
+          activeCollector()?.notePeers(next.length)
+
+          names.current = new Map(next.map((peer) => [peer.userId, peer.name]))
+
+          /**
+           * Who is stepping the ball, re-derived from the room every sync.
+           *
+           * Not negotiated, and that is the whole point: everybody sorts the same
+           * roster the same way, so the answer needs no round of messages and the
+           * *instant* the owner's presence disappears the next person in order takes
+           * over. A handover protocol would have to survive the owner's tab closing
+           * without warning, which is exactly when it is needed.
+           *
+           * Our own connection is included here even though we are excluded from
+           * `peers` - we are as eligible as anybody, and a room where the only
+           * occupant was never the owner would have a ball nobody moved. Added by
+           * hand when the state does not have it yet: the first sync can land
+           * before our own `track` has come back round, and a client that read that
+           * sync as "not me" would hand the ball to somebody else for a moment.
+           */
+          if (!clients.some((client) => client.conn === conn)) {
+            clients.push({ userId, conn })
+          }
+
+          owner.current = ballOwner(clients)
+
+          // Drop transforms for people who left, or the map grows for the life of
+          // the session.
+          const present = new Set(next.map((peer) => peer.userId))
+          for (const key of transforms.current.keys()) {
+            if (!present.has(key)) {
+              // Their kart stops being theirs the moment they are gone - the
+              // parked row (or the loan sweep) is the truth from here. Only a
+              // driver was hiding anything; a passenger's leaving hid nothing.
+              const gone = transforms.current.get(key)
+              if (gone?.driving && gone.seat === 0) onDrivingRef.current?.(key, null)
+              transforms.current.delete(key)
+            }
+          }
+          for (const key of emotes.current.keys()) {
+            if (!present.has(key)) emotes.current.delete(key)
+          }
+          for (const key of saids.current.keys()) {
+            if (!present.has(key)) saids.current.delete(key)
+          }
+          /**
+           * Somebody who has left will not be resending anything.
+           *
+           * Without this their last hole stays open for its full grace period and
+           * then counts as a write-off, which reads in the console as loss the
+           * network never caused.
+           *
+           * Connections *and* people, because that is how the inbox files a
+           * stream: by `c` for anybody whose messages carry one, by user id for
+           * anybody's that do not. A roster of user ids alone would throw away
+           * every connection-keyed stream in the room on the first sync, which
+           * costs nothing visible - the next message re-adopts - but re-opens
+           * every gap in flight at the time.
+           *
+           * A returning client needs no help from this any more: it comes back on
+           * a fresh sequence *and* a fresh connection, so its numbers land in a
+           * slot of their own rather than behind the mark the last one left.
+           */
+          inbox.current.keep(
+            new Set([...present, ...clients.map((client) => client.conn)]),
+          )
+        })
+
+        .on('broadcast', { event: 'room' }, ({ payload }) => {
+          countReceived('room', performance.now())
+          receive('room', (payload as RoomMessage)?.u, payload)
+        })
+        .on('broadcast', { event: 'emote' }, ({ payload }) => {
+          countReceived('emote', performance.now())
+          const message = payload as EmoteMessage
+          if (!message?.u || message.u === userId) return
+          // A face we cannot draw is a face nobody sees - see `isEmote`.
+          if (!isEmote(message.e)) return
+
+          let slot = emotes.current.get(message.u)
+          if (!slot) {
+            slot = noEmote()
+            emotes.current.set(message.u, slot)
+          }
+          showEmote(slot, message.e)
+        })
+        .on('broadcast', { event: 'move' }, ({ payload }) => {
+          const message = payload as MoveMessage
+          if (!message?.u || message.u === userId) return
+
+          const existing = transforms.current.get(message.u)
+          const target = { x: message.x, y: message.y, z: message.z, yaw: message.r }
+          // Tolerated rather than required, so a client that has not reloaded
+          // since combat shipped reads as unhurt instead of instantly dead.
+          const health = typeof message.h === 'number' ? message.h : MAX_HEALTH
+
+          // One clock for the buffer, and it is ours: `record` and `sample` must
+          // agree, and they do not care that the sender's epoch is different.
+          const arrived = performance.now()
+          // The same clock again, deliberately reused rather than re-read: the
+          // two numbers describe one arrival and there is nothing to be gained by
+          // them disagreeing by a microsecond.
+          countReceived('move', arrived)
+
+          const wheeled = message.v ?? null
+          const seat = message.s ?? 0
+          /**
+           * Only the wheel makes a thing *driven* - a passenger of a parked kart
+           * is aboard it, and hiding the kart from its cell over that would make
+           * it vanish under whoever sat down in it.
+           */
+          const drives = wheeled && seat === 0 ? wheeled : null
+
+          if (existing) {
+            const drove =
+              existing.driving && existing.seat === 0 ? existing.driving : null
+            if (drove !== drives) onDrivingRef.current?.(message.u, drives)
+            existing.target = target
+            existing.dancing = message.d
+            existing.driving = wheeled
+            existing.seat = seat
+            existing.health = health
+            existing.held = message.w ?? null
+            existing.pose = message.c ?? null
+            record(existing.motion, target, message.t ?? null, arrived)
+          } else {
+            const motion = newMotionBuffer()
+            record(motion, target, message.t ?? null, arrived)
+            transforms.current.set(message.u, {
+              target,
+              // Seeded to the first known position rather than the origin, so a
+              // peer does not visibly slide in from the middle of the world.
+              current: { ...target },
+              dancing: message.d,
+              driving: wheeled,
+              seat,
+              health,
+              held: message.w ?? null,
+              pose: message.c ?? null,
+              seeded: true,
+              motion,
+            })
+            if (drives) onDrivingRef.current?.(message.u, drives)
+          }
+        })
+        /*
+          Somebody else's bullet, drawn and nothing else.
+
+          Not sequenced and not deduplicated, unlike a hit: a tracer that arrives
+          twice is one extra bullet drawn for half a second, and one that never
+          arrives is a shot you did not see. Neither is worth an ack, and the
+          thing that *does* need exactly-once - what it cost the person it hit -
+          travels as its own addressed message.
+        */
+        .on('broadcast', { event: 'shot' }, ({ payload }) => {
+          countReceived('shot', performance.now())
+          const message = payload as ShotMessage
+          if (!message?.m || message.f === userId) return
+          fireTracer({
+            model: message.m,
+            scale: message.c,
+            speed: message.s,
+            from: { x: message.x, y: message.y, z: message.z },
+            to: { x: message.tx, y: message.ty, z: message.tz },
+          })
+        })
+        .on('broadcast', { event: 'hit' }, ({ payload }) => {
+          countReceived('hit', performance.now())
+          receive('hit', (payload as HitMessage)?.f, payload)
+        })
+        /**
+         * Somebody kicked us.
+         *
+         * Deduplicated out of the same set as hits - the ids are uuids, so there
+         * is nothing to collide, and one bounded set beats two. A redelivered
+         * push matters more than a redelivered hit, not less: it would shove us
+         * twice as far as the kicker saw, and end the argument about where
+         * anybody is standing in the kicker's favour.
+         */
+        .on('broadcast', { event: 'push' }, ({ payload }) => {
+          countReceived('push', performance.now())
+          receive('push', (payload as PushMessage)?.f, payload)
+        })
+        /**
+         * Where the ball is, according to whoever is stepping it.
+         *
+         * Adopted outright rather than eased toward, unlike a peer's body. A ball
+         * changes direction sharply and often - off a wall, off a boot - and smoothing
+         * that would round the corners off every bounce, putting the drawn ball
+         * somewhere the owner's ball never was. Since the owner is also the one judging
+         * whether it crossed a line, a smoothed copy would disagree with the score.
+         *
+         * Ignored when it comes from any client but the current owner, so one that
+         * has not yet seen the owner leave cannot keep writing to everybody's ball.
+         * By connection rather than by person, unlike every other handler here: our
+         * *own* second tab is a different client with the same user id, and the
+         * whole point of the election is that only one of the two steps the ball.
+         * Filtering that by user id would leave the other tab unable to see the
+         * ball it is not stepping.
+         *
+         * Except while we have no ball at all. A client that joins or reloads
+         * mid-match usually sees its first presence sync before the outgoing owner's
+         * next packet, and if its id sorts lowest it has already elected itself by
+         * the time that packet lands - so the strict rule would discard the only copy
+         * of where the ball actually is, and the seed below would restart the match
+         * from the kickoff spot. Nothing can be hijacked by relaxing it here: there
+         * is no ball to overwrite, and only a client that believes it is the owner
+         * broadcasts at all.
+         */
+        .on('broadcast', { event: 'ball' }, ({ payload }) => {
+          countReceived('ball', performance.now())
+          const message = payload as BallMessage
+          if (!message?.u) return
+          // Whoever sent it, in the terms the election uses - see `ballClientKey`.
+          // Only our own connection is an echo: a packet carrying our user id but
+          // not our connection is our *other* tab, and if it is the owner we want
+          // it, which is the entire point of the pair.
+          const from = message.c || message.u
+          if (from === conn) return
+          if (owner.current && from !== owner.current && ball.current) return
+
+          ball.current = {
+            x: message.x,
+            y: message.y,
+            z: message.z,
+            vx: message.vx,
+            vy: message.vy,
+            vz: message.vz,
+          }
+          ballPause.current = message.k
+          // Proof the owner's frame loop is still turning. Stamped here rather
+          // than on any ball message, because a packet from a client that is no
+          // longer the owner says nothing about the one that is.
+          lastBallSeen.current = performance.now()
+        })
+        /**
+         * Somebody wants the ball back on the centre spot.
+         *
+         * Noted by everybody and acted on by the owner alone, which is the point:
+         * ownership changes hands without warning, and a request routed only to
+         * whoever was the owner when the button was pressed would vanish if that
+         * tab closed a moment later. Recording it everywhere costs one number.
+         *
+         * No filter on the sender. Anybody in the room may ask - the person who
+         * can see the ball behind the wall is rarely the one stepping it - and the
+         * owner decides. See `BallResetMessage` for why that is safe.
+         */
+        .on('broadcast', { event: 'ball-reset' }, ({ payload }) => {
+          countReceived('ball-reset', performance.now())
+          receive('ball-reset', (payload as BallResetMessage)?.u, payload)
+        })
+        /**
+         * Somebody missed something of ours.
+         *
+         * The reply is another broadcast rather than a private message, because
+         * Realtime has no private lane and the alternative would be a channel per
+         * pair. Everybody hears the answer; everybody who already had it drops it
+         * as a duplicate, which is exactly what the inbox's "behind the mark"
+         * rule is for. The cost of answering loudly is one extra small message per
+         * hole per room, and the cost of not doing it is the bug this is for.
+         */
+        /**
+         * One end of a video call arranging itself with the other.
+         *
+         * Not put through the sequencer, unlike `room` and `hit`, and the reason
+         * is that the loss it has to survive is broader than the one the
+         * sequencer repairs. A missing offer is a connection that never comes up
+         * - and so is a failed ICE negotiation, a peer that reloaded halfway
+         * through, and a route that stopped working when somebody walked out of
+         * wifi range. One timer that notices a link is not carrying anything
+         * covers all four; a resend request covers the first and leaves the rest.
+         * See the watchdog in `face-links`.
+         *
+         * Everybody in the room hears every message, and all but one drops it on
+         * the address - the same arrangement `hit` and `push` use, for the same
+         * reason: Realtime has no private lane, and the alternative is a channel
+         * per pair.
+         */
+        .on('broadcast', { event: 'face' }, ({ payload }) => {
+          countReceived('other', performance.now())
+          faceLinks.current?.accept(payload)
+        })
+        .on('broadcast', { event: RESEND_EVENT }, ({ payload }) => {
+          countReceived('other', performance.now())
+          const ask = payload as ResendRequest
+          // Only the sender named answers. Without this every client in the room
+          // would replay its own unrelated history at whoever asked.
+          if (ask?.u !== userId) return
+          // And only the tab named, where the asker knew which one. Our sequence
+          // is this mount's; another tab of ours holds a different one, and its
+          // reply to a request meant for us is numbers that fit nobody's stream.
+          if (ask.c && ask.c !== conn) return
+          for (const held of outbox.current.replay(ask.from, ask.to)) {
+            countSent(held.event)
+            void channel.send({
+              type: 'broadcast',
+              event: held.event,
+              payload: held.message,
+            })
+          }
+        })
+        /**
+         * Somebody is timing the room, and we are this ping's addressee.
+         *
+         * Registered unconditionally rather than behind the flag, because adding
+         * or removing a handler means reopening the channel - and a reopened
+         * channel is what produces "cannot add presence callbacks after
+         * subscribe()". It is inert without a sender: nothing broadcasts `perf`
+         * events unless some client has collection armed.
+         *
+         * `collecting()` is the gate on *answering*, and it is the same flag read
+         * from the other end. A client whose space has collection off does not
+         * echo, and the prober knows not to ask it - see `perf` on the presence
+         * payload, which is how a target is chosen in the first place.
+         *
+         * Addressed to one connection rather than answered by everybody: the
+         * obvious version costs one reply per person in the room per ping, which
+         * is the quadratic fan-out this whole diagnostic is supposed to be
+         * measuring rather than adding to.
+         */
+        .on('broadcast', { event: PERF_PING }, ({ payload }) => {
+          const ask = payload as PerfPing
+          countReceived('ping', performance.now())
+          if (!collecting()) return
+          if (!ask?.n || ask.to !== conn) return
+          countSent('ping')
+          void channel.send({
+            type: 'broadcast',
+            event: PERF_ECHO,
+            payload: { n: ask.n, to: ask.from } satisfies PerfEcho,
+          })
+        })
+        /**
+         * Our own nonce, back again.
+         *
+         * The elapsed time is read here, off the same `performance.now()` that
+         * stamped the ping - one clock from end to end, which is the only reason
+         * this number means anything. See the header of `collector.ts` for why
+         * there is no one-way version of it.
+         */
+        .on('broadcast', { event: PERF_ECHO }, ({ payload }) => {
+          const echo = payload as PerfEcho
+          const now = performance.now()
+          countReceived('ping', now)
+          if (!echo?.n || echo.to !== conn) return
+          activeCollector()?.noteEcho(echo.n, now)
+        })
+        .subscribe((status) => {
+          // Before the branches below, so a state nothing else acts on -
+          // `CLOSED`, or a `TIMED_OUT` that recovers - is still recorded. A room
+          // that spent five minutes reconnecting is exactly what this is for.
+          activeCollector()?.noteChannel(channelStateOf(status))
+          if (status === 'SUBSCRIBED') {
+            onStatus('live')
+            // `conn` rides along with the person: presence is keyed by user id, so
+            // this is the only place the room can learn that one of its players is
+            // two clients. See `ballOwner`.
+            void channel.track({
+              userId,
+              name,
+              avatar,
+              conn,
+              perf: measuring,
+              // From the ref, so that switching a camera on does not appear in
+              // this effect's dependencies and take the socket with it. The
+              // effect below re-tracks when it changes.
+              face: cameraOnRef.current,
+            })
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            // Surfaced rather than swallowed: the most likely cause is the
+            // presence migration not being applied, and silent absence of other
+            // people is indistinguishable from nobody being online.
+            onStatus('error')
+          }
+        })
+
+      /**
+       * Holes do not announce themselves.
+       *
+       * A sender who has gone quiet - or gone entirely - produces no further
+       * arrivals, so nothing would drive the retry or the give-up timer from
+       * `accept` alone. This is the clock that does, and it is the same interval
+       * the inbox rate-limits requests to, so a hole is asked about roughly once
+       * per sweep until it fills or expires.
+       */
+      const sweeping = setInterval(() => {
+        pump(inbox.current.sweep(performance.now()))
+      }, RESEND_INTERVAL_MS)
+
+      if (roomRef) {
+        roomRef.current = (message) => {
+          sendReliable('room', { ...message, u: userId } satisfies RoomMessage)
+        }
+      }
+
+      /**
+       * The HUD's "fetch the ball" button.
+       *
+       * Noted locally as well as sent, rather than waiting for our own broadcast
+       * to come back - Realtime does not echo to the sender, so an owner pressing
+       * its own button would otherwise be the one client in the room the request
+       * never reached.
+       */
+      resetBallRef.current = () => {
+        resetAsked.current = performance.now()
+        sendReliable('ball-reset', { u: userId } satisfies BallResetMessage)
+      }
+
+      /**
+       * A shot somebody just fired: drawn for the room, charged to one person.
+       *
+       * Both halves go out from here because both need the socket, and they are
+       * deliberately two messages - see `ShotMessage`. The victim's bar is
+       * dropped locally on the way past for the same reason `judgeDash` does it:
+       * waiting for their next packet puts a round trip between the impact and
+       * the feedback, and at that distance a hit reads as not having registered.
+       */
+      sendShotRef.current = (shot: PlayerShot) => {
+        if (shot.model) {
+          countSent('shot')
+          void channel.send({
+            type: 'broadcast',
+            event: 'shot',
+            payload: {
+              f: userId,
+              x: +shot.from.x.toFixed(2),
+              y: +shot.from.y.toFixed(2),
+              z: +shot.from.z.toFixed(2),
+              tx: +shot.to.x.toFixed(2),
+              ty: +shot.to.y.toFixed(2),
+              tz: +shot.to.z.toFixed(2),
+              m: shot.model,
+              c: shot.scale,
+              s: shot.speed,
+            } satisfies ShotMessage,
+          })
+        }
+
+        if (!shot.hit) return
+
+        sendReliable('hit', {
+          i: crypto.randomUUID(),
+          f: userId,
+          t: shot.hit,
+          d: shot.damage,
+        } satisfies HitMessage)
+
+        const state = transforms.current.get(shot.hit)
+        if (state) state.health = Math.max(0, state.health - shot.damage)
+        handlers.current.onHitLanded(shot.damage, names.current.get(shot.hit) ?? 'them')
+      }
+
+      sendEmoteRef.current = (id: EmoteId) => {
+        if (!isEmote(id)) return
+        countSent('emote')
         void channel.send({
           type: 'broadcast',
-          event: 'shot',
-          payload: {
-            f: userId,
-            x: +shot.from.x.toFixed(2),
-            y: +shot.from.y.toFixed(2),
-            z: +shot.from.z.toFixed(2),
-            tx: +shot.to.x.toFixed(2),
-            ty: +shot.to.y.toFixed(2),
-            tz: +shot.to.z.toFixed(2),
-            m: shot.model,
-            c: shot.scale,
-            s: shot.speed,
-          } satisfies ShotMessage,
+          event: 'emote',
+          payload: { u: userId, e: id } satisfies EmoteMessage,
         })
       }
 
-      if (!shot.hit) return
-
-      sendReliable('hit', {
-        i: crypto.randomUUID(),
-        f: userId,
-        t: shot.hit,
-        d: shot.damage,
-      } satisfies HitMessage)
-
-      const state = transforms.current.get(shot.hit)
-      if (state) state.health = Math.max(0, state.health - shot.damage)
-      handlers.current.onHitLanded(shot.damage, names.current.get(shot.hit) ?? 'them')
-    }
-
-    sendEmoteRef.current = (id: EmoteId) => {
-      if (!isEmote(id)) return
-      countSent('emote')
-      void channel.send({
-        type: 'broadcast',
-        event: 'emote',
-        payload: { u: userId, e: id } satisfies EmoteMessage,
-      })
-    }
-
-    return () => {
-      clearInterval(sweeping)
-      // Cleared alongside the channel, so a picker click during teardown cannot
-      // reach a socket that is on its way out.
-      sendEmoteRef.current = null
-      sendShotRef.current = null
-      resetBallRef.current = null
-      if (roomRef) roomRef.current = null
-      channelRef.current = null
-      void supabase.removeChannel(channel)
+      return () => {
+        clearInterval(sweeping)
+        // Cleared alongside the channel, so a picker click during teardown cannot
+        // reach a socket that is on its way out.
+        sendEmoteRef.current = null
+        sendShotRef.current = null
+        resetBallRef.current = null
+        if (roomRef) roomRef.current = null
+        channelRef.current = null
+        void supabase.removeChannel(channel)
+      }
     }
   }, [
     supabase,
